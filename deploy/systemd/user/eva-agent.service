@@ -1,0 +1,13 @@
+[Unit]
+Description=eva-agent Step 0 runtime
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/apps/eva-agent
+ExecStart=/usr/bin/python3 -m eva.main --runtime-dir %h/.local/state/eva-agent/runtime
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
