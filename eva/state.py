@@ -1,3 +1,5 @@
+"""Persistence models and storage helpers for runtime state and append-only logs."""
+
 from __future__ import annotations
 
 import json
@@ -11,22 +13,30 @@ from .config import EvaPaths
 
 
 def utc_now() -> datetime:
+    """Return the current UTC timestamp."""
+
     return datetime.now(timezone.utc)
 
 
 def to_iso8601(value: datetime | None) -> str | None:
+    """Serialize a UTC datetime into the wire format used by runtime artifacts."""
+
     if value is None:
         return None
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def from_iso8601(value: str | None) -> datetime | None:
+    """Parse an artifact timestamp back into a UTC datetime."""
+
     if value is None:
         return None
     return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def _format_log_value(value: Any) -> str:
+    """Normalize log field values into short single-line text output."""
+
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, datetime):
@@ -39,6 +49,8 @@ def _format_log_value(value: Any) -> str:
 
 
 def emit_log_line(event: str, **fields: Any) -> None:
+    """Emit a compact structured log line for human and journal inspection."""
+
     parts = [f"event={event}"]
     for key, value in fields.items():
         if value is None:
@@ -49,6 +61,8 @@ def emit_log_line(event: str, **fields: Any) -> None:
 
 @dataclass
 class ActiveInstanceRecord:
+    """Persisted ownership record for the currently active runtime instance."""
+
     instance_id: str
     generation: int
     lease_expires_at: datetime
@@ -56,6 +70,8 @@ class ActiveInstanceRecord:
     updated_at: datetime
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the active-instance record for JSON storage."""
+
         return {
             "instance_id": self.instance_id,
             "generation": self.generation,
@@ -66,6 +82,8 @@ class ActiveInstanceRecord:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "ActiveInstanceRecord":
+        """Deserialize an active-instance record from JSON payload data."""
+
         return cls(
             instance_id=payload["instance_id"],
             generation=int(payload["generation"]),
@@ -77,6 +95,8 @@ class ActiveInstanceRecord:
 
 @dataclass
 class RuntimeState:
+    """Persisted Step 0 life-loop state shared across ticks and turns."""
+
     life_state: str = "RECOVERING"
     last_heartbeat_at: datetime | None = None
     last_tick_id: str | None = None
@@ -91,6 +111,8 @@ class RuntimeState:
     updated_at: datetime = field(default_factory=utc_now)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize runtime state for atomic JSON persistence."""
+
         return {
             "life_state": self.life_state,
             "last_heartbeat_at": to_iso8601(self.last_heartbeat_at),
@@ -108,6 +130,8 @@ class RuntimeState:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "RuntimeState":
+        """Deserialize runtime state from the on-disk JSON payload."""
+
         return cls(
             life_state=payload.get("life_state", "RECOVERING"),
             last_heartbeat_at=from_iso8601(payload.get("last_heartbeat_at")),
@@ -125,7 +149,155 @@ class RuntimeState:
 
 
 @dataclass
+class DimensionSnapshot:
+    """Judged status and evidence for one external-life dimension."""
+
+    status: str
+    evidence: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize one judged dimension."""
+
+        return {
+            "status": self.status,
+            "evidence": self.evidence,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "DimensionSnapshot":
+        """Deserialize one judged dimension from artifact data."""
+
+        return cls(
+            status=str(payload.get("status", "healthy")),
+            evidence=dict(payload.get("evidence", {})),
+        )
+
+
+@dataclass
+class ExternalLifeSnapshot:
+    """Current Step 1 view of external-life conditions and dominant gap."""
+
+    captured_at: datetime
+    source_patrol: str
+    dimensions: dict[str, DimensionSnapshot]
+    overall_status: str
+    primary_gap: dict[str, Any] = field(default_factory=dict)
+    trend: str = "unknown"
+    updated_at: datetime = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize a full external-life snapshot for current-state storage."""
+
+        return {
+            "captured_at": to_iso8601(self.captured_at),
+            "source_patrol": self.source_patrol,
+            "dimensions": {key: value.to_dict() for key, value in self.dimensions.items()},
+            "overall_status": self.overall_status,
+            "primary_gap": self.primary_gap,
+            "trend": self.trend,
+            "updated_at": to_iso8601(self.updated_at),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ExternalLifeSnapshot":
+        """Deserialize a full external-life snapshot from JSON payload data."""
+
+        raw_dimensions = payload.get("dimensions", {})
+        return cls(
+            captured_at=from_iso8601(payload.get("captured_at")) or utc_now(),
+            source_patrol=str(payload.get("source_patrol", "shallow")),
+            dimensions={
+                key: DimensionSnapshot.from_dict(value)
+                for key, value in raw_dimensions.items()
+                if isinstance(value, dict)
+            },
+            overall_status=str(payload.get("overall_status", "healthy")),
+            primary_gap=dict(payload.get("primary_gap", {})),
+            trend=str(payload.get("trend", "unknown")),
+            updated_at=from_iso8601(payload.get("updated_at")) or utc_now(),
+        )
+
+
+@dataclass
+class ActivePressure:
+    """One currently active survival pressure derived from a judged gap."""
+
+    pressure_id: str
+    type: str
+    severity: str
+    evidence: dict[str, Any]
+    first_seen_at: datetime
+    last_seen_at: datetime
+    trend: str
+    active: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize one active pressure for current-state storage."""
+
+        return {
+            "pressure_id": self.pressure_id,
+            "type": self.type,
+            "severity": self.severity,
+            "evidence": self.evidence,
+            "first_seen_at": to_iso8601(self.first_seen_at),
+            "last_seen_at": to_iso8601(self.last_seen_at),
+            "trend": self.trend,
+            "active": self.active,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ActivePressure":
+        """Deserialize one active pressure from JSON payload data."""
+
+        now = utc_now()
+        return cls(
+            pressure_id=str(payload["pressure_id"]),
+            type=str(payload.get("type", "continuity")),
+            severity=str(payload.get("severity", "degraded")),
+            evidence=dict(payload.get("evidence", {})),
+            first_seen_at=from_iso8601(payload.get("first_seen_at")) or now,
+            last_seen_at=from_iso8601(payload.get("last_seen_at")) or now,
+            trend=str(payload.get("trend", "unknown")),
+            active=bool(payload.get("active", True)),
+        )
+
+
+@dataclass
+class ActivePressureTable:
+    """Current table of active pressures derived from the latest patrol."""
+
+    captured_at: datetime
+    pressures: list[ActivePressure] = field(default_factory=list)
+    updated_at: datetime = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the active-pressure table for current-state storage."""
+
+        return {
+            "captured_at": to_iso8601(self.captured_at),
+            "pressures": [pressure.to_dict() for pressure in self.pressures],
+            "updated_at": to_iso8601(self.updated_at),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ActivePressureTable":
+        """Deserialize the active-pressure table from JSON payload data."""
+
+        return cls(
+            captured_at=from_iso8601(payload.get("captured_at")) or utc_now(),
+            pressures=[
+                ActivePressure.from_dict(item)
+                for item in payload.get("pressures", [])
+                if isinstance(item, dict)
+            ],
+            updated_at=from_iso8601(payload.get("updated_at")) or utc_now(),
+        )
+
+
+@dataclass
 class EventRecord:
+    """Append-only structured event written into events.jsonl."""
+
     event_type: str
     timestamp: datetime
     instance_id: str | None = None
@@ -136,6 +308,8 @@ class EventRecord:
     details: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize an event record and omit optional empty fields."""
+
         payload = {
             "event_type": self.event_type,
             "timestamp": to_iso8601(self.timestamp),
@@ -155,13 +329,19 @@ class EventRecord:
 
 
 class StateStore:
+    """Read and write runtime artifacts with atomic current-state updates."""
+
     def __init__(self, paths: EvaPaths) -> None:
         self.paths = paths
 
     def ensure_runtime_dir(self) -> None:
+        """Create the runtime directory if it does not exist yet."""
+
         self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
 
     def _atomic_write_json(self, file_path: Path, payload: dict[str, Any]) -> None:
+        """Write a JSON artifact through a temp file and atomic replace."""
+
         self.ensure_runtime_dir()
         temp_path = file_path.with_suffix(file_path.suffix + ".tmp")
         with temp_path.open("w", encoding="utf-8") as handle:
@@ -171,31 +351,87 @@ class StateStore:
             os.fsync(handle.fileno())
         temp_path.replace(file_path)
 
+    def _append_jsonl(self, file_path: Path, payload: dict[str, Any]) -> None:
+        """Append one JSON object to an append-only log file."""
+
+        self.ensure_runtime_dir()
+        with file_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            handle.flush()
+
     def write_active_instance(self, record: ActiveInstanceRecord) -> None:
+        """Persist the active-instance record."""
+
         self._atomic_write_json(self.paths.active_instance_file, record.to_dict())
 
     def read_active_instance(self) -> ActiveInstanceRecord | None:
+        """Read the active-instance record if it exists."""
+
         if not self.paths.active_instance_file.exists():
             return None
         payload = json.loads(self.paths.active_instance_file.read_text(encoding="utf-8"))
         return ActiveInstanceRecord.from_dict(payload)
 
     def write_runtime_state(self, state: RuntimeState) -> None:
+        """Persist the current Step 0 runtime state."""
+
         self._atomic_write_json(self.paths.runtime_state_file, state.to_dict())
 
     def read_runtime_state(self) -> RuntimeState:
+        """Read the current Step 0 runtime state or return defaults."""
+
         if not self.paths.runtime_state_file.exists():
             return RuntimeState()
         payload = json.loads(self.paths.runtime_state_file.read_text(encoding="utf-8"))
         return RuntimeState.from_dict(payload)
 
+    def write_external_life_snapshot(self, snapshot: ExternalLifeSnapshot) -> None:
+        """Persist the latest Step 1 external-life snapshot."""
+
+        self._atomic_write_json(self.paths.external_life_snapshot_file, snapshot.to_dict())
+
+    def read_external_life_snapshot(self) -> ExternalLifeSnapshot | None:
+        """Read the latest Step 1 external-life snapshot if it exists."""
+
+        if not self.paths.external_life_snapshot_file.exists():
+            return None
+        payload = json.loads(self.paths.external_life_snapshot_file.read_text(encoding="utf-8"))
+        return ExternalLifeSnapshot.from_dict(payload)
+
+    def write_active_pressures(self, table: ActivePressureTable) -> None:
+        """Persist the latest active-pressure table."""
+
+        self._atomic_write_json(self.paths.active_pressures_file, table.to_dict())
+
+    def read_active_pressures(self) -> ActivePressureTable:
+        """Read the latest active-pressure table or return an empty one."""
+
+        if not self.paths.active_pressures_file.exists():
+            return ActivePressureTable(captured_at=utc_now())
+        payload = json.loads(self.paths.active_pressures_file.read_text(encoding="utf-8"))
+        return ActivePressureTable.from_dict(payload)
+
+    def append_survival_log(self, payload: dict[str, Any]) -> None:
+        """Append one Step 1 history entry to survival_log.jsonl."""
+
+        self._append_jsonl(self.paths.survival_log_file, payload)
+
+    def read_survival_log(self) -> list[dict[str, Any]]:
+        """Read the append-only survival history log."""
+
+        if not self.paths.survival_log_file.exists():
+            return []
+        lines = self.paths.survival_log_file.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
     def append_event(self, event: EventRecord) -> None:
-        self.ensure_runtime_dir()
-        with self.paths.events_file.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event.to_dict(), ensure_ascii=False) + "\n")
-            handle.flush()
+        """Append one lifecycle event to events.jsonl."""
+
+        self._append_jsonl(self.paths.events_file, event.to_dict())
 
     def read_events(self) -> list[dict[str, Any]]:
+        """Read the append-only lifecycle event log."""
+
         if not self.paths.events_file.exists():
             return []
         lines = self.paths.events_file.read_text(encoding="utf-8").splitlines()

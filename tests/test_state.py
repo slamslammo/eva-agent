@@ -5,10 +5,26 @@ import unittest
 from datetime import timedelta
 
 from eva.config import build_runtime_paths
-from eva.state import ActiveInstanceRecord, EventRecord, RuntimeState, StateStore, utc_now
+from eva.state import (
+    ActiveInstanceRecord,
+    ActivePressure,
+    ActivePressureTable,
+    DimensionSnapshot,
+    EventRecord,
+    ExternalLifeSnapshot,
+    RuntimeState,
+    StateStore,
+    utc_now,
+)
 
 
 class StateStoreTests(unittest.TestCase):
+    def test_build_runtime_paths_includes_step1_files(self) -> None:
+        paths = build_runtime_paths("/tmp/eva-state-test")
+        self.assertTrue(str(paths.external_life_snapshot_file).endswith("external_life_snapshot.json"))
+        self.assertTrue(str(paths.active_pressures_file).endswith("active_pressures.json"))
+        self.assertTrue(str(paths.survival_log_file).endswith("survival_log.jsonl"))
+
     def test_write_and_read_active_instance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -48,6 +64,81 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(loaded.last_tick_id, "tick-0001")
             self.assertTrue(loaded.instance_valid)
 
+    def test_write_and_read_external_life_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            snapshot = ExternalLifeSnapshot(
+                captured_at=now,
+                source_patrol="shallow",
+                dimensions={
+                    "host_continuity": DimensionSnapshot(
+                        status="healthy",
+                        evidence={"process_running": True},
+                    )
+                },
+                overall_status="healthy",
+                primary_gap={"type": "none", "reason": "none"},
+                trend="stable",
+                updated_at=now,
+            )
+            store.write_external_life_snapshot(snapshot)
+            loaded = store.read_external_life_snapshot()
+            self.assertIsNotNone(loaded)
+            assert loaded is not None
+            self.assertEqual(loaded.source_patrol, "shallow")
+            self.assertEqual(loaded.overall_status, "healthy")
+            self.assertIn("host_continuity", loaded.dimensions)
+
+    def test_write_and_read_active_pressures(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            table = ActivePressureTable(
+                captured_at=now,
+                pressures=[
+                    ActivePressure(
+                        pressure_id="pressure-resource_state-disk_space_declining",
+                        type="resource_state",
+                        severity="degraded",
+                        evidence={"disk_free_bytes": 1024},
+                        first_seen_at=now,
+                        last_seen_at=now,
+                        trend="worsening",
+                        active=True,
+                    )
+                ],
+                updated_at=now,
+            )
+            store.write_active_pressures(table)
+            loaded = store.read_active_pressures()
+            self.assertEqual(len(loaded.pressures), 1)
+            self.assertEqual(loaded.pressures[0].pressure_id, "pressure-resource_state-disk_space_declining")
+            self.assertEqual(loaded.pressures[0].type, "resource_state")
+
+    def test_append_survival_log(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            store.append_survival_log(
+                {
+                    "event_type": "survival_snapshot",
+                    "timestamp": now.isoformat(),
+                    "overall_status": "healthy",
+                }
+            )
+            store.append_survival_log(
+                {
+                    "event_type": "pressure_opened",
+                    "timestamp": now.isoformat(),
+                    "pressure_id": "pressure-continuity-restart_loop",
+                }
+            )
+            entries = store.read_survival_log()
+            self.assertEqual(len(entries), 2)
+            self.assertEqual(entries[0]["event_type"], "survival_snapshot")
+            self.assertEqual(entries[1]["event_type"], "pressure_opened")
+
     def test_append_event_log(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -69,6 +160,15 @@ class StateStoreTests(unittest.TestCase):
             loaded = store.read_runtime_state()
             self.assertEqual(loaded.life_state, "STABLE")
             self.assertTrue(loaded.heartbeat_ok)
+
+    def test_runtime_state_remains_step0_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            state = RuntimeState(life_state="STABLE", heartbeat_ok=True, instance_valid=True)
+            store.write_runtime_state(state)
+            payload = store.paths.runtime_state_file.read_text(encoding="utf-8")
+            self.assertNotIn("overall_status", payload)
+            self.assertNotIn("pressures", payload)
 
 
 if __name__ == "__main__":

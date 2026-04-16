@@ -1,3 +1,5 @@
+"""Single-instance coordination built on file locks, generation, and lease expiry."""
+
 from __future__ import annotations
 
 import fcntl
@@ -11,6 +13,8 @@ from .state import ActiveInstanceRecord, StateStore, utc_now
 
 @dataclass(frozen=True)
 class InstanceSnapshot:
+    """Current validity projection for the running instance."""
+
     instance_id: str
     generation: int
     lock_held: bool
@@ -20,6 +24,8 @@ class InstanceSnapshot:
 
     @property
     def invalid_reasons(self) -> list[str]:
+        """Return the ordered reasons why this instance is no longer valid."""
+
         reasons: list[str] = []
         if not self.lock_held:
             reasons.append("lock_lost")
@@ -31,10 +37,14 @@ class InstanceSnapshot:
 
     @property
     def instance_valid(self) -> bool:
+        """Return whether lock, generation, and lease checks all still hold."""
+
         return self.lock_held and self.generation_matches and self.lease_not_expired
 
 
 class InstanceGuard:
+    """Own the file lock and keep the active-instance record in sync."""
+
     def __init__(self, lock_file: Path, store: StateStore, lifecycle: LifecycleConfig) -> None:
         self.lock_file = lock_file
         self.store = store
@@ -44,11 +54,15 @@ class InstanceGuard:
         self.generation: int | None = None
 
     def acquire(self) -> None:
+        """Acquire the non-blocking runtime lock before starting the instance."""
+
         self.store.ensure_runtime_dir()
         self._lock_handle = self.lock_file.open("a+", encoding="utf-8")
         fcntl.flock(self._lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def release(self) -> None:
+        """Release the runtime lock if it is currently held."""
+
         if self._lock_handle is None:
             return
         fcntl.flock(self._lock_handle.fileno(), fcntl.LOCK_UN)
@@ -56,6 +70,8 @@ class InstanceGuard:
         self._lock_handle = None
 
     def start_instance(self, instance_id: str) -> ActiveInstanceRecord:
+        """Create a new active-instance record and bump generation if needed."""
+
         current = self.store.read_active_instance()
         generation = 1 if current is None else current.generation + 1
         now = utc_now()
@@ -73,6 +89,8 @@ class InstanceGuard:
         return record
 
     def refresh_lease(self) -> ActiveInstanceRecord:
+        """Extend the current lease to confirm the instance is still alive."""
+
         if self.instance_id is None or self.generation is None:
             raise RuntimeError("instance not started")
         now = utc_now()
@@ -88,9 +106,13 @@ class InstanceGuard:
 
     @property
     def lock_held(self) -> bool:
+        """Return whether the local process still owns an open lock handle."""
+
         return self._lock_handle is not None and not self._lock_handle.closed
 
     def snapshot(self, now: datetime | None = None) -> InstanceSnapshot:
+        """Read back the active-instance record and project current validity."""
+
         if self.instance_id is None or self.generation is None:
             raise RuntimeError("instance not started")
         now = now or utc_now()

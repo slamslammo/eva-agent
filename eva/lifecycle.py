@@ -1,3 +1,5 @@
+"""Heartbeat-first lifecycle runtime that coordinates ticks, turns, and patrol work."""
+
 from __future__ import annotations
 
 import json
@@ -7,12 +9,15 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from .config import LifecycleConfig
+from .config import ExternalLifeConfig, LifecycleConfig
 from .instance import InstanceGuard, InstanceSnapshot
+from .patrol import PatrolScheduler, execute_patrol
 from .state import EventRecord, RuntimeState, StateStore, emit_log_line, utc_now
 
 
 class LifeState(str, Enum):
+    """Coarse-grained health states for the life loop."""
+
     RECOVERING = "RECOVERING"
     STABLE = "STABLE"
     DEGRADED = "DEGRADED"
@@ -21,6 +26,8 @@ class LifeState(str, Enum):
 
 @dataclass
 class TickResult:
+    """Summary of one completed heartbeat tick."""
+
     tick_id: str
     life_state: LifeState
     instance_valid: bool
@@ -28,36 +35,88 @@ class TickResult:
     consecutive_failures: int
 
 
+@dataclass(frozen=True)
+class WorkSlice:
+    """One unit of turn work, either maintenance or patrol."""
+
+    name: str
+    kind: str = "maintenance"
+    due_at: datetime | None = None
+
+
 @dataclass
 class TurnResult:
+    """Summary of one attempted turn execution."""
+
     turn_id: str
     executed: bool
     yielded_to_heartbeat: bool
     work_slice: str | None = None
+    work_kind: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
 
 
 class LifecycleRuntime:
-    def __init__(self, store: StateStore, instance_guard: InstanceGuard, lifecycle: LifecycleConfig) -> None:
+    """Run the heartbeat loop while preserving heartbeat priority over turn work."""
+
+    def __init__(
+        self,
+        store: StateStore,
+        instance_guard: InstanceGuard,
+        lifecycle: LifecycleConfig,
+        external_life: ExternalLifeConfig | None = None,
+    ) -> None:
         self.store = store
         self.instance_guard = instance_guard
         self.lifecycle = lifecycle
-        self.pending_work: deque[str] = deque(["self_check", "persist_marker"])
+        self.external_life = external_life or ExternalLifeConfig()
+        self.patrol_scheduler = PatrolScheduler(self.external_life)
+        self.pending_work: deque[WorkSlice] = deque([
+            WorkSlice(name="self_check"),
+            WorkSlice(name="persist_marker"),
+        ])
         self._tick_counter = 0
         self._turn_counter = 0
 
     def has_pending_work(self) -> bool:
+        """Return whether the runtime has turn work waiting to execute."""
+
         return bool(self.pending_work)
 
+    def queue_due_patrols(self, now: datetime | None = None) -> None:
+        """Append due patrol work slices without duplicating already queued cadences."""
+
+        now = now or utc_now()
+        queued_patrols = {work.name for work in self.pending_work if work.kind == "patrol"}
+        for plan in self.patrol_scheduler.due_patrols(now, queued_patrols):
+            self.pending_work.append(WorkSlice(name=plan.name, kind="patrol", due_at=plan.due_at))
+            self.store.append_event(
+                EventRecord(
+                    event_type="patrol_queued",
+                    timestamp=now,
+                    details={
+                        "cadence": plan.name,
+                        "due_at": plan.due_at.isoformat(),
+                    },
+                )
+            )
+            emit_log_line("patrol_queued", cadence=plan.name, due_at=plan.due_at)
+
     def next_tick_id(self) -> str:
+        """Return the next sequential tick id."""
+
         self._tick_counter += 1
         return f"tick-{self._tick_counter:04d}"
 
     def next_turn_id(self) -> str:
+        """Return the next sequential turn id."""
+
         self._turn_counter += 1
         return f"turn-{self._turn_counter:04d}"
 
     def consume_distress_injection(self) -> dict[str, Any] | None:
+        """Consume one manual distress injection payload if it exists."""
+
         path = self.store.paths.distress_injection_file
         if not path.exists():
             return None
@@ -84,6 +143,8 @@ class LifecycleRuntime:
         *,
         force_critical: bool = False,
     ) -> LifeState:
+        """Project the current life state from instance validity and heartbeat history."""
+
         if not snapshot.instance_valid:
             return LifeState.CRITICAL
         if force_critical:
@@ -104,6 +165,8 @@ class LifecycleRuntime:
         return LifeState.STABLE
 
     def run_tick(self, state: RuntimeState, *, now: datetime | None = None) -> TickResult:
+        """Run one heartbeat tick and refresh persistent runtime state."""
+
         now = now or utc_now()
         tick_id = self.next_tick_id()
         previous_life_state = state.life_state
@@ -205,37 +268,88 @@ class LifecycleRuntime:
         )
 
     def run_turn(self, state: RuntimeState, *, next_heartbeat_at: datetime, now: datetime | None = None) -> TurnResult:
+        """Run at most one work slice, but only when heartbeat safety allows it."""
+
         now = now or utc_now()
         turn_id = self.next_turn_id()
         self.store.append_event(EventRecord(event_type="turn_started", timestamp=now, turn_id=turn_id, life_state=state.life_state))
         remaining = (next_heartbeat_at - now).total_seconds()
+
+        # Preserve heartbeat-first behavior by refusing turn work near the next deadline.
         if remaining <= self.lifecycle.turn_guard_window_sec:
-            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=True, details={"reason": "heartbeat_deadline_near"})
-            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=result.details))
+            details = {"reason": "heartbeat_deadline_near"}
+            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=True, details=details)
+            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason="heartbeat_deadline_near")
             return result
         snapshot = self.instance_guard.snapshot(now)
         if not snapshot.instance_valid:
             reason = snapshot.invalid_reasons[0] if snapshot.invalid_reasons else "instance_invalid"
-            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details={"reason": reason})
-            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=result.details))
+            details = {"reason": reason}
+            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
+            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason=reason)
             return result
         if state.life_state == LifeState.CRITICAL.value:
-            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details={"reason": "critical_life_state"})
-            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=result.details))
+            details = {"reason": "critical_life_state"}
+            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
+            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason="critical_life_state")
             return result
         if not self.pending_work:
-            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details={"reason": "no_work"})
-            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=result.details))
+            details = {"reason": "no_work"}
+            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
+            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason="no_work")
             return result
+
         work_slice = self.pending_work.popleft()
-        result = TurnResult(turn_id=turn_id, executed=True, yielded_to_heartbeat=False, work_slice=work_slice, details={"status": "completed"})
+        details: dict[str, Any] = {
+            "work_slice": work_slice.name,
+            "work_kind": work_slice.kind,
+            "status": "completed",
+        }
+        if work_slice.kind == "patrol":
+            patrol_result = execute_patrol(
+                work_slice.name,
+                self.store,
+                state,
+                self.external_life,
+                now,
+                due_at=work_slice.due_at,
+            )
+            details.update(
+                {
+                    "cadence": patrol_result.cadence,
+                    "overall_status": patrol_result.snapshot.overall_status,
+                    "primary_gap": patrol_result.snapshot.primary_gap,
+                    "pressure_count": patrol_result.pressure_count,
+                    "opened_count": patrol_result.opened_count,
+                    "resolved_count": patrol_result.resolved_count,
+                }
+            )
+
         state.last_turn_id = turn_id
         state.updated_at = now
         self.store.write_runtime_state(state)
-        self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details={"work_slice": work_slice, "status": "completed"}))
-        emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=True, work_slice=work_slice, status="completed")
-        return result
+        self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
+        emit_log_line(
+            "turn",
+            turn_id=turn_id,
+            state=state.life_state,
+            executed=True,
+            work_slice=work_slice.name,
+            work_kind=work_slice.kind,
+            status="completed",
+            cadence=details.get("cadence"),
+            overall_status=details.get("overall_status"),
+            pressure_count=details.get("pressure_count"),
+        )
+        return TurnResult(
+            turn_id=turn_id,
+            executed=True,
+            yielded_to_heartbeat=False,
+            work_slice=work_slice.name,
+            work_kind=work_slice.kind,
+            details=details,
+        )

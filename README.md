@@ -13,7 +13,7 @@
 项目要验证的是：agent 的关键能力能不能不是被一次性设计完，而是在真实运行、真实反馈和真实压力下逐步成长出来。
 
 ## 当前阶段
-当前处于：Step 0（最小运行壳已落地，可做 bounded run 与单测验证）
+当前处于：Step 1（第一轮本地实现、本地测试、Linux accelerated 验证与 Linux 异常注入验证已完成；真实生产节律长期观察待补）
 
 当前已确认：
 - 起点是生命循环，不是功能列表
@@ -41,6 +41,7 @@ Step 0 暂不讨论：
 
 ## 文档入口
 - `docs/project-definition.md`：项目定义、设计哲学与当前边界
+- `docs/development-standards.md`：后续迭代中的开发规范、代码质量要求与变更纪律
 - `docs/step-0-life-loop.md`：Step 0 生命循环、双层生命函数与最小生命体征规格
 - `docs/step-0-implementation-spec.md`：Step 0 的模块边界、事件流与状态流
 - `docs/runtime-persistence.md`：`active_instance.json`、`runtime_state.json`、`events.jsonl` 的持久化协议
@@ -48,6 +49,9 @@ Step 0 暂不讨论：
 - `docs/deploy-systemd-example.md`：Linux 长期运行的最小部署示例
 - `docs/reference-materials.md`：原始 Obsidian 材料路径与回顾入口
 - `docs/step-1-outline.md`：Step 1 巡逻与报告层的启动说明
+- `docs/step-1-implementation-spec.md`：Step 1 的能力推导、能力边界、归类原则与第一轮实现收口
+- `docs/step-1-persistence.md`：Step 1 的快照、active pressure 与追加式生存日志持久化方案
+- `docs/step-1-verification.md`：Step 1 的非回归验证、本地 accelerated cadence 验证与 Linux 长时运行验证方案
 
 ## 下一关键节点
 - 已完成 Step 0 的实现合同文档与最小 Python 运行壳骨架
@@ -55,5 +59,11 @@ Step 0 暂不讨论：
 - 已通过 mac 本地 bounded run、自动化测试与结构化日志验证核心边界
 - 已在远程 Linux 主机以 user systemd 方式完成隔离部署与基本验证
 - 已完成长时 heartbeat 观察，以及 generation mismatch / lease expiry / restart recovery / distress injection 的异常路径验证
-- 已补 Step 1 启动说明与原始参考材料入口，支持后续新会话直接进入 Step 1 docs-first 规划
-- 下一步优先写 Step 1 实现规格，而不是继续给 Step 0 扩层级能力
+- 已补 Step 1 启动说明、实现规格、持久化方案、验证方案与原始参考材料入口，支持新会话直接继续 Step 1 docs-first 规划
+- 已完成 Step 1 第一轮本地实现：external life sensing、judgment、pressure、history、patrol 调度已接入 heartbeat-first 主循环
+- 已完成 Step 1 本地自动化验证：34 个测试通过，覆盖 Step 0 非回归、Step 1 模块边界、pressure 开关历史与 accelerated cadence 集成路径
+- 已在远程 Linux 主机同步 Step 1 代码并通过全量测试
+- 已在远程 Linux 主机通过 accelerated 验证：journal 中观察到 shallow / deep / full patrol，runtime 目录真实生成 `external_life_snapshot.json`、`active_pressures.json`、`survival_log.jsonl`
+- 已在远程 Linux 主机通过半真实节律观察：5s / 10s / 15s cadence 下持续观察到 shallow / deep / full 触发，heartbeat 未被 patrol 压住
+- 已在远程 Linux 主机通过异常注入验证：通过移除再恢复 `eva.lock` 路径，真实得到 `pressure_opened -> pressure_resolved` 历史链路
+- 下一步只剩真实生产节律的长期观察，以及决定是否进行 Step 1 收口提交

@@ -1,11 +1,11 @@
 [Unit]
-Description=eva-agent Step 0 runtime
+Description=eva-agent Step 1 runtime
 After=default.target
 
 [Service]
 Type=simple
 WorkingDirectory=%h/apps/eva-agent
-ExecStart=/usr/bin/python3 -m eva.main --runtime-dir %h/.local/state/eva-agent/runtime
+ExecStart=/usr/bin/python3 -m eva.main --runtime-dir %h/.local/state/eva-agent/runtime --heartbeat-interval 15 --lease-duration 20 --recovering-window 30 --turn-guard-window 0.5 --idle-sleep-sec 0.05 --shallow-patrol-interval 300 --deep-patrol-interval 1800 --full-report-interval 86400 --recent-event-window 1800
 Restart=always
 RestartSec=3
 
