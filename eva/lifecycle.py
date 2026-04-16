@@ -12,6 +12,7 @@ from typing import Any
 from .config import ExternalLifeConfig, LifecycleConfig
 from .instance import InstanceGuard, InstanceSnapshot
 from .patrol import PatrolScheduler, execute_patrol
+from .response import build_response_selected_event_details, maybe_respond_after_patrol
 from .state import EventRecord, RuntimeState, StateStore, emit_log_line, utc_now
 
 
@@ -75,13 +76,44 @@ class LifecycleRuntime:
             WorkSlice(name="self_check"),
             WorkSlice(name="persist_marker"),
         ])
+        self._conservative_until_next_patrol = False
         self._tick_counter = 0
         self._turn_counter = 0
+
+    def activate_conservative_until_next_patrol(self) -> None:
+        """Pause ordinary turn work until one later patrol finishes."""
+
+        self._conservative_until_next_patrol = True
 
     def has_pending_work(self) -> bool:
         """Return whether the runtime has turn work waiting to execute."""
 
-        return bool(self.pending_work)
+        return self._has_executable_work()
+
+    def _has_executable_work(self) -> bool:
+        """Return whether any queued work is currently executable."""
+
+        return any(self._can_execute_work(work_slice) for work_slice in self.pending_work)
+
+    def _can_execute_work(self, work_slice: WorkSlice) -> bool:
+        """Return whether the current runtime mode allows this work slice."""
+
+        if not self._conservative_until_next_patrol:
+            return True
+        return work_slice.kind == "patrol"
+
+    def _pop_next_executable_work(self) -> WorkSlice | None:
+        """Remove and return the next work slice allowed by the current mode."""
+
+        if not self.pending_work:
+            return None
+        if not self._conservative_until_next_patrol:
+            return self.pending_work.popleft()
+        for work_slice in tuple(self.pending_work):
+            if work_slice.kind == "patrol":
+                self.pending_work.remove(work_slice)
+                return work_slice
+        return None
 
     def queue_due_patrols(self, now: datetime | None = None) -> None:
         """Append due patrol work slices without duplicating already queued cadences."""
@@ -303,7 +335,20 @@ class LifecycleRuntime:
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason="no_work")
             return result
 
-        work_slice = self.pending_work.popleft()
+        work_slice = self._pop_next_executable_work()
+        if work_slice is None:
+            details = {"reason": "conservative_mode_waiting_for_patrol"}
+            result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
+            self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
+            emit_log_line(
+                "turn",
+                turn_id=turn_id,
+                state=state.life_state,
+                executed=False,
+                reason="conservative_mode_waiting_for_patrol",
+            )
+            return result
+
         details: dict[str, Any] = {
             "work_slice": work_slice.name,
             "work_kind": work_slice.kind,
@@ -328,6 +373,31 @@ class LifecycleRuntime:
                     "resolved_count": patrol_result.resolved_count,
                 }
             )
+            conservative_before_patrol = self._conservative_until_next_patrol
+            if conservative_before_patrol:
+                self._conservative_until_next_patrol = False
+            response_summary = maybe_respond_after_patrol(
+                self.store,
+                state,
+                now,
+                runtime=self,
+                allow_repair_side_effects=not conservative_before_patrol,
+            )
+            if response_summary is not None:
+                details["response"] = response_summary
+                self.store.append_event(
+                    EventRecord(
+                        event_type="response_selected",
+                        timestamp=now,
+                        turn_id=turn_id,
+                        life_state=state.life_state,
+                        details=build_response_selected_event_details(
+                            response_summary,
+                            work_slice=work_slice.name,
+                            work_kind=work_slice.kind,
+                        ),
+                    )
+                )
 
         state.last_turn_id = turn_id
         state.updated_at = now

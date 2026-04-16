@@ -424,6 +424,19 @@ class StateStore:
         lines = self.paths.survival_log_file.read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
 
+    def append_response_history(self, payload: dict[str, Any]) -> None:
+        """Append one Step 2 response entry to response_history.jsonl."""
+
+        self._append_jsonl(self.paths.response_history_file, payload)
+
+    def read_response_history(self) -> list[dict[str, Any]]:
+        """Read the append-only Step 2 response history log."""
+
+        if not self.paths.response_history_file.exists():
+            return []
+        lines = self.paths.response_history_file.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
     def append_event(self, event: EventRecord) -> None:
         """Append one lifecycle event to events.jsonl."""
 

@@ -7,6 +7,7 @@ from datetime import timedelta
 from eva.config import ExternalLifeConfig, LifecycleConfig, build_runtime_paths
 from eva.instance import InstanceGuard
 from eva.lifecycle import LifeState, LifecycleRuntime, WorkSlice
+from eva.response import RECHECK_ACTION, REPAIR_ACTION
 from eva.state import EventRecord, RuntimeState, StateStore, utc_now
 
 
@@ -83,6 +84,7 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(result.details["status"], "completed")
         self.assertEqual(result.details["overall_status"], "healthy")
         self.assertEqual(result.details["pressure_count"], 0)
+        self.assertNotIn("response", result.details)
 
         snapshot = self.store.read_external_life_snapshot()
         self.assertIsNotNone(snapshot)
@@ -103,6 +105,9 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(len(turn_events), 1)
         self.assertEqual(turn_events[0]["details"]["work_kind"], "patrol")
         self.assertEqual(turn_events[0]["details"]["work_slice"], "deep")
+        response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
+        self.assertEqual(response_events, [])
+        self.assertEqual(self.store.read_response_history(), [])
 
     def test_patrol_history_records_pressure_opened_and_resolved(self) -> None:
         now = utc_now()
@@ -124,6 +129,18 @@ class PatrolRuntimeTests(unittest.TestCase):
         pressure_table = self.store.read_active_pressures()
         self.assertEqual(len(pressure_table.pressures), 1)
         self.assertEqual(pressure_table.pressures[0].type, "integrity")
+        self.assertIn("response", first.details)
+        self.assertEqual(first.details["response"]["pressure_type"], "integrity")
+        self.assertEqual(first.details["response"]["selected_action"], RECHECK_ACTION)
+        self.assertEqual(first.details["response"]["execution_status"], "completed")
+        response_history = self.store.read_response_history()
+        self.assertEqual(len(response_history), 1)
+        self.assertEqual(response_history[0]["selected_action"], RECHECK_ACTION)
+        response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
+        self.assertEqual(len(response_events), 1)
+        self.assertEqual(response_events[0]["turn_id"], first.turn_id)
+        self.assertEqual(response_events[0]["details"]["selected_action"], RECHECK_ACTION)
+        self.assertEqual(response_events[0]["details"]["pressure_type"], "integrity")
 
         self.state.instance_valid = True
         self.store.write_runtime_state(self.state)
@@ -138,12 +155,64 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(second.details["pressure_count"], 0)
         self.assertEqual(second.details["opened_count"], 0)
         self.assertEqual(second.details["resolved_count"], 1)
+        self.assertNotIn("response", second.details)
+
+        later_response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
+        self.assertEqual(len(later_response_events), 1)
 
         survival_events = [entry["event_type"] for entry in self.store.read_survival_log()]
         self.assertIn("pressure_opened", survival_events)
         self.assertIn("pressure_resolved", survival_events)
         self.assertIn("survival_snapshot", survival_events)
 
+    def test_repair_response_pauses_maintenance_until_next_patrol(self) -> None:
+        now = utc_now()
+        self.runtime.pending_work.clear()
+        self.runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=now - timedelta(seconds=1)))
+        self.runtime.pending_work.append(WorkSlice(name="self_check"))
+        self.store.append_event(
+            EventRecord(
+                event_type="yield",
+                timestamp=now - timedelta(seconds=0.1),
+                details={"reason": "manual_test_yield"},
+            )
+        )
 
-if __name__ == "__main__":
-    unittest.main()
+        first = self.runtime.run_turn(
+            self.state,
+            next_heartbeat_at=now + timedelta(seconds=1),
+            now=now,
+        )
+        self.assertTrue(first.executed)
+        self.assertIn("response", first.details)
+        self.assertEqual(first.details["response"]["selected_action"], REPAIR_ACTION)
+        self.assertTrue(self.runtime._conservative_until_next_patrol)
+        response_history = self.store.read_response_history()
+        self.assertEqual(response_history[0]["side_effects"], ["temporary_conservative_until_next_patrol"])
+        self.assertEqual([work.name for work in self.runtime.pending_work], ["self_check"])
+        self.assertFalse(self.runtime.has_pending_work())
+
+        blocked_at = now + timedelta(seconds=0.05)
+        blocked = self.runtime.run_turn(
+            self.state,
+            next_heartbeat_at=blocked_at + timedelta(seconds=1),
+            now=blocked_at,
+        )
+        self.assertFalse(blocked.executed)
+        self.assertEqual(blocked.details["reason"], "conservative_mode_waiting_for_patrol")
+        self.assertEqual([work.name for work in self.runtime.pending_work], ["self_check"])
+
+        patrol_at = now + timedelta(seconds=0.2)
+        self.runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=patrol_at - timedelta(seconds=1)))
+        self.assertTrue(self.runtime.has_pending_work())
+        second = self.runtime.run_turn(
+            self.state,
+            next_heartbeat_at=patrol_at + timedelta(seconds=1),
+            now=patrol_at,
+        )
+        self.assertTrue(second.executed)
+        self.assertEqual(second.work_slice, "deep")
+        self.assertFalse(self.runtime._conservative_until_next_patrol)
+        self.assertEqual([work.name for work in self.runtime.pending_work], ["self_check"])
+        self.assertTrue(self.runtime.has_pending_work())
+

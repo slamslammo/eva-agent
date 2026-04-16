@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from eva.config import LifecycleConfig, build_runtime_paths
 from eva.instance import InstanceGuard
-from eva.lifecycle import LifeState, LifecycleRuntime
+from eva.lifecycle import LifeState, LifecycleRuntime, WorkSlice
 from eva.state import ActiveInstanceRecord, RuntimeState, StateStore, utc_now
 
 
@@ -112,6 +112,26 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(distress_events[0]["details"]["reason"], "manual_distress_test")
         self.assertEqual(distress_events[0]["details"]["source"], "distress_injection_file")
         self.assertTrue(distress_events[0]["details"]["instance_valid"])
+
+    def test_conservative_window_keeps_heartbeat_guard_and_critical_block(self) -> None:
+        now = utc_now()
+        self.runtime.pending_work.clear()
+        self.runtime.pending_work.append(WorkSlice(name="self_check"))
+        self.runtime.activate_conservative_until_next_patrol()
+        state = RuntimeState(life_state=LifeState.STABLE.value, instance_valid=True, recovering_until=now - timedelta(seconds=1))
+
+        yielded = self.runtime.run_turn(state, next_heartbeat_at=now + timedelta(seconds=0.1), now=now)
+        self.assertFalse(yielded.executed)
+        self.assertTrue(yielded.yielded_to_heartbeat)
+        self.assertEqual(yielded.details["reason"], "heartbeat_deadline_near")
+
+        later = now + timedelta(seconds=1)
+        state.life_state = LifeState.CRITICAL.value
+        blocked = self.runtime.run_turn(state, next_heartbeat_at=later + timedelta(seconds=1), now=later)
+        self.assertFalse(blocked.executed)
+        self.assertFalse(blocked.yielded_to_heartbeat)
+        self.assertEqual(blocked.details["reason"], "critical_life_state")
+        self.assertTrue(self.runtime._conservative_until_next_patrol)
 
 
 if __name__ == "__main__":

@@ -19,11 +19,12 @@ from eva.state import (
 
 
 class StateStoreTests(unittest.TestCase):
-    def test_build_runtime_paths_includes_step1_files(self) -> None:
+    def test_build_runtime_paths_includes_step1_and_step2_files(self) -> None:
         paths = build_runtime_paths("/tmp/eva-state-test")
         self.assertTrue(str(paths.external_life_snapshot_file).endswith("external_life_snapshot.json"))
         self.assertTrue(str(paths.active_pressures_file).endswith("active_pressures.json"))
         self.assertTrue(str(paths.survival_log_file).endswith("survival_log.jsonl"))
+        self.assertTrue(str(paths.response_history_file).endswith("response_history.jsonl"))
 
     def test_write_and_read_active_instance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -149,6 +150,33 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(len(events), 2)
             self.assertEqual(events[0]["event_type"], "startup")
             self.assertEqual(events[1]["event_type"], "shutdown")
+
+    def test_append_and_read_response_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            store.append_response_history(
+                {
+                    "response_id": "resp-001",
+                    "recorded_at": now.isoformat(),
+                    "pressure_id": "pressure-integrity-instance_invalid",
+                    "selected_action": "recheck_runtime_integrity",
+                    "execution_status": "completed",
+                }
+            )
+            store.append_response_history(
+                {
+                    "response_id": "resp-002",
+                    "recorded_at": now.isoformat(),
+                    "pressure_id": "pressure-integrity-runtime_not_writable",
+                    "selected_action": "escalate_integrity_risk",
+                    "execution_status": "escalated",
+                }
+            )
+            entries = store.read_response_history()
+            self.assertEqual(len(entries), 2)
+            self.assertEqual(entries[0]["response_id"], "resp-001")
+            self.assertEqual(entries[1]["selected_action"], "escalate_integrity_risk")
 
     def test_runtime_state_overwrite_remains_readable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

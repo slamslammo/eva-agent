@@ -1,0 +1,319 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from datetime import timedelta
+
+from eva.config import build_runtime_paths
+from eva.response import (
+    ESCALATE_ACTION,
+    RECHECK_ACTION,
+    REPAIR_ACTION,
+    build_integrity_response_candidates,
+    build_response_selected_event_details,
+    filter_response_candidates,
+    maybe_respond_after_patrol,
+    respond_to_integrity_pressure,
+    select_response_action,
+)
+from eva.state import ActivePressure, ActivePressureTable, RuntimeState, StateStore, utc_now
+
+
+class StubRuntime:
+    def __init__(self) -> None:
+        self.activated = False
+
+    def activate_conservative_until_next_patrol(self) -> None:
+        self.activated = True
+
+
+class ResponseTests(unittest.TestCase):
+    def _pressure(self, reason: str, **evidence: object) -> ActivePressure:
+        now = utc_now()
+        base_evidence = {"reason": reason}
+        base_evidence.update(evidence)
+        return ActivePressure(
+            pressure_id=f"pressure-integrity-{reason}",
+            type="integrity",
+            severity="critical",
+            evidence=base_evidence,
+            first_seen_at=now - timedelta(seconds=10),
+            last_seen_at=now,
+            trend="worsening",
+            active=True,
+        )
+
+    def _state(self, life_state: str = "STABLE", *, instance_valid: bool = True) -> RuntimeState:
+        return RuntimeState(life_state=life_state, instance_valid=instance_valid, heartbeat_ok=True, tick_ok=True)
+
+    def test_instance_invalid_defaults_to_recheck(self) -> None:
+        pressure = self._pressure("instance_invalid")
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(pressure, state, candidates, decisions)
+
+        self.assertEqual([candidate.action for candidate in candidates], [RECHECK_ACTION, ESCALATE_ACTION])
+        self.assertEqual(selection.selected_action, RECHECK_ACTION)
+        self.assertEqual(selection.selected_action_reason, "best_information_gain")
+
+    def test_runtime_files_missing_defaults_to_escalate(self) -> None:
+        pressure = self._pressure("runtime_files_missing", runtime_state_present=False)
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(pressure, state, candidates, decisions)
+
+        self.assertEqual(selection.selected_action, ESCALATE_ACTION)
+        self.assertEqual(selection.selected_posture, "defer_or_request_help")
+
+    def test_recent_yield_detected_in_stable_state_defaults_to_repair(self) -> None:
+        pressure = self._pressure(
+            "recent_yield_detected",
+            runtime_writable=True,
+            active_instance_present=True,
+            runtime_state_present=True,
+            events_present=True,
+            lock_present=True,
+            recent_distress_count=0,
+        )
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(pressure, state, candidates, decisions)
+
+        self.assertEqual([candidate.action for candidate in candidates], [RECHECK_ACTION, REPAIR_ACTION, ESCALATE_ACTION])
+        self.assertEqual(selection.selected_action, REPAIR_ACTION)
+        self.assertEqual(selection.state_mode, "conservative")
+
+    def test_recent_yield_detected_in_degraded_state_falls_back_to_escalate(self) -> None:
+        pressure = self._pressure("recent_yield_detected")
+        state = self._state("DEGRADED")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(pressure, state, candidates, decisions)
+
+        self.assertEqual([candidate.action for candidate in candidates], [RECHECK_ACTION, ESCALATE_ACTION])
+        self.assertEqual(selection.selected_action, ESCALATE_ACTION)
+
+    def test_repair_is_denied_and_selection_falls_back_to_only_allowed_action(self) -> None:
+        pressure = self._pressure(
+            "recent_yield_detected",
+            runtime_writable=False,
+            active_instance_present=True,
+            runtime_state_present=True,
+            events_present=True,
+            lock_present=True,
+            recent_distress_count=0,
+        )
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(pressure, state, candidates, decisions)
+
+        self.assertIn(REPAIR_ACTION, selection.denied_actions)
+        self.assertEqual(selection.selected_action, RECHECK_ACTION)
+        self.assertEqual(selection.selected_action_reason, "only_allowed_action")
+        self.assertIn("risk_to_continuity", selection.filter_reasons)
+
+    def test_respond_to_integrity_pressure_writes_recheck_history_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            store.write_runtime_state(state)
+            pressure = self._pressure("instance_invalid")
+            store.write_active_pressures(
+                ActivePressureTable(captured_at=now, pressures=[pressure], updated_at=now)
+            )
+            store.paths.active_instance_file.write_text("{}\n", encoding="utf-8")
+            store.paths.events_file.write_text('{"event_type": "startup"}\n', encoding="utf-8")
+
+            summary = respond_to_integrity_pressure(store, pressure, state, now)
+            history = store.read_response_history()
+
+            self.assertEqual(summary["selected_action"], RECHECK_ACTION)
+            self.assertEqual(summary["execution_status"], "completed")
+            self.assertEqual(summary["pressure_outcome"], "unchanged")
+            self.assertEqual(len(history), 1)
+            self.assertEqual(history[0]["selected_action"], RECHECK_ACTION)
+            self.assertEqual(history[0]["pressure_outcome"], "unchanged")
+            self.assertEqual(history[0]["state_mode"], "normal")
+
+    def test_respond_to_integrity_pressure_writes_repair_history_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure(
+                "recent_yield_detected",
+                runtime_writable=True,
+                active_instance_present=True,
+                runtime_state_present=True,
+                events_present=True,
+                lock_present=True,
+                recent_distress_count=0,
+            )
+            runtime = StubRuntime()
+
+            summary = respond_to_integrity_pressure(store, pressure, state, now, runtime=runtime)
+            history = store.read_response_history()
+
+            self.assertTrue(runtime.activated)
+            self.assertEqual(summary["selected_action"], REPAIR_ACTION)
+            self.assertEqual(summary["execution_status"], "completed")
+            self.assertEqual(summary["pressure_outcome"], "unknown")
+            self.assertEqual(history[0]["selected_action"], REPAIR_ACTION)
+            self.assertEqual(history[0]["state_mode"], "conservative")
+            self.assertEqual(history[0]["side_effects"], ["temporary_conservative_until_next_patrol"])
+            self.assertTrue(history[0]["followup_needed"])
+
+    def test_respond_to_integrity_pressure_writes_escalation_history_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure("runtime_files_missing", runtime_state_present=False)
+
+            summary = respond_to_integrity_pressure(store, pressure, state, now)
+            history = store.read_response_history()
+
+            self.assertEqual(summary["selected_action"], ESCALATE_ACTION)
+            self.assertEqual(summary["execution_status"], "escalated")
+            self.assertEqual(summary["pressure_outcome"], "unchanged")
+            self.assertEqual(history[0]["selected_action"], ESCALATE_ACTION)
+            self.assertEqual(history[0]["integration_hint"], "needs_human_review")
+
+    def test_build_response_selected_event_details_returns_minimal_payload(self) -> None:
+        payload = build_response_selected_event_details(
+            {
+                "pressure_id": "pressure-integrity-instance_invalid",
+                "pressure_type": "integrity",
+                "selected_action": RECHECK_ACTION,
+                "selected_posture": "recheck_or_observe",
+                "execution_status": "completed",
+                "pressure_outcome": "unchanged",
+                "followup_needed": True,
+            },
+            work_slice="deep",
+            work_kind="patrol",
+        )
+
+        self.assertEqual(
+            payload,
+            {
+                "work_slice": "deep",
+                "work_kind": "patrol",
+                "pressure_id": "pressure-integrity-instance_invalid",
+                "pressure_type": "integrity",
+                "selected_action": RECHECK_ACTION,
+                "selected_posture": "recheck_or_observe",
+                "execution_status": "completed",
+                "pressure_outcome": "unchanged",
+                "followup_needed": True,
+            },
+        )
+
+    def test_maybe_respond_after_patrol_returns_none_without_integrity_pressure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            store.write_active_pressures(
+                ActivePressureTable(
+                    captured_at=now,
+                    pressures=[
+                        ActivePressure(
+                            pressure_id="pressure-continuity-restart_loop",
+                            type="continuity",
+                            severity="critical",
+                            evidence={"reason": "restart_loop"},
+                            first_seen_at=now,
+                            last_seen_at=now,
+                            trend="worsening",
+                            active=True,
+                        )
+                    ],
+                    updated_at=now,
+                )
+            )
+
+            summary = maybe_respond_after_patrol(store, state, now)
+
+            self.assertIsNone(summary)
+            self.assertEqual(store.read_response_history(), [])
+
+    def test_maybe_respond_after_patrol_activates_runtime_for_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure(
+                "recent_yield_detected",
+                runtime_writable=True,
+                active_instance_present=True,
+                runtime_state_present=True,
+                events_present=True,
+                lock_present=True,
+                recent_distress_count=0,
+            )
+            store.write_active_pressures(
+                ActivePressureTable(captured_at=now, pressures=[pressure], updated_at=now)
+            )
+            runtime = StubRuntime()
+
+            summary = maybe_respond_after_patrol(store, state, now, runtime=runtime)
+            history = store.read_response_history()
+
+            self.assertIsNotNone(summary)
+            assert summary is not None
+            self.assertTrue(runtime.activated)
+            self.assertEqual(summary["selected_action"], REPAIR_ACTION)
+            self.assertEqual(history[0]["side_effects"], ["temporary_conservative_until_next_patrol"])
+
+    def test_maybe_respond_after_patrol_selects_first_integrity_pressure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            first_integrity = self._pressure("runtime_files_missing", runtime_state_present=False)
+            later_integrity = self._pressure("instance_invalid")
+            store.write_active_pressures(
+                ActivePressureTable(
+                    captured_at=now,
+                    pressures=[
+                        ActivePressure(
+                            pressure_id="pressure-continuity-restart_loop",
+                            type="continuity",
+                            severity="critical",
+                            evidence={"reason": "restart_loop"},
+                            first_seen_at=now,
+                            last_seen_at=now,
+                            trend="worsening",
+                            active=True,
+                        ),
+                        first_integrity,
+                        later_integrity,
+                    ],
+                    updated_at=now,
+                )
+            )
+
+            summary = maybe_respond_after_patrol(store, state, now)
+            history = store.read_response_history()
+
+            self.assertIsNotNone(summary)
+            assert summary is not None
+            self.assertEqual(summary["pressure_id"], first_integrity.pressure_id)
+            self.assertEqual(summary["selected_action"], ESCALATE_ACTION)
+            self.assertEqual(len(history), 1)
+            self.assertEqual(history[0]["pressure_id"], first_integrity.pressure_id)
+
+
+if __name__ == "__main__":
+    unittest.main()
