@@ -8,9 +8,7 @@ import unittest
 from datetime import timedelta
 from pathlib import Path
 
-from eva.config import LifecycleConfig, build_runtime_paths
-from eva.instance import InstanceGuard
-from eva.state import ActiveInstanceRecord, StateStore, utc_now
+from eva.kernel import ActiveInstanceRecord, InstanceGuard, LifecycleConfig, StateStore, build_runtime_paths, utc_now
 
 
 class InstanceGuardTests(unittest.TestCase):
@@ -70,9 +68,7 @@ class InstanceGuardTests(unittest.TestCase):
         env = os.environ.copy()
         env["PYTHONPATH"] = str(repo_root)
         script = """
-from eva.config import LifecycleConfig, build_runtime_paths
-from eva.instance import InstanceGuard
-from eva.state import StateStore
+from eva.kernel import InstanceGuard, LifecycleConfig, StateStore, build_runtime_paths
 import sys
 
 store = StateStore(build_runtime_paths(sys.argv[1]))

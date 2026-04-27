@@ -295,6 +295,75 @@ class ActivePressureTable:
 
 
 @dataclass
+class DriveState:
+    """One continuous L2 drive value and its latest local update summary."""
+
+    drive_type: str
+    level: float = 0.0
+    delta: float = 0.0
+    trend: str = "unknown"
+    contributors: list[str] = field(default_factory=list)
+    updated_at: datetime = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize one continuous drive record for current-state storage."""
+
+        return {
+            "drive_type": self.drive_type,
+            "level": self.level,
+            "delta": self.delta,
+            "trend": self.trend,
+            "contributors": list(self.contributors),
+            "updated_at": to_iso8601(self.updated_at),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "DriveState":
+        """Deserialize one continuous drive record from JSON payload data."""
+
+        return cls(
+            drive_type=str(payload.get("drive_type", "survival")),
+            level=float(payload.get("level", 0.0)),
+            delta=float(payload.get("delta", 0.0)),
+            trend=str(payload.get("trend", "unknown")),
+            contributors=[str(item) for item in payload.get("contributors", [])],
+            updated_at=from_iso8601(payload.get("updated_at")) or utc_now(),
+        )
+
+
+@dataclass
+class DriveStateTable:
+    """Current table of continuous L2 drives derived from patrol updates."""
+
+    captured_at: datetime
+    drives: list[DriveState] = field(default_factory=list)
+    updated_at: datetime = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the continuous drive table for current-state storage."""
+
+        return {
+            "captured_at": to_iso8601(self.captured_at),
+            "drives": [drive.to_dict() for drive in self.drives],
+            "updated_at": to_iso8601(self.updated_at),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "DriveStateTable":
+        """Deserialize the continuous drive table from JSON payload data."""
+
+        return cls(
+            captured_at=from_iso8601(payload.get("captured_at")) or utc_now(),
+            drives=[
+                DriveState.from_dict(item)
+                for item in payload.get("drives", [])
+                if isinstance(item, dict)
+            ],
+            updated_at=from_iso8601(payload.get("updated_at")) or utc_now(),
+        )
+
+
+@dataclass
 class EventRecord:
     """Append-only structured event written into events.jsonl."""
 
@@ -410,6 +479,19 @@ class StateStore:
             return ActivePressureTable(captured_at=utc_now())
         payload = json.loads(self.paths.active_pressures_file.read_text(encoding="utf-8"))
         return ActivePressureTable.from_dict(payload)
+
+    def write_drive_state(self, table: DriveStateTable) -> None:
+        """Persist the latest continuous drive-state table."""
+
+        self._atomic_write_json(self.paths.drive_state_file, table.to_dict())
+
+    def read_drive_state(self) -> DriveStateTable | None:
+        """Read the latest continuous drive-state table if it exists."""
+
+        if not self.paths.drive_state_file.exists():
+            return None
+        payload = json.loads(self.paths.drive_state_file.read_text(encoding="utf-8"))
+        return DriveStateTable.from_dict(payload)
 
     def append_survival_log(self, payload: dict[str, Any]) -> None:
         """Append one Step 1 history entry to survival_log.jsonl."""

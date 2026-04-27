@@ -8,10 +8,19 @@ from dataclasses import dataclass
 from datetime import timedelta
 from uuid import uuid4
 
-from .config import ExternalLifeConfig, LoopControl, LifecycleConfig, RuntimeConfig, build_runtime_config
-from .instance import InstanceGuard
+from .kernel import (
+    EventRecord,
+    ExternalLifeConfig,
+    InstanceGuard,
+    LifecycleConfig,
+    LoopControl,
+    RuntimeConfig,
+    StateStore,
+    build_runtime_config,
+    emit_log_line,
+    utc_now,
+)
 from .lifecycle import LifecycleRuntime
-from .state import EventRecord, StateStore, emit_log_line, utc_now
 
 
 @dataclass

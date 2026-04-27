@@ -4,16 +4,18 @@ import tempfile
 import unittest
 from datetime import timedelta
 
-from eva.config import build_runtime_paths
-from eva.state import (
+from eva.kernel import (
     ActiveInstanceRecord,
     ActivePressure,
     ActivePressureTable,
     DimensionSnapshot,
+    DriveState,
+    DriveStateTable,
     EventRecord,
     ExternalLifeSnapshot,
     RuntimeState,
     StateStore,
+    build_runtime_paths,
     utc_now,
 )
 
@@ -22,6 +24,7 @@ class StateStoreTests(unittest.TestCase):
     def test_build_runtime_paths_includes_step1_and_step2_files(self) -> None:
         paths = build_runtime_paths("/tmp/eva-state-test")
         self.assertTrue(str(paths.external_life_snapshot_file).endswith("external_life_snapshot.json"))
+        self.assertTrue(str(paths.drive_state_file).endswith("drive_state.json"))
         self.assertTrue(str(paths.active_pressures_file).endswith("active_pressures.json"))
         self.assertTrue(str(paths.survival_log_file).endswith("survival_log.jsonl"))
         self.assertTrue(str(paths.response_history_file).endswith("response_history.jsonl"))
@@ -91,7 +94,33 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(loaded.overall_status, "healthy")
             self.assertIn("host_continuity", loaded.dimensions)
 
-    def test_write_and_read_active_pressures(self) -> None:
+    def test_write_and_read_drive_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            table = DriveStateTable(
+                captured_at=now,
+                drives=[
+                    DriveState(
+                        drive_type="survival",
+                        level=0.4,
+                        delta=0.1,
+                        trend="worsening",
+                        contributors=["resource_state.disk_space_declining"],
+                        updated_at=now,
+                    )
+                ],
+                updated_at=now,
+            )
+            store.write_drive_state(table)
+            loaded = store.read_drive_state()
+            self.assertIsNotNone(loaded)
+            assert loaded is not None
+            self.assertEqual(len(loaded.drives), 1)
+            self.assertEqual(loaded.drives[0].drive_type, "survival")
+            self.assertAlmostEqual(loaded.drives[0].level, 0.4)
+            self.assertEqual(loaded.drives[0].contributors, ["resource_state.disk_space_declining"])
+
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
             now = utc_now()
@@ -197,6 +226,7 @@ class StateStoreTests(unittest.TestCase):
             payload = store.paths.runtime_state_file.read_text(encoding="utf-8")
             self.assertNotIn("overall_status", payload)
             self.assertNotIn("pressures", payload)
+            self.assertNotIn("drive", payload)
 
 
 if __name__ == "__main__":

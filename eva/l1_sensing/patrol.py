@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from .config import ExternalLifeConfig
+from ..kernel import DriveStateTable, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore
+from ..l2_drive import DriveBroadcast, DriveSummary, build_active_pressure_table, build_drive_broadcast, update_drive_state
 from .history import persist_patrol_artifacts
 from .judgment import determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
-from .pressure import build_active_pressure_table
 from .sensing import collect_external_life_inputs
-from .state import ExternalLifeSnapshot, RuntimeState, StateStore
+from .signal_bus import SignalRecord, SignalDispatchSummary, build_patrol_signals, summarize_signal_dispatch
 
 PATROL_ORDER = ("shallow", "deep", "full")
 PATROL_INTERVAL_SECONDS = {
@@ -37,6 +37,11 @@ class PatrolResult:
     pressure_count: int
     opened_count: int
     resolved_count: int
+    signals: list[SignalRecord]
+    signal_summary: SignalDispatchSummary
+    drive_state: DriveStateTable
+    drive_summary: DriveSummary
+    drive_broadcast: DriveBroadcast
 
 
 class PatrolScheduler:
@@ -83,8 +88,15 @@ def execute_patrol(
 ) -> PatrolResult:
     """Run one patrol from sensing through persistence and history writing."""
 
-    inputs = collect_external_life_inputs(store, runtime_state, config, now, due_at=due_at)
     previous_snapshot = store.read_external_life_snapshot()
+    inputs = collect_external_life_inputs(
+        store,
+        runtime_state,
+        config,
+        now,
+        due_at=due_at,
+        previous_snapshot=previous_snapshot,
+    )
     dimensions = evaluate_dimensions(inputs, config)
     overall_status = determine_overall_status(dimensions)
     snapshot = ExternalLifeSnapshot(
@@ -93,11 +105,21 @@ def execute_patrol(
         dimensions=dimensions,
         overall_status=overall_status,
         primary_gap=determine_primary_gap(dimensions),
-        trend=determine_trend(overall_status, previous_snapshot),
+        trend=determine_trend(
+            overall_status,
+            previous_snapshot,
+            current_dimensions=dimensions,
+        ),
         updated_at=now,
     )
     previous_pressures = store.read_active_pressures()
     pressure_table, opened_pressures, resolved_pressures = build_active_pressure_table(snapshot, previous_pressures)
+    signals = build_patrol_signals(snapshot, pressure_table)
+    signal_summary = summarize_signal_dispatch(signals)
+    previous_drive_state = store.read_drive_state()
+    drive_state, drive_summary = update_drive_state(previous_drive_state, snapshot, signals)
+    drive_broadcast = build_drive_broadcast(drive_state)
+    store.write_drive_state(drive_state)
     persist_patrol_artifacts(
         store,
         snapshot,
@@ -112,4 +134,9 @@ def execute_patrol(
         pressure_count=len(pressure_table.pressures),
         opened_count=len(opened_pressures),
         resolved_count=len(resolved_pressures),
+        signals=signals,
+        signal_summary=signal_summary,
+        drive_state=drive_state,
+        drive_summary=drive_summary,
+        drive_broadcast=drive_broadcast,
     )

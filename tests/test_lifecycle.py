@@ -5,10 +5,8 @@ import tempfile
 import unittest
 from datetime import timedelta
 
-from eva.config import LifecycleConfig, build_runtime_paths
-from eva.instance import InstanceGuard
+from eva.kernel import ActiveInstanceRecord, InstanceGuard, LifecycleConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.lifecycle import LifeState, LifecycleRuntime, WorkSlice
-from eva.state import ActiveInstanceRecord, RuntimeState, StateStore, utc_now
 
 
 class LifecycleRuntimeTests(unittest.TestCase):
@@ -112,6 +110,28 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(distress_events[0]["details"]["reason"], "manual_distress_test")
         self.assertEqual(distress_events[0]["details"]["source"], "distress_injection_file")
         self.assertTrue(distress_events[0]["details"]["instance_valid"])
+
+    def test_patrol_turn_reports_signal_summary_without_bypassing_guard(self) -> None:
+        now = utc_now()
+        state = RuntimeState(life_state=LifeState.STABLE.value, instance_valid=True, recovering_until=now - timedelta(seconds=1))
+        self.store.write_runtime_state(state)
+        self.runtime.pending_work.clear()
+        self.runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=now - timedelta(seconds=1)))
+
+        guarded = self.runtime.run_turn(state, next_heartbeat_at=now + timedelta(seconds=0.1), now=now)
+        self.assertFalse(guarded.executed)
+        self.assertEqual(guarded.details["reason"], "heartbeat_deadline_near")
+
+        later = now + timedelta(seconds=1)
+        executed = self.runtime.run_turn(state, next_heartbeat_at=later + timedelta(seconds=1), now=later)
+        self.assertTrue(executed.executed)
+        self.assertEqual(executed.details["work_kind"], "patrol")
+        self.assertEqual(executed.details["signal_summary"]["signal_count"], 1)
+        self.assertEqual(executed.details["signal_summary"]["status_signal_count"], 1)
+        self.assertEqual(executed.details["signal_summary"]["threat_signal_count"], 0)
+        self.assertEqual(executed.details["drive_summary"]["top_drive"], "curiosity")
+        self.assertEqual(executed.details["drive_broadcast"]["top_drive"], "curiosity")
+        self.assertIn("curiosity", executed.details["drive_broadcast"]["drive_levels"])
 
     def test_conservative_window_keeps_heartbeat_guard_and_critical_block(self) -> None:
         now = utc_now()

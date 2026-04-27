@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eva-agent"
 version = "0.1.0"
-description = "Step 0 lifecycle runtime for eva-agent"
+description = "Existence-centered agent runtime experiment aligned with EVA theory"
 requires-python = ">=3.11"
 
-[tool.setuptools]
-packages = ["eva"]
+[tool.setuptools.packages.find]
+include = ["eva*"]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .state import ActivePressure, ActivePressureTable, ExternalLifeSnapshot, StateStore, to_iso8601
+from ..kernel import ActivePressure, ActivePressureTable, ExternalLifeSnapshot, StateStore, to_iso8601
 
 
 def _build_summary(snapshot: ExternalLifeSnapshot) -> str:

@@ -4,11 +4,10 @@ import tempfile
 import unittest
 from datetime import timedelta
 
-from eva.config import ExternalLifeConfig, LifecycleConfig, build_runtime_paths
-from eva.instance import InstanceGuard
+from eva.kernel import DriveStateTable, EventRecord, ExternalLifeConfig, InstanceGuard, LifecycleConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
+from eva.l1_sensing import execute_patrol
 from eva.lifecycle import LifeState, LifecycleRuntime, WorkSlice
 from eva.response import RECHECK_ACTION, REPAIR_ACTION
-from eva.state import EventRecord, RuntimeState, StateStore, utc_now
 
 
 class PatrolRuntimeTests(unittest.TestCase):
@@ -52,7 +51,36 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.guard.release()
         self.temp_dir.cleanup()
 
-    def test_queue_due_patrols_adds_patrol_work_without_duplicates(self) -> None:
+    def test_execute_patrol_emits_status_signal_with_rate_context(self) -> None:
+        now = utc_now()
+
+        result = execute_patrol(
+            "deep",
+            self.store,
+            self.state,
+            self.external_life,
+            now,
+            due_at=now - timedelta(seconds=1),
+        )
+
+        self.assertEqual(result.signal_summary.signal_count, 1)
+        self.assertEqual(result.signal_summary.status_signal_count, 1)
+        self.assertEqual(result.signal_summary.threat_signal_count, 0)
+        self.assertFalse(result.signal_summary.has_threat_signal)
+        self.assertEqual(len(result.signals), 1)
+        self.assertEqual({drive.drive_type for drive in result.drive_state.drives}, {"survival", "integrity", "continuity", "curiosity"})
+        self.assertEqual(result.drive_summary.top_drive, "curiosity")
+        self.assertEqual(result.drive_broadcast.top_drive, "curiosity")
+        self.assertIn("curiosity", result.drive_broadcast.drive_levels)
+
+        status_signal = result.signals[0].to_dict()
+        self.assertEqual(status_signal["source"], "deep")
+        self.assertEqual(status_signal["class"], "status")
+        self.assertEqual(status_signal["captured_at"], result.snapshot.to_dict()["captured_at"])
+        self.assertEqual(status_signal["payload"], result.snapshot.to_dict())
+        self.assertIn("host_continuity", status_signal["rate_context"])
+        self.assertFalse(status_signal["rate_context"]["host_continuity"]["available"])
+
         self.runtime.pending_work.clear()
         start = utc_now()
 
@@ -84,6 +112,14 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(result.details["status"], "completed")
         self.assertEqual(result.details["overall_status"], "healthy")
         self.assertEqual(result.details["pressure_count"], 0)
+        self.assertEqual(result.details["signal_summary"]["signal_count"], 1)
+        self.assertEqual(result.details["signal_summary"]["status_signal_count"], 1)
+        self.assertEqual(result.details["signal_summary"]["threat_signal_count"], 0)
+        self.assertFalse(result.details["signal_summary"]["has_threat_signal"])
+        self.assertEqual(result.details["drive_summary"]["top_drive"], "curiosity")
+        self.assertIn("curiosity", result.details["drive_summary"]["drive_levels"])
+        self.assertEqual(result.details["drive_broadcast"]["top_drive"], "curiosity")
+        self.assertIn("curiosity", result.details["drive_broadcast"]["drive_levels"])
         self.assertNotIn("response", result.details)
 
         snapshot = self.store.read_external_life_snapshot()
@@ -92,9 +128,15 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(snapshot.source_patrol, "deep")
         self.assertEqual(snapshot.overall_status, "healthy")
         self.assertEqual(snapshot.primary_gap["type"], "none")
+        self.assertIn("rate_context", snapshot.dimensions["host_continuity"].evidence)
+        self.assertFalse(snapshot.dimensions["host_continuity"].evidence["rate_context"]["available"])
 
         pressure_table = self.store.read_active_pressures()
         self.assertEqual(len(pressure_table.pressures), 0)
+        drive_state = self.store.read_drive_state()
+        self.assertIsNotNone(drive_state)
+        assert drive_state is not None
+        self.assertEqual(len(drive_state.drives), 4)
 
         survival_log = self.store.read_survival_log()
         self.assertEqual(len(survival_log), 1)
@@ -125,10 +167,16 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(first.details["pressure_count"], 1)
         self.assertEqual(first.details["opened_count"], 1)
         self.assertEqual(first.details["resolved_count"], 0)
+        self.assertEqual(first.details["signal_summary"]["signal_count"], 2)
+        self.assertEqual(first.details["signal_summary"]["status_signal_count"], 1)
+        self.assertEqual(first.details["signal_summary"]["threat_signal_count"], 1)
+        self.assertTrue(first.details["signal_summary"]["has_threat_signal"])
+        self.assertEqual(first.details["drive_summary"]["top_drive"], "integrity")
 
         pressure_table = self.store.read_active_pressures()
         self.assertEqual(len(pressure_table.pressures), 1)
         self.assertEqual(pressure_table.pressures[0].type, "integrity")
+        self.assertEqual(len(first.details["signal_summary"]), 5)
         self.assertIn("response", first.details)
         self.assertEqual(first.details["response"]["pressure_type"], "integrity")
         self.assertEqual(first.details["response"]["selected_action"], RECHECK_ACTION)
@@ -155,7 +203,16 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(second.details["pressure_count"], 0)
         self.assertEqual(second.details["opened_count"], 0)
         self.assertEqual(second.details["resolved_count"], 1)
+        self.assertEqual(second.details["signal_summary"]["signal_count"], 1)
+        self.assertEqual(second.details["signal_summary"]["threat_signal_count"], 0)
+        self.assertFalse(second.details["signal_summary"]["has_threat_signal"])
+        self.assertEqual(second.details["drive_summary"]["top_drive"], "integrity")
         self.assertNotIn("response", second.details)
+        snapshot_after_second = self.store.read_external_life_snapshot()
+        self.assertIsNotNone(snapshot_after_second)
+        assert snapshot_after_second is not None
+        self.assertTrue(snapshot_after_second.dimensions["runtime_integrity"].evidence["rate_context"]["available"])
+        self.assertEqual(snapshot_after_second.dimensions["runtime_integrity"].status, "healthy")
 
         later_response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
         self.assertEqual(len(later_response_events), 1)

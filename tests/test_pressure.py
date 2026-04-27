@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from datetime import timedelta
 
-from eva.pressure import build_active_pressure_table
-from eva.state import ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot, utc_now
+from eva.kernel import ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot, utc_now
+from eva.l2_drive import build_active_pressure_table
 
 
 class PressureTests(unittest.TestCase):

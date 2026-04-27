@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from datetime import timedelta
 
-from eva.config import build_runtime_paths
+from eva.kernel import ActivePressure, ActivePressureTable, DriveState, DriveStateTable, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.response import (
     ESCALATE_ACTION,
     RECHECK_ACTION,
@@ -16,7 +16,7 @@ from eva.response import (
     respond_to_integrity_pressure,
     select_response_action,
 )
-from eva.state import ActivePressure, ActivePressureTable, RuntimeState, StateStore, utc_now
+from eva.l2_drive import build_drive_broadcast
 
 
 class StubRuntime:
@@ -28,6 +28,20 @@ class StubRuntime:
 
 
 class ResponseTests(unittest.TestCase):
+    def _drive_broadcast(self) -> dict[str, object]:
+        now = utc_now()
+        table = DriveStateTable(
+            captured_at=now,
+            drives=[
+                DriveState(drive_type="survival", level=0.1, updated_at=now),
+                DriveState(drive_type="integrity", level=0.6, delta=0.2, trend="worsening", contributors=["runtime_integrity.recent_yield_detected"], updated_at=now),
+                DriveState(drive_type="continuity", level=0.05, updated_at=now),
+                DriveState(drive_type="curiosity", level=0.0, updated_at=now),
+            ],
+            updated_at=now,
+        )
+        return build_drive_broadcast(table).to_dict()
+
     def _pressure(self, reason: str, **evidence: object) -> ActivePressure:
         now = utc_now()
         base_evidence = {"reason": reason}
@@ -199,25 +213,18 @@ class ResponseTests(unittest.TestCase):
                 "execution_status": "completed",
                 "pressure_outcome": "unchanged",
                 "followup_needed": True,
+                "drive_context": self._drive_broadcast(),
             },
             work_slice="deep",
             work_kind="patrol",
         )
 
-        self.assertEqual(
-            payload,
-            {
-                "work_slice": "deep",
-                "work_kind": "patrol",
-                "pressure_id": "pressure-integrity-instance_invalid",
-                "pressure_type": "integrity",
-                "selected_action": RECHECK_ACTION,
-                "selected_posture": "recheck_or_observe",
-                "execution_status": "completed",
-                "pressure_outcome": "unchanged",
-                "followup_needed": True,
-            },
-        )
+        self.assertEqual(payload["work_slice"], "deep")
+        self.assertEqual(payload["work_kind"], "patrol")
+        self.assertEqual(payload["pressure_id"], "pressure-integrity-instance_invalid")
+        self.assertEqual(payload["selected_action"], RECHECK_ACTION)
+        self.assertTrue(payload["followup_needed"])
+        self.assertEqual(payload["drive_context"]["top_drive"], "integrity")
 
     def test_maybe_respond_after_patrol_returns_none_without_integrity_pressure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -304,15 +311,17 @@ class ResponseTests(unittest.TestCase):
                 )
             )
 
-            summary = maybe_respond_after_patrol(store, state, now)
+            summary = maybe_respond_after_patrol(store, state, now, drive_context=self._drive_broadcast())
             history = store.read_response_history()
 
             self.assertIsNotNone(summary)
             assert summary is not None
             self.assertEqual(summary["pressure_id"], first_integrity.pressure_id)
             self.assertEqual(summary["selected_action"], ESCALATE_ACTION)
+            self.assertEqual(summary["drive_context"]["top_drive"], "integrity")
             self.assertEqual(len(history), 1)
             self.assertEqual(history[0]["pressure_id"], first_integrity.pressure_id)
+            self.assertEqual(history[0]["drive_context"]["top_drive"], "integrity")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from .state import ActivePressure, ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot
+from ..kernel import ActivePressure, ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot
 
 SEVERITY_ORDER = {"healthy": 0, "degraded": 1, "critical": 2}
 PRESSURE_TYPE_BY_DIMENSION = {

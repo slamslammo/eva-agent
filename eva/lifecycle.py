@@ -9,11 +9,19 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from .config import ExternalLifeConfig, LifecycleConfig
-from .instance import InstanceGuard, InstanceSnapshot
-from .patrol import PatrolScheduler, execute_patrol
+from .kernel import (
+    EventRecord,
+    ExternalLifeConfig,
+    InstanceGuard,
+    InstanceSnapshot,
+    LifecycleConfig,
+    RuntimeState,
+    StateStore,
+    emit_log_line,
+    utc_now,
+)
+from .l1_sensing import PatrolScheduler, execute_patrol
 from .response import build_response_selected_event_details, maybe_respond_after_patrol
-from .state import EventRecord, RuntimeState, StateStore, emit_log_line, utc_now
 
 
 class LifeState(str, Enum):
@@ -371,6 +379,9 @@ class LifecycleRuntime:
                     "pressure_count": patrol_result.pressure_count,
                     "opened_count": patrol_result.opened_count,
                     "resolved_count": patrol_result.resolved_count,
+                    "signal_summary": patrol_result.signal_summary.to_dict(),
+                    "drive_summary": patrol_result.drive_summary.to_dict(),
+                    "drive_broadcast": patrol_result.drive_broadcast.to_dict(),
                 }
             )
             conservative_before_patrol = self._conservative_until_next_patrol
@@ -382,6 +393,7 @@ class LifecycleRuntime:
                 now,
                 runtime=self,
                 allow_repair_side_effects=not conservative_before_patrol,
+                drive_context=patrol_result.drive_broadcast,
             )
             if response_summary is not None:
                 details["response"] = response_summary

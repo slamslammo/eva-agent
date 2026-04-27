@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from .config import ExternalLifeConfig
-from .state import DimensionSnapshot, ExternalLifeSnapshot
+from typing import Any
+
+from ..kernel import DimensionSnapshot, ExternalLifeConfig, ExternalLifeSnapshot
 
 SEVERITY_ORDER = {"healthy": 0, "degraded": 1, "critical": 2}
 DIMENSION_PRIORITY = [
@@ -12,6 +13,62 @@ DIMENSION_PRIORITY = [
     "resource_state",
     "anomaly_accumulation",
 ]
+
+
+def _rank_for_status(value: str) -> int:
+    """Return the numeric severity rank for one status label."""
+
+    return SEVERITY_ORDER.get(value, 0)
+
+
+def _rate_context(inputs: dict[str, object]) -> dict[str, Any]:
+    """Return the normalized rate-context payload for one dimension."""
+
+    value = inputs.get("rate_context")
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def _rate_available(inputs: dict[str, object]) -> bool:
+    """Return whether rate evidence is available for one dimension."""
+
+    return bool(_rate_context(inputs).get("available"))
+
+
+def _rate_direction_from_inputs(inputs: dict[str, object]) -> str:
+    """Return the coarse direction label derived by sensing."""
+
+    direction = _rate_context(inputs).get("direction")
+    if isinstance(direction, str):
+        return direction
+    return "unknown"
+
+
+def _rate_direction(snapshot: DimensionSnapshot | None) -> str:
+    """Extract the coarse direction from one dimension snapshot."""
+
+    if snapshot is None:
+        return "unknown"
+    rate_context = snapshot.evidence.get("rate_context")
+    if not isinstance(rate_context, dict):
+        return "unknown"
+    direction = rate_context.get("direction")
+    if isinstance(direction, str):
+        return direction
+    return "unknown"
+
+
+def _float_value(payload: dict[str, Any], key: str) -> float | None:
+    """Read one numeric payload value when present."""
+
+    value = payload.get(key)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _host_continuity_snapshot(inputs: dict[str, object], config: ExternalLifeConfig) -> DimensionSnapshot:
@@ -26,6 +83,11 @@ def _host_continuity_snapshot(inputs: dict[str, object], config: ExternalLifeCon
     elif restart_count >= config.continuity_restart_degraded_count:
         status = "degraded"
         reason = "restart_unstable"
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening":
+        near_degraded = restart_count >= max(config.continuity_restart_degraded_count - 1, 1)
+        if near_degraded:
+            status = "degraded"
+            reason = "restart_unstable"
     evidence = dict(inputs)
     evidence["reason"] = reason
     return DimensionSnapshot(status=status, evidence=evidence)
@@ -42,6 +104,7 @@ def _runtime_integrity_snapshot(inputs: dict[str, object]) -> DimensionSnapshot:
     instance_valid = bool(inputs.get("instance_valid"))
     distress_count = int(inputs.get("recent_distress_count", 0))
     yield_count = int(inputs.get("recent_yield_count", 0))
+    consecutive_failures = int(inputs.get("consecutive_failures", 0))
     status = "healthy"
     reason = "runtime_integrity_ok"
     if not required_present:
@@ -59,6 +122,9 @@ def _runtime_integrity_snapshot(inputs: dict[str, object]) -> DimensionSnapshot:
     elif yield_count > 0:
         status = "degraded"
         reason = "recent_yield_detected"
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening" and consecutive_failures > 0:
+        status = "degraded"
+        reason = "heartbeat_miss_trend"
     evidence = dict(inputs)
     evidence["reason"] = reason
     return DimensionSnapshot(status=status, evidence=evidence)
@@ -84,6 +150,14 @@ def _resource_state_snapshot(inputs: dict[str, object], config: ExternalLifeConf
     elif disk_free_bytes <= config.disk_degraded_free_bytes:
         status = "degraded"
         reason = "disk_space_declining"
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening":
+        rate_context = _rate_context(inputs)
+        disk_delta = _float_value(rate_context, "disk_free_bytes_delta")
+        if disk_delta is not None and disk_delta < 0:
+            headroom_to_degraded = disk_free_bytes - config.disk_degraded_free_bytes
+            if headroom_to_degraded <= abs(disk_delta):
+                status = "degraded"
+                reason = "disk_space_declining"
     evidence = dict(inputs)
     evidence["reason"] = reason
     return DimensionSnapshot(status=status, evidence=evidence)
@@ -96,7 +170,7 @@ def _anomaly_accumulation_snapshot(inputs: dict[str, object], config: ExternalLi
     yield_count = int(inputs.get("recent_yield_count", 0))
     distress_count = int(inputs.get("recent_distress_count", 0))
     restart_count = int(inputs.get("recent_restart_count", 0))
-    anomaly_count = error_count + yield_count + distress_count + max(restart_count - 1, 0)
+    anomaly_count = int(inputs.get("anomaly_count", error_count + yield_count + distress_count + max(restart_count - 1, 0)))
     status = "healthy"
     reason = "anomaly_window_quiet"
     if distress_count > 0 or anomaly_count >= config.anomaly_critical_count:
@@ -105,6 +179,11 @@ def _anomaly_accumulation_snapshot(inputs: dict[str, object], config: ExternalLi
     elif anomaly_count >= config.anomaly_degraded_count:
         status = "degraded"
         reason = "anomaly_density_rising"
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening":
+        near_degraded = anomaly_count >= max(config.anomaly_degraded_count - 1, 1)
+        if near_degraded:
+            status = "degraded"
+            reason = "anomaly_density_rising"
     evidence = dict(inputs)
     evidence["reason"] = reason
     return DimensionSnapshot(status=status, evidence=evidence)
@@ -121,10 +200,31 @@ def evaluate_dimensions(inputs: dict[str, dict[str, object]], config: ExternalLi
     }
 
 
+def _dimension_trend(
+    current_dimensions: dict[str, DimensionSnapshot],
+    previous_snapshot: ExternalLifeSnapshot,
+) -> str:
+    """Compare current and previous dimensions when overall severity is unchanged."""
+
+    for dimension_name in DIMENSION_PRIORITY:
+        current = current_dimensions.get(dimension_name)
+        previous = previous_snapshot.dimensions.get(dimension_name)
+        current_rank = _rank_for_status("healthy" if current is None else current.status)
+        previous_rank = _rank_for_status("healthy" if previous is None else previous.status)
+        if current_rank > previous_rank:
+            return "worsening"
+        if current_rank < previous_rank:
+            return "improving"
+        direction = _rate_direction(current)
+        if direction in {"worsening", "improving"}:
+            return direction
+    return "stable"
+
+
 def determine_overall_status(dimensions: dict[str, DimensionSnapshot]) -> str:
     """Collapse per-dimension judgments into the highest-severity overall status."""
 
-    highest = max(SEVERITY_ORDER.get(snapshot.status, 0) for snapshot in dimensions.values())
+    highest = max(_rank_for_status(snapshot.status) for snapshot in dimensions.values())
     for status, rank in SEVERITY_ORDER.items():
         if rank == highest:
             return status
@@ -146,15 +246,19 @@ def determine_primary_gap(dimensions: dict[str, DimensionSnapshot]) -> dict[str,
 def determine_trend(
     current_overall_status: str,
     previous_snapshot: ExternalLifeSnapshot | None,
+    *,
+    current_dimensions: dict[str, DimensionSnapshot] | None = None,
 ) -> str:
-    """Compare current overall severity with the previous snapshot to derive trend."""
+    """Compare current status with the previous snapshot to derive trend."""
 
     if previous_snapshot is None:
         return "unknown"
-    current_rank = SEVERITY_ORDER.get(current_overall_status, 0)
-    previous_rank = SEVERITY_ORDER.get(previous_snapshot.overall_status, 0)
+    current_rank = _rank_for_status(current_overall_status)
+    previous_rank = _rank_for_status(previous_snapshot.overall_status)
     if current_rank > previous_rank:
         return "worsening"
     if current_rank < previous_rank:
         return "improving"
-    return "stable"
+    if current_dimensions is None:
+        return "stable"
+    return _dimension_trend(current_dimensions, previous_snapshot)

@@ -14,6 +14,7 @@ class EvaPaths:
     active_instance_file: Path
     runtime_state_file: Path
     external_life_snapshot_file: Path
+    drive_state_file: Path
     active_pressures_file: Path
     survival_log_file: Path
     response_history_file: Path
@@ -79,6 +80,7 @@ def build_runtime_paths(base_dir: str | Path) -> EvaPaths:
         active_instance_file=runtime_dir / "active_instance.json",
         runtime_state_file=runtime_dir / "runtime_state.json",
         external_life_snapshot_file=runtime_dir / "external_life_snapshot.json",
+        drive_state_file=runtime_dir / "drive_state.json",
         active_pressures_file=runtime_dir / "active_pressures.json",
         survival_log_file=runtime_dir / "survival_log.jsonl",
         response_history_file=runtime_dir / "response_history.jsonl",

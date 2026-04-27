@@ -4,9 +4,8 @@ import tempfile
 import unittest
 from datetime import timedelta
 
-from eva.config import build_runtime_paths
-from eva.history import build_survival_snapshot_entry, persist_patrol_artifacts
-from eva.state import ActivePressure, ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot, StateStore, utc_now
+from eva.kernel import ActivePressure, ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot, StateStore, build_runtime_paths, utc_now
+from eva.l1_sensing import build_survival_snapshot_entry, persist_patrol_artifacts
 
 
 class HistoryTests(unittest.TestCase):

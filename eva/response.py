@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-from .state import ActivePressure, RuntimeState, StateStore, to_iso8601
+from .kernel import ActivePressure, RuntimeState, StateStore, to_iso8601
+from .l2_drive import DriveBroadcast
 
 __all__ = [
     "RECHECK_ACTION",
@@ -364,6 +365,7 @@ def append_response_history(
     selection: ResponseSelection,
     execution_result: dict[str, Any],
     now: datetime,
+    drive_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Append one complete Step 2 response record and return it."""
 
@@ -393,6 +395,8 @@ def append_response_history(
         "integration_hint": execution_result["integration_hint"],
         "followup_needed": execution_result["followup_needed"],
     }
+    if drive_context is not None:
+        payload["drive_context"] = drive_context
     store.append_response_history(payload)
     return payload
 
@@ -405,6 +409,7 @@ def respond_to_integrity_pressure(
     runtime: ConservativeRuntime | None = None,
     *,
     allow_repair_side_effects: bool = True,
+    drive_context: DriveBroadcast | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the full Step 2 v1 response closure for one integrity pressure."""
 
@@ -419,7 +424,8 @@ def respond_to_integrity_pressure(
         runtime=runtime,
         allow_repair_side_effects=allow_repair_side_effects,
     )
-    append_response_history(store, pressure, runtime_state, selection, execution_result, now)
+    drive_context_payload = None if drive_context is None else (drive_context.to_dict() if isinstance(drive_context, DriveBroadcast) else dict(drive_context))
+    append_response_history(store, pressure, runtime_state, selection, execution_result, now, drive_context=drive_context_payload)
     return {
         "pressure_id": pressure.pressure_id,
         "pressure_type": pressure.type,
@@ -428,6 +434,7 @@ def respond_to_integrity_pressure(
         "execution_status": execution_result["execution_status"],
         "pressure_outcome": execution_result["pressure_outcome"],
         "followup_needed": execution_result["followup_needed"],
+        "drive_context": drive_context_payload,
     }
 
 
@@ -438,6 +445,7 @@ def maybe_respond_after_patrol(
     runtime: ConservativeRuntime | None = None,
     *,
     allow_repair_side_effects: bool = True,
+    drive_context: DriveBroadcast | dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Run the first minimal Step 2 response after a patrol, if an integrity pressure exists."""
 
@@ -451,6 +459,7 @@ def maybe_respond_after_patrol(
                 now,
                 runtime=runtime,
                 allow_repair_side_effects=allow_repair_side_effects,
+                drive_context=drive_context,
             )
     return None
 
@@ -463,7 +472,7 @@ def build_response_selected_event_details(
 ) -> dict[str, Any]:
     """Build the minimal response_selected event details payload."""
 
-    return {
+    payload = {
         "work_slice": work_slice,
         "work_kind": work_kind,
         "pressure_id": response_summary["pressure_id"],
@@ -474,6 +483,9 @@ def build_response_selected_event_details(
         "pressure_outcome": response_summary["pressure_outcome"],
         "followup_needed": response_summary["followup_needed"],
     }
+    if response_summary.get("drive_context") is not None:
+        payload["drive_context"] = response_summary["drive_context"]
+    return payload
 
 
 def _preferred_action_for_reason(pressure: ActivePressure, runtime_state: RuntimeState) -> str:

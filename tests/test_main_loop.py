@@ -7,9 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eva.config import ExternalLifeConfig, LifecycleConfig, LoopControl, build_runtime_config
+from eva.kernel import ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
 from eva.main import run_runtime
-from eva.state import StateStore
 
 
 class MainLoopTests(unittest.TestCase):
@@ -92,6 +91,12 @@ class MainLoopTests(unittest.TestCase):
                 if event["event_type"] == "turn_completed" and event["details"].get("work_kind") == "patrol"
             ]
             self.assertGreaterEqual(len(patrol_turns), 1)
+            self.assertIn("signal_summary", patrol_turns[0]["details"])
+            self.assertGreaterEqual(patrol_turns[0]["details"]["signal_summary"]["signal_count"], 1)
+            self.assertIn("drive_summary", patrol_turns[0]["details"])
+            self.assertIn("top_drive", patrol_turns[0]["details"]["drive_summary"])
+            self.assertIn("drive_broadcast", patrol_turns[0]["details"])
+            self.assertIn("top_drive", patrol_turns[0]["details"]["drive_broadcast"])
 
     def test_cli_bounded_run_succeeds(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

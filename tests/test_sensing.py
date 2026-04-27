@@ -4,9 +4,8 @@ import tempfile
 import unittest
 from datetime import timedelta
 
-from eva.config import ExternalLifeConfig, build_runtime_paths
-from eva.sensing import collect_external_life_inputs
-from eva.state import ActiveInstanceRecord, EventRecord, RuntimeState, StateStore, utc_now
+from eva.kernel import ActiveInstanceRecord, DimensionSnapshot, EventRecord, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, build_runtime_paths, utc_now
+from eva.l1_sensing import collect_external_life_inputs
 
 
 class SensingTests(unittest.TestCase):
@@ -55,6 +54,78 @@ class SensingTests(unittest.TestCase):
             self.assertGreater(inputs["resource_state"]["disk_free_bytes"], 0)
             self.assertEqual(inputs["anomaly_accumulation"]["recent_error_count"], 1)
             self.assertEqual(inputs["anomaly_accumulation"]["recent_restart_count"], 1)
+            self.assertIn("rate_context", inputs["host_continuity"])
+            self.assertFalse(inputs["host_continuity"]["rate_context"]["available"])
+            self.assertEqual(inputs["runtime_integrity"]["rate_context"]["direction"], "unknown")
+
+    def test_collect_external_life_inputs_adds_rate_context_from_previous_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.ensure_runtime_dir()
+            now = utc_now()
+            previous_time = now - timedelta(seconds=10)
+            previous_snapshot = ExternalLifeSnapshot(
+                captured_at=previous_time,
+                source_patrol="deep",
+                dimensions={
+                    "host_continuity": DimensionSnapshot(
+                        status="healthy",
+                        evidence={
+                            "recent_restart_count": 0,
+                            "schedule_drift_sec": 1.0,
+                        },
+                    ),
+                    "runtime_integrity": DimensionSnapshot(
+                        status="healthy",
+                        evidence={
+                            "recent_yield_count": 0,
+                            "recent_distress_count": 0,
+                            "heartbeat_age_sec": 0.0,
+                            "consecutive_failures": 0,
+                        },
+                    ),
+                    "resource_state": DimensionSnapshot(
+                        status="healthy",
+                        evidence={"disk_free_bytes": 1},
+                    ),
+                    "anomaly_accumulation": DimensionSnapshot(
+                        status="healthy",
+                        evidence={
+                            "recent_error_count": 0,
+                            "recent_yield_count": 0,
+                            "recent_distress_count": 0,
+                            "recent_restart_count": 0,
+                            "anomaly_count": 0,
+                        },
+                    ),
+                },
+                overall_status="healthy",
+                primary_gap={"type": "none", "reason": "none"},
+                trend="stable",
+                updated_at=previous_time,
+            )
+            runtime_state = RuntimeState(
+                instance_valid=True,
+                heartbeat_ok=True,
+                tick_ok=True,
+                heartbeat_age_sec=2.0,
+                consecutive_failures=1,
+                updated_at=now,
+            )
+            inputs = collect_external_life_inputs(
+                store,
+                runtime_state,
+                ExternalLifeConfig(recent_event_window_sec=60.0),
+                now,
+                due_at=now - timedelta(seconds=3),
+                previous_snapshot=previous_snapshot,
+            )
+
+            self.assertTrue(inputs["host_continuity"]["rate_context"]["available"])
+            self.assertEqual(inputs["host_continuity"]["rate_context"]["schedule_drift_direction"], "worsening")
+            self.assertEqual(inputs["runtime_integrity"]["rate_context"]["heartbeat_age_direction"], "worsening")
+            self.assertEqual(inputs["runtime_integrity"]["rate_context"]["consecutive_failures_direction"], "worsening")
+            self.assertEqual(inputs["anomaly_accumulation"]["rate_context"]["direction"], "stable")
 
 
 if __name__ == "__main__":
