@@ -10,14 +10,14 @@
 
 当前仓库已经具备：
 - kernel baseline
-- Phase A 完成后的 L1 / L2 主干（state + rate sensing、Signal Bus、continuous drive state、read-only drive broadcast）
+- 当前已落地的 L1 / L2 baseline（state + rate sensing、minimal signal publication、continuous drive state、read-only drive broadcast）
 - compatibility pressure view / history / minimal action path
 
-当前判断：**Phase A 已完成**。
+当前判断：**Phase A 主干已落地，当前进入 A5 strict closeout / audit。**
 
-因此，下一步入口应转向：**Phase B：L3 最小骨架**。
+因此，下一步入口不应直接跳到 Phase B 实施，而应先完成当前严格收尾，再进入 **Phase B：L3 最小骨架** 的规划与实施准备。
 
-## 2. Phase A：L1 / L2 结构升级（已完成）
+## 2. Phase A：L1 / L2 结构升级（主干已落地，A5 closeout 进行中）
 
 ### 目标
 建立一条符合 EVA 的基础通路：
@@ -28,14 +28,14 @@ sensing -> signal classification -> drive update -> drive broadcast
 
 ### 重点
 - 补齐 state + rate sensing
-- 引入 Signal Bus
+- 建立最小 signal publication contract
 - 将 pressure 过渡视图升级为 continuous drive state
 - 建立 read-only drive broadcast
 - 保持当前最小 action path 只作为兼容层，不继续扩展
 
 ### 完成后应成立
 - L1 不再只有当前态采样，也具备最小 rate sensing
-- signal 能按 `threat / status / background` 分流
+- signal 已按 `threat / status / background` 统一发布，且 routing seam 的边界被明确说明
 - drive state 为连续更新值
 - L3 只能读取 drive broadcast，不能改写 drive
 

@@ -132,6 +132,8 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(executed.details["drive_summary"]["top_drive"], "curiosity")
         self.assertEqual(executed.details["drive_broadcast"]["top_drive"], "curiosity")
         self.assertIn("curiosity", executed.details["drive_broadcast"]["drive_levels"])
+        response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
+        self.assertEqual(response_events, [])
 
     def test_conservative_window_keeps_heartbeat_guard_and_critical_block(self) -> None:
         now = utc_now()

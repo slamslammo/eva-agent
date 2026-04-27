@@ -15,10 +15,10 @@
 
 目前已经成立的资产包括：
 - kernel baseline：heartbeat-first、`tick / turn`、`instance_valid`、状态持久化、distress / yield
-- Phase A 完成后的 L1 / L2 主干：state + rate sensing、Signal Bus、continuous drive state、read-only drive broadcast
+- 当前已落地的 L1 / L2 baseline：state + rate sensing、deterministic judgment、minimal signal publication、continuous drive state、read-only drive broadcast
 - compatibility projection layer：pressure 视图、survival history、temporary minimal action path
 
-当前状态应理解为：**Phase A 已完成，下一步进入 Phase B 规划与实施准备**。
+当前状态应理解为：**Phase A 主干已落地，当前进入 A5 strict closeout / audit，而不是直接视为已正式关闭。**
 
 ## 阅读顺序
 

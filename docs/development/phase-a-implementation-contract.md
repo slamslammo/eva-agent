@@ -51,7 +51,7 @@ Phase A 不负责：
 - `eva/l1_sensing/sensing.py`
   - 从当前 snapshot / recent-count 采样，升级为同时支持 state 与 rate 的 sensing 输入层
 - `eva/l1_sensing/patrol.py`
-  - 从直接执行 `sensing -> judgment -> pressure -> persist` 的串行流程，升级为可接入 Signal Bus 与 drive update 的编排层
+  - 从直接执行 `sensing -> judgment -> pressure -> persist` 的串行流程，升级为可接入 signal publication 与 drive update 的编排层
 - `eva/lifecycle.py`
   - 保留 heartbeat-first 边界，但要为新的 sensing / drive 通路留出清晰接缝
 
@@ -69,8 +69,10 @@ Phase A 期间，应优先冻结以下合同。
 - `rate_context`
 
 约束：
-- `threat` 信号可直达 fast path
-- `status` / `background` 信号进入 drive update
+- 当前 Phase A 至少冻结 signal publication contract
+- `threat` 保留为 future fast-path 的显式类别，但当前不宣称完整 routing layer 已成立
+- `status` / `background` 进入 drive update 的读侧语义保留
+- urgency semantics 若未进入正式字段，则在 closeout 中明确 defer
 
 ### 3.2 Drive state contract
 
@@ -143,7 +145,8 @@ Phase A 方向：
 
 Phase A 方向：
 - 继续保留 cadence 组织角色
-- 从“直接串行调用完整链路”改为“驱动 sensing / signal / drive 更新流程”的编排器
+- 从“直接串行调用完整链路”改为“驱动 sensing / signal publication / drive update 流程”的编排器
+- patrol 当前负责发布 normalized signal batch，但不被写成完整 routing engine owner
 - 不让 patrol 继续成为未来内部主结构的唯一入口
 
 ### 4.5 `eva/l1_sensing/history.py`
@@ -170,7 +173,8 @@ Phase A 方向：
   - heartbeat deadline guard
   - instance invalid turn block
   - critical life-state turn block
-- 当前 patrol 后直接触发 `response.py` 的路径只保留兼容角色
+- 当前 patrol 后直接触发 `response.py` 的路径只保留 compatibility 角色
+- 不把当前 patrol 后 response hook 误写成完整 reflex / fast-path routing layer
 
 ## 5. 持久化边界
 
@@ -220,7 +224,7 @@ Phase A 迁移期间，应优先以以下测试作为冻结边界：
 Phase A implementation contract 完成执行后，至少应成立：
 - 现有 heartbeat-first baseline 未回退
 - sensing 已同时提供 state 与 rate 信息
-- Signal Bus 已形成最小合同
+- Signal Bus 的最小 publication contract 已形成，并明确区分已实现合同与 deferred routing/urgency 能力
 - drive state 已成为内部主状态之一
 - drive broadcast 已对高层只读暴露
 - 旧 pressure / history / response 工件仍可作为兼容层继续工作

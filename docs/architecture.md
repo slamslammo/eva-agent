@@ -207,13 +207,19 @@ memory 不能替代 audit，audit 也不等于 memory。
 
 ## 6. 当前开发状态
 
-Phase A 已完成，当前仓库已经具备：
+当前仓库已经建立 Phase A 主干：
 
 ```text
 sensing -> signal classification -> drive update -> drive broadcast
 ```
 
-这意味着当前下一步不应再回到 pressure / minimal action path 扩张，而应转向后续 phase，继续补齐 mediator、anchor 与 memory 等高层结构。
+但这应被理解为：L1 / L2 baseline 已落地，当前进入 A5 strict closeout / audit，而不是直接把 Phase A 视为已正式关闭。
+
+在当前口径下，需要继续明确并收紧：
+- Signal Bus 当前已成立的是 normalized signal publication contract，而不是完整 routing layer
+- urgency semantics 仍未作为正式 Phase A contract 落地
+- `response.py` 仍是 pressure-led compatibility path，只兼容读取 `drive_broadcast`
+- mediator、anchor 与 cognitive memory 仍属于后续 phase
 
 ## 7. 当前非目标
 

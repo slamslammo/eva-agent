@@ -43,9 +43,9 @@ Phase A 不是从零开始。当前仓库已经有以下资产可直接作为起
 - heartbeat miss trend
 - distress / yield trend
 
-### A2. 建立 Signal Bus
+### A2. 建立最小 signal publication contract
 
-目标：统一 L1 的信号合同，并为 fast path / slow path 分流提供承载面。
+目标：统一 L1 的信号合同，并为后续 fast path / slow path 分流保留明确接缝。
 
 最小合同应包含：
 - `source`
@@ -55,8 +55,10 @@ Phase A 不是从零开始。当前仓库已经有以下资产可直接作为起
 - `rate_context`
 
 约束：
-- `threat` 信号必须可直接进入 fast path
-- `status` 与 `background` 信号进入 drive update 与后续 deliberation 输入
+- 当前 Phase A 至少保证标准化 signal publication，而不是完整 routing engine
+- `threat` 是当前唯一保留给 future fast path 的信号类别
+- `status` 与 `background` 作为 drive update 与后续 deliberation 的输入保留
+- urgency semantics 若尚未进入正式字段，应在 closeout 中明确 defer
 
 ### A3. 建立 continuous drive state
 
@@ -86,10 +88,11 @@ Phase A 的初始 drive 类型限定为：
 
 Phase A 期间必须始终保持：
 - heartbeat deadline 不被 ordinary work 抢占
-- `threat` 信号可以直达 fast path
+- `threat` 信号分类与 future fast-path reservation 保持显式
 - drive state 是连续更新的内部状态，而不是离散跳表的改写版本
 - drive broadcast 对高层是只读的
 - 当前最小 action path 只保留兼容角色，不继续扩动作谱系
+- 文档不得把 urgency / routing seam 写成已经完整落地的能力
 
 ## 5. 本阶段不做的事
 
@@ -104,7 +107,7 @@ Phase A 明确不做：
 
 Phase A 完成后，至少应成立：
 - 系统具备 state + rate 的最小 L1 能力
-- signal 可以按 `threat / status / background` 分流
+- signal 已按 `threat / status / background` 统一发布，且 routing seam 的边界被明确说明
 - drive state 是连续更新的内部状态
 - drive broadcast 对高层是只读的
 - 当前兼容 action path 仍可运行，但不再是未来扩展中心
@@ -113,7 +116,7 @@ Phase A 完成后，至少应成立：
 
 需要重点验证：
 - heartbeat deadline 仍不被 ordinary work 抢占
-- `threat` 信号可直达 fast path
+- `threat` signal contract 被保留，且当前文档/测试不再过度宣称完整 fast path 已落地
 - drive 不退化回离散跳表伪装
 - L3 无法直接写 drive state
 - 当前兼容通路可在新 drive 接口下继续工作

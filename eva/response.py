@@ -1,4 +1,4 @@
-"""Rule-based Step 2 response selection for integrity pressures."""
+"""Rule-based compatibility response selection for integrity pressures."""
 
 from __future__ import annotations
 

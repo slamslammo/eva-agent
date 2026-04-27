@@ -1,4 +1,4 @@
-"""Minimal Signal Bus contract and patrol-derived signal helpers."""
+"""Minimal signal publication contract and patrol-derived signal helpers."""
 
 from __future__ import annotations
 

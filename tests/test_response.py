@@ -203,6 +203,21 @@ class ResponseTests(unittest.TestCase):
             self.assertEqual(history[0]["selected_action"], ESCALATE_ACTION)
             self.assertEqual(history[0]["integration_hint"], "needs_human_review")
 
+    def test_respond_to_integrity_pressure_records_broadcast_context_without_writing_drive_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure("instance_invalid")
+            drive_context = self._drive_broadcast()
+
+            summary = respond_to_integrity_pressure(store, pressure, state, now, drive_context=drive_context)
+            history = store.read_response_history()
+
+            self.assertEqual(summary["drive_context"], drive_context)
+            self.assertEqual(history[0]["drive_context"], drive_context)
+            self.assertIsNone(store.read_drive_state())
+
     def test_build_response_selected_event_details_returns_minimal_payload(self) -> None:
         payload = build_response_selected_event_details(
             {
@@ -282,6 +297,46 @@ class ResponseTests(unittest.TestCase):
             self.assertTrue(runtime.activated)
             self.assertEqual(summary["selected_action"], REPAIR_ACTION)
             self.assertEqual(history[0]["side_effects"], ["temporary_conservative_until_next_patrol"])
+
+    def test_maybe_respond_after_patrol_remains_pressure_led_when_broadcast_top_drive_differs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure(
+                "recent_yield_detected",
+                runtime_writable=True,
+                active_instance_present=True,
+                runtime_state_present=True,
+                events_present=True,
+                lock_present=True,
+                recent_distress_count=0,
+            )
+            drive_context = build_drive_broadcast(
+                DriveStateTable(
+                    captured_at=now,
+                    drives=[
+                        DriveState(drive_type="survival", level=0.8, updated_at=now),
+                        DriveState(drive_type="integrity", level=0.1, updated_at=now),
+                        DriveState(drive_type="continuity", level=0.05, updated_at=now),
+                        DriveState(drive_type="curiosity", level=0.0, updated_at=now),
+                    ],
+                    updated_at=now,
+                )
+            ).to_dict()
+            store.write_active_pressures(
+                ActivePressureTable(captured_at=now, pressures=[pressure], updated_at=now)
+            )
+
+            summary = maybe_respond_after_patrol(store, state, now, drive_context=drive_context)
+            history = store.read_response_history()
+
+            self.assertIsNotNone(summary)
+            assert summary is not None
+            self.assertEqual(summary["selected_action"], REPAIR_ACTION)
+            self.assertEqual(summary["drive_context"]["top_drive"], "survival")
+            self.assertEqual(history[0]["selected_action"], REPAIR_ACTION)
+            self.assertEqual(history[0]["drive_context"]["top_drive"], "survival")
 
     def test_maybe_respond_after_patrol_selects_first_integrity_pressure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
