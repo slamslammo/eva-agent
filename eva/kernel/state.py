@@ -519,6 +519,32 @@ class StateStore:
         lines = self.paths.response_history_file.read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
 
+    def append_deliberation_audit(self, payload: dict[str, Any]) -> None:
+        """Append one Phase B deliberation audit record."""
+
+        self._append_jsonl(self.paths.deliberation_audit_file, payload)
+
+    def read_deliberation_audit(self) -> list[dict[str, Any]]:
+        """Read the append-only Phase B deliberation audit log."""
+
+        if not self.paths.deliberation_audit_file.exists():
+            return []
+        lines = self.paths.deliberation_audit_file.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
+    def append_cognitive_memory_stub(self, payload: dict[str, Any]) -> None:
+        """Append one minimal cognitive-memory stub entry."""
+
+        self._append_jsonl(self.paths.cognitive_memory_stub_file, payload)
+
+    def read_cognitive_memory_stub(self) -> list[dict[str, Any]]:
+        """Read the append-only cognitive-memory stub log."""
+
+        if not self.paths.cognitive_memory_stub_file.exists():
+            return []
+        lines = self.paths.cognitive_memory_stub_file.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
     def append_event(self, event: EventRecord) -> None:
         """Append one lifecycle event to events.jsonl."""
 

@@ -111,9 +111,16 @@ Signal Bus 是 L1 与后续层之间的统一信号合同。
 - `captured_at`
 - `rate_context`
 
-它必须支持：
-- fast path：直接触达 reflex / urgent handling
-- slow path：进入 drive update 与 deliberation
+当前 B0 阶段，对 L3 的最小输入面进一步冻结为：
+- `signal_batch.signals`
+- `signal_batch.summary`
+
+它当前支持的是：
+- normalized signal publication
+- drive update 的标准化读侧输入
+- 未来 routing seam 的保留接缝
+
+当前尚不宣称完整 fast/slow routing layer 已成立。
 
 ### 4.2 Drive Broadcast
 
@@ -124,7 +131,26 @@ Drive Broadcast 是 L2 向后续层提供的只读上下文接口。
 - broadcast 对 L3 是只读的
 - L3 不得通过 reasoning 直接改写 drive
 
-### 4.3 Anchor Domain Restriction
+当前 B0 阶段，`drive_broadcast` 已被收紧为 L2 -> L3 的 canonical read surface，至少承载：
+- `captured_at`
+- `top_drive`
+- `drive_levels`
+- `drive_trends`
+
+### 4.3 Runtime Gate Context
+
+Runtime Gate Context 是 kernel 向后续层暴露的最小运行边界输入。
+
+当前 B0 冻结的最小语义包括：
+- `instance_valid`
+- `turn_allowed`
+- `critical_blocked`
+- `conservative_mode`
+- `life_state`
+
+它的作用是保证后续层读取 drive / signal 时，同时受 heartbeat-first 与 kernel 边界约束。
+
+### 4.4 Anchor Domain Restriction
 
 anchor 的职责不是“先生成动作，再过滤掉不安全动作”，而是：
 
@@ -169,6 +195,18 @@ mediator 是 default inhibition 的结构性保证。
 
 memory 不能替代 audit，audit 也不等于 memory。
 
+### 4.6 当前最小下游暴露面
+
+当前 Phase B 骨架已明确把 patrol 后的下游可见面收紧为：
+- `turn_completed.details.deliberation = { outcome, selected_action }`
+- `turn_completed.details.response = { pressure_id, pressure_type, selected_action }`
+- `response_selected.details = { work_slice, work_kind, pressure_id, pressure_type, selected_action }`
+
+这意味着：
+- 完整 candidate / assessment / release rationale 不经 lifecycle turn details 下发
+- 完整 deliberation 细节只进入 `deliberation_audit.jsonl`
+- 更丰富的 compatibility execution 细节只进入 `response_history.jsonl`
+
 ## 5. 当前实现映射
 
 当前仓库还不是完整 EVA 系统，而是一个 **early reference implementation / partial instantiation**。
@@ -185,15 +223,16 @@ memory 不能替代 audit，audit 也不等于 memory。
 | `eva/l1_sensing/judgment.py` | L1 judgment baseline | 已有规则基线 |
 | `eva/l1_sensing/patrol.py` | L1 cadence organization | 已接入 signal / drive 编排 |
 | `eva/l2_drive/pressure.py` | L2 过渡视图 | 作为 compatibility projection 保留 |
-| `eva/response.py` | L3 过渡动作通路 | 仍是 temporary minimal action path |
+| `eva/l3_deliberation/` | L3 最小骨架 | 已建立 contracts / mediator / memory stub baseline |
+| `eva/response.py` | L3 过渡动作通路 | 仍是 pressure-led compatibility path |
 | `eva/l1_sensing/history.py` | audit / baseline history | 仍是 projection / audit 层，不是 cognitive memory |
 
 ### 5.2 当前仍未建立的关键结构
 
 当前尚未真正建立：
-- anchor-bounded candidate generation
-- default inhibition + mediator
-- salience-weighted cognitive memory
+- 完整 anchor-bounded candidate generation
+- 完整 mediator policy layer
+- salience-weighted cognitive memory retrieval
 - outcome delta / habit track / working-memory abstraction
 
 ### 5.3 当前过渡结构的定位
@@ -205,6 +244,15 @@ memory 不能替代 audit，audit 也不等于 memory。
 
 它们可以作为迁移期兼容面保留，但不应继续长成未来主架构。
 
+### 5.4 B0：Phase B entry gate
+
+当前在进入 Phase B 前，额外冻结以下最小输入合同：
+- `drive_broadcast`
+- `signal_batch`
+- `runtime_gate_context`
+
+这意味着后续 L3 最小骨架应从这些正式输入面开始，而不是再把 `active_pressures.json` 当作主输入起点。
+
 ## 6. 当前开发状态
 
 当前仓库已经建立 Phase A 主干：
@@ -215,11 +263,13 @@ sensing -> signal classification -> drive update -> drive broadcast
 
 但这应被理解为：L1 / L2 baseline 已落地，当前进入 A5 strict closeout / audit，而不是直接把 Phase A 视为已正式关闭。
 
+同时，仓库已从 B0 进入 Phase B 最小骨架：L3 已具备独立 `eva/l3_deliberation/` 包、最小 candidate/value/mediator 结构，以及分离的 deliberation audit / memory stub 轨道。
+
 在当前口径下，需要继续明确并收紧：
 - Signal Bus 当前已成立的是 normalized signal publication contract，而不是完整 routing layer
 - urgency semantics 仍未作为正式 Phase A contract 落地
-- `response.py` 仍是 pressure-led compatibility path，只兼容读取 `drive_broadcast`
-- mediator、anchor 与 cognitive memory 仍属于后续 phase
+- `response.py` 仍是 pressure-led compatibility path，只在 mediator 允许时兼容执行
+- 完整 mediator、完整 anchor system 与完整 cognitive memory 仍属于后续阶段
 
 ## 7. 当前非目标
 

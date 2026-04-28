@@ -13,9 +13,12 @@
 - 当前已落地的 L1 / L2 baseline（state + rate sensing、minimal signal publication、continuous drive state、read-only drive broadcast）
 - compatibility pressure view / history / minimal action path
 
-当前判断：**Phase A 主干已落地，当前进入 A5 strict closeout / audit。**
+当前判断：**Phase A 主干已落地并完成 B0 输入冻结；Phase B 已进入 L3 最小骨架的首轮实现。**
 
-因此，下一步入口不应直接跳到 Phase B 实施，而应先完成当前严格收尾，再进入 **Phase B：L3 最小骨架** 的规划与实施准备。
+因此，下一步重点不再是解释 B0，而是继续收紧 **Phase B：L3 最小骨架** 的合同、验证与表达边界，尤其是：
+- `turn_completed.details.deliberation` 只暴露 `{ outcome, selected_action }`
+- `turn_completed.details.response` 只暴露 `{ pressure_id, pressure_type, selected_action }`
+- `response_selected` 只保留最小 downstream surface，完整执行细节回收到 append-only history / audit
 
 ## 2. Phase A：L1 / L2 结构升级（主干已落地，A5 closeout 进行中）
 
@@ -39,7 +42,19 @@ sensing -> signal classification -> drive update -> drive broadcast
 - drive state 为连续更新值
 - L3 只能读取 drive broadcast，不能改写 drive
 
-## 3. Phase B：L3 最小骨架
+## 3. B0：Phase B entry gate（已冻结）
+
+### 目标
+在进入 Phase B 功能开发前，先冻结 L3 可稳定依赖的最小上游输入面。
+
+### 必须成立
+- `drive_broadcast` 成为 L2 -> L3 的 canonical read surface
+- `signal_batch` 成为 L1 -> downstream 的最小标准化输入
+- `runtime_gate_context` 成为 kernel -> downstream 的最小运行边界输入
+- `active_pressures.json` 明确降级为 compatibility projection
+- `response.py` 明确冻结为 pressure-led compatibility path
+
+## 4. Phase B：L3 最小骨架（进行中）
 
 ### 目标
 先建立 L3 的结构性核心，而不是先追求复杂推理。
@@ -56,7 +71,7 @@ sensing -> signal classification -> drive update -> drive broadcast
 - 候选生成受 capability 与 parameter domain 双重限制
 - audit trail 与 cognitive memory 双轨并存
 
-## 4. Phase C：学习能力
+## 5. Phase C：学习能力
 
 ### 目标
 在既有 L3 结构上引入 outcome-based adaptation。
@@ -72,20 +87,20 @@ sensing -> signal classification -> drive update -> drive broadcast
 - 部分常见情境能从 deliberative path 迁移到 habit track
 - LLM 只能作为 working-memory / reasoning adapter，而不是 release authority
 
-## 5. Phase D：L4 雏形
+## 6. Phase D：L4 雏形
 
 L4 只有在前面几层已经积累出足够多的行为史与 memory 史之后才有意义。
 
 当前不提前展开实现细节。
 
-## 6. 推进原则
+## 7. 推进原则
 
 - 先对齐架构与合同，再进入代码实现
 - 先把结构搭对，再扩高层能力
 - 过渡结构可以短期保留，但不再作为未来主路线继续长大
 - 每个 phase 都应有明确的完成标准与进展记录
 
-## 7. 相关文档
+## 8. 相关文档
 
 - `docs/architecture.md`
 - `docs/development/phase-a-plan.md`

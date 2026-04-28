@@ -64,6 +64,9 @@ class PatrolRuntimeTests(unittest.TestCase):
         )
 
         self.assertEqual(result.signal_summary.signal_count, 1)
+        self.assertEqual(result.signal_batch["summary"], result.signal_summary.to_dict())
+        self.assertEqual(len(result.signal_batch["signals"]), 1)
+        self.assertEqual(result.signal_batch["signals"][0]["class"], "status")
         self.assertEqual(result.signal_summary.status_signal_count, 1)
         self.assertEqual(result.signal_summary.threat_signal_count, 0)
         self.assertFalse(result.signal_summary.has_threat_signal)
@@ -113,13 +116,25 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(result.details["overall_status"], "healthy")
         self.assertEqual(result.details["pressure_count"], 0)
         self.assertEqual(result.details["signal_summary"]["signal_count"], 1)
+        self.assertEqual(result.details["signal_batch"]["summary"], result.details["signal_summary"])
+        self.assertEqual(len(result.details["signal_batch"]["signals"]), 1)
+        self.assertEqual(result.details["signal_batch"]["signals"][0]["class"], "status")
         self.assertEqual(result.details["signal_summary"]["status_signal_count"], 1)
         self.assertEqual(result.details["signal_summary"]["threat_signal_count"], 0)
         self.assertFalse(result.details["signal_summary"]["has_threat_signal"])
         self.assertEqual(result.details["drive_summary"]["top_drive"], "curiosity")
+        self.assertEqual(result.details["runtime_gate_context"]["instance_valid"], True)
+        self.assertEqual(result.details["runtime_gate_context"]["turn_allowed"], True)
+        self.assertEqual(result.details["runtime_gate_context"]["critical_blocked"], False)
+        self.assertEqual(result.details["runtime_gate_context"]["conservative_mode"], False)
         self.assertIn("curiosity", result.details["drive_summary"]["drive_levels"])
         self.assertEqual(result.details["drive_broadcast"]["top_drive"], "curiosity")
         self.assertIn("curiosity", result.details["drive_broadcast"]["drive_levels"])
+        self.assertIn("deliberation", result.details)
+        self.assertEqual(result.details["deliberation"]["outcome"], "withhold")
+        self.assertEqual(set(result.details["deliberation"].keys()), {"outcome", "selected_action"})
+        self.assertFalse(self.store.paths.deliberation_audit_file.exists() == False)
+        self.assertFalse(self.store.paths.cognitive_memory_stub_file.exists())
         self.assertNotIn("response", result.details)
 
         snapshot = self.store.read_external_life_snapshot()
@@ -168,27 +183,68 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(first.details["opened_count"], 1)
         self.assertEqual(first.details["resolved_count"], 0)
         self.assertEqual(first.details["signal_summary"]["signal_count"], 2)
+        self.assertEqual(first.details["signal_batch"]["summary"], first.details["signal_summary"])
+        self.assertEqual([signal["class"] for signal in first.details["signal_batch"]["signals"]], ["status", "threat"])
         self.assertEqual(first.details["signal_summary"]["status_signal_count"], 1)
         self.assertEqual(first.details["signal_summary"]["threat_signal_count"], 1)
         self.assertTrue(first.details["signal_summary"]["has_threat_signal"])
         self.assertEqual(first.details["drive_summary"]["top_drive"], "integrity")
+        self.assertIn("deliberation", first.details)
+        self.assertEqual(first.details["deliberation"]["outcome"], "compatibility_release")
 
         pressure_table = self.store.read_active_pressures()
         self.assertEqual(len(pressure_table.pressures), 1)
         self.assertEqual(pressure_table.pressures[0].type, "integrity")
         self.assertEqual(len(first.details["signal_summary"]), 5)
         self.assertIn("response", first.details)
-        self.assertEqual(first.details["response"]["pressure_type"], "integrity")
-        self.assertEqual(first.details["response"]["selected_action"], RECHECK_ACTION)
-        self.assertEqual(first.details["response"]["execution_status"], "completed")
+        self.assertEqual(
+            first.details["response"],
+            {
+                "pressure_id": pressure_table.pressures[0].pressure_id,
+                "pressure_type": "integrity",
+                "selected_action": RECHECK_ACTION,
+            },
+        )
         response_history = self.store.read_response_history()
         self.assertEqual(len(response_history), 1)
         self.assertEqual(response_history[0]["selected_action"], RECHECK_ACTION)
+        self.assertEqual(response_history[0]["response_mode"], "pressure_led_compatibility")
+        self.assertEqual(
+            response_history[0]["release_context"],
+            {
+                "bridge_target": "pressure_led_compatibility",
+                "response_mode": "pressure_led_compatibility",
+                "candidate_profile": "stabilize_first",
+                "bridge_policy": {
+                    "policy_name": "stabilize_first_bias",
+                    "selection": {
+                        "preferred_action": "shrink_to_conservative_mode",
+                        "fallback_action": "recheck_runtime_integrity",
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["recent_yield_detected"],
+                        "life_states": ["STABLE"],
+                    },
+                    "execution": {
+                        "allow_repair_side_effects": True,
+                    },
+                },
+            },
+        )
         response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
         self.assertEqual(len(response_events), 1)
         self.assertEqual(response_events[0]["turn_id"], first.turn_id)
-        self.assertEqual(response_events[0]["details"]["selected_action"], RECHECK_ACTION)
-        self.assertEqual(response_events[0]["details"]["pressure_type"], "integrity")
+        self.assertEqual(
+            response_events[0]["details"],
+            {
+                "work_slice": "deep",
+                "work_kind": "patrol",
+                "pressure_id": pressure_table.pressures[0].pressure_id,
+                "pressure_type": "integrity",
+                "selected_action": RECHECK_ACTION,
+            },
+        )
 
         self.state.instance_valid = True
         self.store.write_runtime_state(self.state)
@@ -221,6 +277,30 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertIn("pressure_opened", survival_events)
         self.assertIn("pressure_resolved", survival_events)
         self.assertIn("survival_snapshot", survival_events)
+
+    def test_run_turn_exposes_b0_minimal_input_contract(self) -> None:
+        now = utc_now()
+        self.runtime.pending_work.clear()
+        self.runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=now - timedelta(seconds=1)))
+
+        result = self.runtime.run_turn(
+            self.state,
+            next_heartbeat_at=now + timedelta(seconds=1),
+            now=now,
+        )
+
+        self.assertTrue(result.executed)
+        self.assertEqual(set(result.details["signal_batch"].keys()), {"signals", "summary"})
+        self.assertIn("drive_broadcast", result.details)
+        self.assertIn("drive_trends", result.details["drive_broadcast"])
+        self.assertIn("deliberation", result.details)
+        self.assertEqual(result.details["deliberation"]["outcome"], "withhold")
+        self.assertEqual(set(result.details["deliberation"].keys()), {"outcome", "selected_action"})
+        self.assertEqual(
+            set(result.details["runtime_gate_context"].keys()),
+            {"instance_valid", "turn_allowed", "critical_blocked", "conservative_mode", "life_state"},
+        )
+        self.assertEqual(result.details["runtime_gate_context"]["turn_allowed"], True)
 
     def test_repair_response_pauses_maintenance_until_next_patrol(self) -> None:
         now = utc_now()

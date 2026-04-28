@@ -73,6 +73,7 @@ Phase A 期间，应优先冻结以下合同。
 - `threat` 保留为 future fast-path 的显式类别，但当前不宣称完整 routing layer 已成立
 - `status` / `background` 进入 drive update 的读侧语义保留
 - urgency semantics 若未进入正式字段，则在 closeout 中明确 defer
+- 进入 B0 后，turn details 额外冻结 `signal_batch = {signals, summary}` 作为 L1 -> downstream 最小输入面
 
 ### 3.2 Drive state contract
 
@@ -88,8 +89,20 @@ Phase A 期间，应优先冻结以下合同。
 - 对高层是只读接口
 - L3 不能直接改写 drive
 - 当前兼容 action path 只能通过兼容接口读取新 drive 状态
+- 进入 B0 后，`drive_broadcast` 至少稳定暴露：`captured_at / top_drive / drive_levels / drive_trends`
 
-### 3.4 Compatibility projection contract
+### 3.4 Runtime gate contract
+
+B0 期间额外冻结：
+- `runtime_gate_context.instance_valid`
+- `runtime_gate_context.turn_allowed`
+- `runtime_gate_context.critical_blocked`
+- `runtime_gate_context.conservative_mode`
+- `runtime_gate_context.life_state`
+
+它属于 kernel -> downstream 的最小运行边界输入。
+
+### 3.5 Compatibility projection contract
 
 Phase A 期间允许保留以下兼容投影：
 - `active_pressures.json`

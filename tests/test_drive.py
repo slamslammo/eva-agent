@@ -233,6 +233,8 @@ class DriveTests(unittest.TestCase):
         self.assertEqual(broadcast.top_drive, "survival")
         self.assertEqual(broadcast.top_level, 0.4)
         self.assertEqual(payload["drive_levels"]["survival"], 0.4)
+        self.assertEqual(payload["drive_trends"]["survival"], "worsening")
+        self.assertEqual(payload["drive_trends"]["integrity"], "improving")
         self.assertEqual(payload["drives"]["survival"]["delta"], 0.1)
         self.assertEqual(payload["drives"]["survival"]["trend"], "worsening")
         self.assertEqual(payload["drives"]["survival"]["contributors"], ["resource_state.disk_space_critical"])

@@ -25,7 +25,7 @@
 ### A2：Signal Bus / signal publication contract
 - 已建立最小 Signal Bus 合同：`source / class / payload / captured_at / rate_context`
 - patrol 现在会产出标准化 signal batch
-- lifecycle turn details 已暴露 `signal_summary`
+- lifecycle turn details 已暴露 `signal_summary` 与 `signal_batch`
 - 当前已明确：Phase A 冻结的是 normalized signal publication contract，而不是完整 routing layer
 
 ### A3：continuous drive state
@@ -39,6 +39,7 @@
 - 已新增 `DriveBroadcast` 与 `build_drive_broadcast()`
 - patrol 结果已显式携带 `drive_broadcast`
 - lifecycle turn details 已暴露 `drive_broadcast`
+- 当前 `drive_broadcast` 已补充 `drive_trends`，并作为 B0 的 canonical L2 -> L3 read surface 冻结
 - 当前兼容 response path 已能以只读 `drive_context` 形式读取新 drive 接口
 - response 仍不拥有 drive update / write 权限
 
@@ -54,6 +55,7 @@
 - drive 已成为独立的连续内部状态，而非 pressure severity 的改名
 - broadcast 已作为当前 downstream 的只读读取面暴露
 - patrol 后 response 仍是 pressure-led compatibility path，不应被理解为 drive-native downstream policy
+- lifecycle turn details 已额外暴露 `runtime_gate_context`，作为 B0 的 kernel -> downstream 最小运行边界输入
 
 ### 仍保留为 compatibility projection 的工件
 - `active_pressures.json`
@@ -108,10 +110,10 @@ PYTHONPATH="/Users/mojiawen/Documents/claude_projects/eva-agent" python -m unitt
 
 ## 6. 下一步
 
-A5 当前仍在进行中。
+A5 当前仍在进行中，并已进入 B0 启动门槛冻结。
 
 下一步应继续：
-1. 冻结 Signal Bus publication contract 与 deferred routing/urgency 边界
-2. 补 temporal drive behavior、broadcast canonical usage、response boundary 的 targeted verification
-3. 完成 README / architecture / roadmap / phase-a docs 的 strict closeout 对齐
-4. 在上述收尾完成后，再判断是否正式关闭 Phase A 并进入 Phase B 规划与实施准备
+1. 冻结 `drive_broadcast + signal_batch + runtime_gate_context` 作为 L3 最小输入合同
+2. 继续补 canonical broadcast usage、runtime gate、response compatibility boundary 的 targeted verification
+3. 完成 README / architecture / roadmap / phase-a docs 的 B0 对齐
+4. 在 B0 合同与验证稳定后，已进入 Phase B 最小骨架的首轮落地

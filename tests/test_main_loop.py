@@ -92,11 +92,25 @@ class MainLoopTests(unittest.TestCase):
             ]
             self.assertGreaterEqual(len(patrol_turns), 1)
             self.assertIn("signal_summary", patrol_turns[0]["details"])
+            self.assertIn("signal_batch", patrol_turns[0]["details"])
+            self.assertEqual(patrol_turns[0]["details"]["signal_batch"]["summary"], patrol_turns[0]["details"]["signal_summary"])
             self.assertGreaterEqual(patrol_turns[0]["details"]["signal_summary"]["signal_count"], 1)
             self.assertIn("drive_summary", patrol_turns[0]["details"])
             self.assertIn("top_drive", patrol_turns[0]["details"]["drive_summary"])
             self.assertIn("drive_broadcast", patrol_turns[0]["details"])
             self.assertIn("top_drive", patrol_turns[0]["details"]["drive_broadcast"])
+            self.assertIn("runtime_gate_context", patrol_turns[0]["details"])
+            self.assertIn("turn_allowed", patrol_turns[0]["details"]["runtime_gate_context"])
+            self.assertIn("deliberation", patrol_turns[0]["details"])
+            self.assertEqual(set(patrol_turns[0]["details"]["deliberation"].keys()), {"outcome", "selected_action"})
+            self.assertIn("outcome", patrol_turns[0]["details"]["deliberation"])
+            self.assertTrue(config.paths.deliberation_audit_file.exists())
+            self.assertTrue(config.paths.cognitive_memory_stub_file.exists())
+            memory_entries = store.read_cognitive_memory_stub()
+            if memory_entries:
+                self.assertIn("memory_type", memory_entries[0])
+                self.assertIn("write_reason", memory_entries[0])
+                self.assertIn("linked_audit_recorded_at", memory_entries[0])
 
     def test_cli_bounded_run_succeeds(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

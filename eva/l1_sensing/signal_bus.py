@@ -55,6 +55,15 @@ class SignalDispatchSummary:
         }
 
 
+def build_signal_batch_payload(signals: Sequence[SignalRecord]) -> dict[str, Any]:
+    """Build the minimal B0 signal-batch payload for downstream readers."""
+
+    return {
+        "signals": [signal.to_dict() for signal in signals],
+        "summary": summarize_signal_dispatch(signals).to_dict(),
+    }
+
+
 def build_patrol_signals(snapshot: ExternalLifeSnapshot, pressure_table: ActivePressureTable) -> list[SignalRecord]:
     """Build the minimal signal batch emitted by one completed patrol."""
 

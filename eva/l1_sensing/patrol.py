@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from ..kernel import DriveStateTable, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore
+from ..kernel import ActivePressureTable, DriveStateTable, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore
 from ..l2_drive import DriveBroadcast, DriveSummary, build_active_pressure_table, build_drive_broadcast, update_drive_state
 from .history import persist_patrol_artifacts
 from .judgment import determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
 from .sensing import collect_external_life_inputs
-from .signal_bus import SignalRecord, SignalDispatchSummary, build_patrol_signals, summarize_signal_dispatch
+from .signal_bus import SignalRecord, SignalDispatchSummary, build_patrol_signals, build_signal_batch_payload, summarize_signal_dispatch
 
 PATROL_ORDER = ("shallow", "deep", "full")
 PATROL_INTERVAL_SECONDS = {
@@ -37,8 +37,10 @@ class PatrolResult:
     pressure_count: int
     opened_count: int
     resolved_count: int
+    pressure_table: ActivePressureTable
     signals: list[SignalRecord]
     signal_summary: SignalDispatchSummary
+    signal_batch: dict[str, object]
     drive_state: DriveStateTable
     drive_summary: DriveSummary
     drive_broadcast: DriveBroadcast
@@ -116,6 +118,7 @@ def execute_patrol(
     pressure_table, opened_pressures, resolved_pressures = build_active_pressure_table(snapshot, previous_pressures)
     signals = build_patrol_signals(snapshot, pressure_table)
     signal_summary = summarize_signal_dispatch(signals)
+    signal_batch = build_signal_batch_payload(signals)
     previous_drive_state = store.read_drive_state()
     drive_state, drive_summary = update_drive_state(previous_drive_state, snapshot, signals)
     drive_broadcast = build_drive_broadcast(drive_state)
@@ -134,8 +137,10 @@ def execute_patrol(
         pressure_count=len(pressure_table.pressures),
         opened_count=len(opened_pressures),
         resolved_count=len(resolved_pressures),
+        pressure_table=pressure_table,
         signals=signals,
         signal_summary=signal_summary,
+        signal_batch=signal_batch,
         drive_state=drive_state,
         drive_summary=drive_summary,
         drive_broadcast=drive_broadcast,

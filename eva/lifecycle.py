@@ -21,7 +21,26 @@ from .kernel import (
     utc_now,
 )
 from .l1_sensing import PatrolScheduler, execute_patrol
+from .l3_deliberation import build_deliberation_input, run_deliberation
 from .response import build_response_selected_event_details, maybe_respond_after_patrol
+
+
+def build_runtime_gate_context(
+    state: RuntimeState,
+    *,
+    instance_valid: bool,
+    critical_blocked: bool,
+    conservative_mode: bool,
+) -> dict[str, Any]:
+    """Build the minimal kernel gate context exposed to downstream layers."""
+
+    return {
+        "instance_valid": instance_valid,
+        "turn_allowed": instance_valid and not critical_blocked,
+        "critical_blocked": critical_blocked,
+        "conservative_mode": conservative_mode,
+        "life_state": state.life_state,
+    }
 
 
 class LifeState(str, Enum):
@@ -317,7 +336,15 @@ class LifecycleRuntime:
 
         # Preserve heartbeat-first behavior by refusing turn work near the next deadline.
         if remaining <= self.lifecycle.turn_guard_window_sec:
-            details = {"reason": "heartbeat_deadline_near"}
+            details = {
+                "reason": "heartbeat_deadline_near",
+                "runtime_gate_context": build_runtime_gate_context(
+                    state,
+                    instance_valid=state.instance_valid,
+                    critical_blocked=state.life_state == LifeState.CRITICAL.value,
+                    conservative_mode=self._conservative_until_next_patrol,
+                ),
+            }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=True, details=details)
             self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason="heartbeat_deadline_near")
@@ -325,19 +352,43 @@ class LifecycleRuntime:
         snapshot = self.instance_guard.snapshot(now)
         if not snapshot.instance_valid:
             reason = snapshot.invalid_reasons[0] if snapshot.invalid_reasons else "instance_invalid"
-            details = {"reason": reason}
+            details = {
+                "reason": reason,
+                "runtime_gate_context": build_runtime_gate_context(
+                    state,
+                    instance_valid=False,
+                    critical_blocked=False,
+                    conservative_mode=self._conservative_until_next_patrol,
+                ),
+            }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
             self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason=reason)
             return result
         if state.life_state == LifeState.CRITICAL.value:
-            details = {"reason": "critical_life_state"}
+            details = {
+                "reason": "critical_life_state",
+                "runtime_gate_context": build_runtime_gate_context(
+                    state,
+                    instance_valid=True,
+                    critical_blocked=True,
+                    conservative_mode=self._conservative_until_next_patrol,
+                ),
+            }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
             self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason="critical_life_state")
             return result
         if not self.pending_work:
-            details = {"reason": "no_work"}
+            details = {
+                "reason": "no_work",
+                "runtime_gate_context": build_runtime_gate_context(
+                    state,
+                    instance_valid=True,
+                    critical_blocked=False,
+                    conservative_mode=self._conservative_until_next_patrol,
+                ),
+            }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
             self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line("turn", turn_id=turn_id, state=state.life_state, executed=False, reason="no_work")
@@ -345,7 +396,15 @@ class LifecycleRuntime:
 
         work_slice = self._pop_next_executable_work()
         if work_slice is None:
-            details = {"reason": "conservative_mode_waiting_for_patrol"}
+            details = {
+                "reason": "conservative_mode_waiting_for_patrol",
+                "runtime_gate_context": build_runtime_gate_context(
+                    state,
+                    instance_valid=True,
+                    critical_blocked=False,
+                    conservative_mode=self._conservative_until_next_patrol,
+                ),
+            }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
             self.store.append_event(EventRecord(event_type="turn_completed", timestamp=now, turn_id=turn_id, life_state=state.life_state, details=details))
             emit_log_line(
@@ -361,6 +420,12 @@ class LifecycleRuntime:
             "work_slice": work_slice.name,
             "work_kind": work_slice.kind,
             "status": "completed",
+            "runtime_gate_context": build_runtime_gate_context(
+                state,
+                instance_valid=True,
+                critical_blocked=False,
+                conservative_mode=self._conservative_until_next_patrol,
+            ),
         }
         if work_slice.kind == "patrol":
             patrol_result = execute_patrol(
@@ -380,23 +445,56 @@ class LifecycleRuntime:
                     "opened_count": patrol_result.opened_count,
                     "resolved_count": patrol_result.resolved_count,
                     "signal_summary": patrol_result.signal_summary.to_dict(),
+                    "signal_batch": patrol_result.signal_batch,
                     "drive_summary": patrol_result.drive_summary.to_dict(),
                     "drive_broadcast": patrol_result.drive_broadcast.to_dict(),
                 }
             )
+            deliberation_input = build_deliberation_input(
+                patrol_result.signal_batch,
+                patrol_result.drive_broadcast.to_dict(),
+                details["runtime_gate_context"],
+                patrol_result.pressure_table,
+            )
+            deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)
+            self.store.append_deliberation_audit(deliberation_audit.to_dict())
+            if memory_stub is not None:
+                self.store.append_cognitive_memory_stub(memory_stub)
+            details["deliberation"] = {
+                "outcome": deliberation_audit.release_decision.get("outcome"),
+                "selected_action": deliberation_audit.release_decision.get("selected_action"),
+            }
             conservative_before_patrol = self._conservative_until_next_patrol
             if conservative_before_patrol:
                 self._conservative_until_next_patrol = False
-            response_summary = maybe_respond_after_patrol(
-                self.store,
+            response_summary = None
+            release_context = deliberation_audit.release_decision.get("release_context")
+            if (
+                deliberation_audit.release_decision.get("outcome") == "compatibility_release"
+                and isinstance(release_context, dict)
+                and release_context.get("bridge_target") == "pressure_led_compatibility"
+            ):
+                response_summary = maybe_respond_after_patrol(
+                    self.store,
+                    state,
+                    now,
+                    runtime=self,
+                    allow_repair_side_effects=not conservative_before_patrol,
+                    drive_context=patrol_result.drive_broadcast,
+                    release_context=release_context,
+                )
+            details["runtime_gate_context"] = build_runtime_gate_context(
                 state,
-                now,
-                runtime=self,
-                allow_repair_side_effects=not conservative_before_patrol,
-                drive_context=patrol_result.drive_broadcast,
+                instance_valid=True,
+                critical_blocked=False,
+                conservative_mode=self._conservative_until_next_patrol,
             )
             if response_summary is not None:
-                details["response"] = response_summary
+                details["response"] = {
+                    "pressure_id": response_summary["pressure_id"],
+                    "pressure_type": response_summary["pressure_type"],
+                    "selected_action": response_summary["selected_action"],
+                }
                 self.store.append_event(
                     EventRecord(
                         event_type="response_selected",

@@ -18,7 +18,17 @@
 - 当前已落地的 L1 / L2 baseline：state + rate sensing、deterministic judgment、minimal signal publication、continuous drive state、read-only drive broadcast
 - compatibility projection layer：pressure 视图、survival history、temporary minimal action path
 
-当前状态应理解为：**Phase A 主干已落地，当前进入 A5 strict closeout / audit，而不是直接视为已正式关闭。**
+当前状态应理解为：**Phase A 主干已落地，当前进入 A5 strict closeout / audit；B0 已冻结 L3 最小输入合同；Phase B 已进入 L3 最小骨架的首轮落地。**
+
+## 当前 Phase B 重点
+
+当前正在落地的 Phase B 最小骨架包括：
+- `eva/l3_deliberation/`：独立 L3 包
+- `DeliberationInput` / `Candidate` / `ReleaseDecision` 等最小合同
+- `deliberation_audit.jsonl` 与 `cognitive_memory_stub.jsonl` 两条独立轨道
+- patrol 后先经 mediator，再决定是否进入 compatibility response
+
+当前 `active_pressures.json` 与 `response.py` 仍保留，但只作为 compatibility layer，不是未来 L3 的 owner。
 
 ## 阅读顺序
 
@@ -26,11 +36,15 @@
    - 总方案、分层与关键合同
 2. `docs/development/roadmap.md`
    - 分阶段路线
-3. `docs/development/phase-a-plan.md`
+3. `docs/development/phase-b-plan.md`
+   - 当前 Phase B 计划
+4. `docs/development/phase-b-progress.md`
+   - 当前 Phase B 进展
+5. `docs/development/phase-a-plan.md`
    - 当前 Phase A 计划
-4. `docs/development/phase-a-progress.md`
+6. `docs/development/phase-a-progress.md`
    - 当前 Phase A 进展
-5. `docs/development/phase-a-implementation-contract.md`
+7. `docs/development/phase-a-implementation-contract.md`
    - 当前 Phase A 的实施合同
 
 ## 当前阶段不做

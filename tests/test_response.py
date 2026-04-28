@@ -114,7 +114,75 @@ class ResponseTests(unittest.TestCase):
         self.assertEqual([candidate.action for candidate in candidates], [RECHECK_ACTION, ESCALATE_ACTION])
         self.assertEqual(selection.selected_action, ESCALATE_ACTION)
 
-    def test_repair_is_denied_and_selection_falls_back_to_only_allowed_action(self) -> None:
+    def test_recent_yield_with_observe_first_biases_to_recheck(self) -> None:
+        pressure = self._pressure(
+            "recent_yield_detected",
+            runtime_writable=True,
+            active_instance_present=True,
+            runtime_state_present=True,
+            events_present=True,
+            lock_present=True,
+            recent_distress_count=0,
+        )
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(
+            pressure,
+            state,
+            candidates,
+            decisions,
+            bridge_policy={
+                "selection": {
+                    "preferred_action": RECHECK_ACTION,
+                    "default_path": "pressure_default",
+                },
+                "applicability": {
+                    "pressure_reasons": ["recent_yield_detected"],
+                    "life_states": ["STABLE"],
+                },
+            },
+        )
+
+        self.assertEqual(selection.selected_action, RECHECK_ACTION)
+        self.assertEqual(selection.selected_action_reason, "bridge_policy_bias")
+
+    def test_recent_yield_with_bridge_policy_override_biases_to_recheck(self) -> None:
+        pressure = self._pressure(
+            "recent_yield_detected",
+            runtime_writable=True,
+            active_instance_present=True,
+            runtime_state_present=True,
+            events_present=True,
+            lock_present=True,
+            recent_distress_count=0,
+        )
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(
+            pressure,
+            state,
+            candidates,
+            decisions,
+            bridge_policy={
+                "selection": {
+                    "preferred_action": RECHECK_ACTION,
+                    "default_path": "pressure_default",
+                },
+                "applicability": {
+                    "pressure_reasons": ["recent_yield_detected"],
+                    "life_states": ["STABLE"],
+                },
+            },
+        )
+
+        self.assertEqual(selection.selected_action, RECHECK_ACTION)
+        self.assertEqual(selection.selected_action_reason, "bridge_policy_bias")
+
+    def test_bridge_policy_fallback_selects_recheck_when_repair_is_denied(self) -> None:
         pressure = self._pressure(
             "recent_yield_detected",
             runtime_writable=False,
@@ -128,12 +196,96 @@ class ResponseTests(unittest.TestCase):
 
         candidates = build_integrity_response_candidates(pressure, state)
         decisions = filter_response_candidates(pressure, state, candidates)
-        selection = select_response_action(pressure, state, candidates, decisions)
+        selection = select_response_action(
+            pressure,
+            state,
+            candidates,
+            decisions,
+            bridge_policy={
+                "selection": {
+                    "preferred_action": REPAIR_ACTION,
+                    "fallback_action": RECHECK_ACTION,
+                    "default_path": "pressure_default",
+                },
+                "applicability": {
+                    "pressure_reasons": ["recent_yield_detected"],
+                    "life_states": ["STABLE"],
+                },
+            },
+        )
 
-        self.assertIn(REPAIR_ACTION, selection.denied_actions)
         self.assertEqual(selection.selected_action, RECHECK_ACTION)
-        self.assertEqual(selection.selected_action_reason, "only_allowed_action")
-        self.assertIn("risk_to_continuity", selection.filter_reasons)
+        self.assertEqual(selection.selected_action_reason, "bridge_policy_fallback")
+
+    def test_non_applicable_bridge_policy_falls_back_to_pressure_default(self) -> None:
+        pressure = self._pressure(
+            "recent_yield_detected",
+            runtime_writable=True,
+            active_instance_present=True,
+            runtime_state_present=True,
+            events_present=True,
+            lock_present=True,
+            recent_distress_count=0,
+        )
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(
+            pressure,
+            state,
+            candidates,
+            decisions,
+            bridge_policy={
+                "selection": {
+                    "preferred_action": RECHECK_ACTION,
+                    "fallback_action": ESCALATE_ACTION,
+                    "default_path": "pressure_default",
+                },
+                "applicability": {
+                    "pressure_reasons": ["instance_invalid"],
+                    "life_states": ["STABLE"],
+                },
+            },
+        )
+
+        self.assertEqual(selection.selected_action, REPAIR_ACTION)
+        self.assertEqual(selection.selected_action_reason, "state_requires_conservative_response")
+
+    def test_recent_yield_with_stabilize_first_keeps_repair_preference(self) -> None:
+        pressure = self._pressure(
+            "recent_yield_detected",
+            runtime_writable=True,
+            active_instance_present=True,
+            runtime_state_present=True,
+            events_present=True,
+            lock_present=True,
+            recent_distress_count=0,
+        )
+        state = self._state("STABLE")
+
+        candidates = build_integrity_response_candidates(pressure, state)
+        decisions = filter_response_candidates(pressure, state, candidates)
+        selection = select_response_action(
+            pressure,
+            state,
+            candidates,
+            decisions,
+            bridge_policy={
+                "selection": {
+                    "preferred_action": REPAIR_ACTION,
+                    "fallback_action": RECHECK_ACTION,
+                    "default_path": "pressure_default",
+                },
+                "applicability": {
+                    "pressure_reasons": ["recent_yield_detected"],
+                    "life_states": ["STABLE"],
+                },
+            },
+        )
+
+        self.assertEqual(selection.selected_action, REPAIR_ACTION)
+        self.assertEqual(selection.selected_action_reason, "state_requires_conservative_response")
 
     def test_respond_to_integrity_pressure_writes_recheck_history_entry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -158,6 +310,110 @@ class ResponseTests(unittest.TestCase):
             self.assertEqual(history[0]["selected_action"], RECHECK_ACTION)
             self.assertEqual(history[0]["pressure_outcome"], "unchanged")
             self.assertEqual(history[0]["state_mode"], "normal")
+
+    def test_respond_to_integrity_pressure_uses_observe_first_bridge_bias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure(
+                "recent_yield_detected",
+                runtime_writable=True,
+                active_instance_present=True,
+                runtime_state_present=True,
+                events_present=True,
+                lock_present=True,
+                recent_distress_count=0,
+            )
+            runtime = StubRuntime()
+            release_context = {
+                "bridge_target": "pressure_led_compatibility",
+                "response_mode": "pressure_led_compatibility",
+                "candidate_profile": "observe_first",
+                "bridge_policy": {
+                    "policy_name": "observe_first_bias",
+                    "selection": {
+                        "preferred_action": RECHECK_ACTION,
+                        "fallback_action": ESCALATE_ACTION,
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["recent_yield_detected"],
+                        "life_states": ["STABLE"],
+                    },
+                    "execution": {
+                        "allow_repair_side_effects": False,
+                    },
+                },
+            }
+
+            summary = respond_to_integrity_pressure(
+                store,
+                pressure,
+                state,
+                now,
+                runtime=runtime,
+                release_context=release_context,
+            )
+            history = store.read_response_history()
+
+            self.assertFalse(runtime.activated)
+            self.assertEqual(summary["selected_action"], RECHECK_ACTION)
+            self.assertEqual(history[0]["selected_action"], RECHECK_ACTION)
+            self.assertEqual(history[0]["selected_action_reason"], "bridge_policy_bias")
+            self.assertEqual(history[0]["release_context"], release_context)
+
+    def test_observe_first_policy_blocks_repair_side_effects_even_if_repair_is_selected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure(
+                "recent_yield_detected",
+                runtime_writable=True,
+                active_instance_present=True,
+                runtime_state_present=True,
+                events_present=True,
+                lock_present=True,
+                recent_distress_count=0,
+            )
+            runtime = StubRuntime()
+            release_context = {
+                "bridge_target": "pressure_led_compatibility",
+                "response_mode": "pressure_led_compatibility",
+                "candidate_profile": "observe_first",
+                "bridge_policy": {
+                    "policy_name": "observe_first_bias",
+                    "selection": {
+                        "preferred_action": REPAIR_ACTION,
+                        "fallback_action": RECHECK_ACTION,
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["recent_yield_detected"],
+                        "life_states": ["STABLE"],
+                    },
+                    "execution": {
+                        "allow_repair_side_effects": False,
+                    },
+                },
+            }
+
+            summary = respond_to_integrity_pressure(
+                store,
+                pressure,
+                state,
+                now,
+                runtime=runtime,
+                release_context=release_context,
+            )
+            history = store.read_response_history()
+
+            self.assertFalse(runtime.activated)
+            self.assertEqual(summary["selected_action"], REPAIR_ACTION)
+            self.assertEqual(history[0]["selected_action"], REPAIR_ACTION)
+            self.assertEqual(history[0]["side_effects"], [])
+            self.assertEqual(history[0]["selected_action_reason"], "state_requires_conservative_response")
 
     def test_respond_to_integrity_pressure_writes_repair_history_entry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -210,12 +466,42 @@ class ResponseTests(unittest.TestCase):
             state = self._state("STABLE", instance_valid=True)
             pressure = self._pressure("instance_invalid")
             drive_context = self._drive_broadcast()
+            release_context = {
+                "bridge_target": "pressure_led_compatibility",
+                "response_mode": "pressure_led_compatibility",
+                "candidate_profile": "observe_first",
+                "bridge_policy": {
+                    "policy_name": "observe_first_bias",
+                    "selection": {
+                        "preferred_action": RECHECK_ACTION,
+                        "fallback_action": ESCALATE_ACTION,
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["recent_yield_detected"],
+                        "life_states": ["STABLE"],
+                    },
+                    "execution": {
+                        "allow_repair_side_effects": False,
+                    },
+                },
+            }
 
-            summary = respond_to_integrity_pressure(store, pressure, state, now, drive_context=drive_context)
+            summary = respond_to_integrity_pressure(
+                store,
+                pressure,
+                state,
+                now,
+                drive_context=drive_context,
+                release_context=release_context,
+            )
             history = store.read_response_history()
 
             self.assertEqual(summary["drive_context"], drive_context)
+            self.assertEqual(summary["response_mode"], "pressure_led_compatibility")
             self.assertEqual(history[0]["drive_context"], drive_context)
+            self.assertEqual(history[0]["response_mode"], "pressure_led_compatibility")
+            self.assertEqual(history[0]["release_context"], release_context)
             self.assertIsNone(store.read_drive_state())
 
     def test_build_response_selected_event_details_returns_minimal_payload(self) -> None:
@@ -228,18 +514,23 @@ class ResponseTests(unittest.TestCase):
                 "execution_status": "completed",
                 "pressure_outcome": "unchanged",
                 "followup_needed": True,
+                "response_mode": "pressure_led_compatibility",
                 "drive_context": self._drive_broadcast(),
             },
             work_slice="deep",
             work_kind="patrol",
         )
 
-        self.assertEqual(payload["work_slice"], "deep")
-        self.assertEqual(payload["work_kind"], "patrol")
-        self.assertEqual(payload["pressure_id"], "pressure-integrity-instance_invalid")
-        self.assertEqual(payload["selected_action"], RECHECK_ACTION)
-        self.assertTrue(payload["followup_needed"])
-        self.assertEqual(payload["drive_context"]["top_drive"], "integrity")
+        self.assertEqual(
+            payload,
+            {
+                "work_slice": "deep",
+                "work_kind": "patrol",
+                "pressure_id": "pressure-integrity-instance_invalid",
+                "pressure_type": "integrity",
+                "selected_action": RECHECK_ACTION,
+            },
+        )
 
     def test_maybe_respond_after_patrol_returns_none_without_integrity_pressure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -296,7 +587,63 @@ class ResponseTests(unittest.TestCase):
             assert summary is not None
             self.assertTrue(runtime.activated)
             self.assertEqual(summary["selected_action"], REPAIR_ACTION)
+            self.assertEqual(summary["response_mode"], "pressure_led_compatibility")
             self.assertEqual(history[0]["side_effects"], ["temporary_conservative_until_next_patrol"])
+
+    def test_maybe_respond_after_patrol_uses_observe_first_profile_from_release_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure(
+                "recent_yield_detected",
+                runtime_writable=True,
+                active_instance_present=True,
+                runtime_state_present=True,
+                events_present=True,
+                lock_present=True,
+                recent_distress_count=0,
+            )
+            store.write_active_pressures(
+                ActivePressureTable(captured_at=now, pressures=[pressure], updated_at=now)
+            )
+            runtime = StubRuntime()
+            release_context = {
+                "bridge_target": "pressure_led_compatibility",
+                "response_mode": "pressure_led_compatibility",
+                "candidate_profile": "observe_first",
+                "bridge_policy": {
+                    "policy_name": "observe_first_bias",
+                    "selection": {
+                        "preferred_action": RECHECK_ACTION,
+                        "fallback_action": ESCALATE_ACTION,
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["recent_yield_detected"],
+                        "life_states": ["STABLE"],
+                    },
+                    "execution": {
+                        "allow_repair_side_effects": False,
+                    },
+                },
+            }
+
+            summary = maybe_respond_after_patrol(
+                store,
+                state,
+                now,
+                runtime=runtime,
+                release_context=release_context,
+            )
+            history = store.read_response_history()
+
+            self.assertIsNotNone(summary)
+            assert summary is not None
+            self.assertFalse(runtime.activated)
+            self.assertEqual(summary["selected_action"], RECHECK_ACTION)
+            self.assertEqual(history[0]["selected_action"], RECHECK_ACTION)
+            self.assertEqual(history[0]["selected_action_reason"], "bridge_policy_bias")
 
     def test_maybe_respond_after_patrol_remains_pressure_led_when_broadcast_top_drive_differs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -334,6 +681,7 @@ class ResponseTests(unittest.TestCase):
             self.assertIsNotNone(summary)
             assert summary is not None
             self.assertEqual(summary["selected_action"], REPAIR_ACTION)
+            self.assertEqual(summary["response_mode"], "pressure_led_compatibility")
             self.assertEqual(summary["drive_context"]["top_drive"], "survival")
             self.assertEqual(history[0]["selected_action"], REPAIR_ACTION)
             self.assertEqual(history[0]["drive_context"]["top_drive"], "survival")

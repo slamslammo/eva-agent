@@ -52,6 +52,8 @@ class LifecycleRuntimeTests(unittest.TestCase):
         result = self.runtime.run_turn(state, next_heartbeat_at=now + timedelta(seconds=0.1), now=now)
         self.assertFalse(result.executed)
         self.assertTrue(result.yielded_to_heartbeat)
+        self.assertEqual(result.details["runtime_gate_context"]["turn_allowed"], True)
+        self.assertEqual(result.details["runtime_gate_context"]["critical_blocked"], False)
 
     def test_run_turn_blocks_when_instance_invalid(self) -> None:
         now = utc_now()
@@ -70,6 +72,8 @@ class LifecycleRuntimeTests(unittest.TestCase):
         result = self.runtime.run_turn(state, next_heartbeat_at=now + timedelta(seconds=1), now=now)
         self.assertFalse(result.executed)
         self.assertFalse(result.yielded_to_heartbeat)
+        self.assertEqual(result.details["runtime_gate_context"]["instance_valid"], False)
+        self.assertEqual(result.details["runtime_gate_context"]["turn_allowed"], False)
         self.assertEqual(result.details["reason"], "lease_expired")
 
     def test_run_tick_emits_yield_with_specific_reason(self) -> None:
@@ -121,16 +125,23 @@ class LifecycleRuntimeTests(unittest.TestCase):
         guarded = self.runtime.run_turn(state, next_heartbeat_at=now + timedelta(seconds=0.1), now=now)
         self.assertFalse(guarded.executed)
         self.assertEqual(guarded.details["reason"], "heartbeat_deadline_near")
+        self.assertIn("runtime_gate_context", guarded.details)
 
         later = now + timedelta(seconds=1)
         executed = self.runtime.run_turn(state, next_heartbeat_at=later + timedelta(seconds=1), now=later)
         self.assertTrue(executed.executed)
         self.assertEqual(executed.details["work_kind"], "patrol")
         self.assertEqual(executed.details["signal_summary"]["signal_count"], 1)
+        self.assertEqual(executed.details["signal_batch"]["summary"], executed.details["signal_summary"])
+        self.assertEqual(executed.details["signal_batch"]["signals"][0]["class"], "status")
         self.assertEqual(executed.details["signal_summary"]["status_signal_count"], 1)
         self.assertEqual(executed.details["signal_summary"]["threat_signal_count"], 0)
         self.assertEqual(executed.details["drive_summary"]["top_drive"], "curiosity")
-        self.assertEqual(executed.details["drive_broadcast"]["top_drive"], "curiosity")
+        self.assertEqual(executed.details["runtime_gate_context"]["instance_valid"], True)
+        self.assertEqual(executed.details["runtime_gate_context"]["turn_allowed"], True)
+        self.assertIn("deliberation", executed.details)
+        self.assertEqual(executed.details["deliberation"]["outcome"], "withhold")
+        self.assertEqual(set(executed.details["deliberation"].keys()), {"outcome", "selected_action"})
         self.assertIn("curiosity", executed.details["drive_broadcast"]["drive_levels"])
         response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
         self.assertEqual(response_events, [])
@@ -152,6 +163,8 @@ class LifecycleRuntimeTests(unittest.TestCase):
         blocked = self.runtime.run_turn(state, next_heartbeat_at=later + timedelta(seconds=1), now=later)
         self.assertFalse(blocked.executed)
         self.assertFalse(blocked.yielded_to_heartbeat)
+        self.assertEqual(blocked.details["runtime_gate_context"]["critical_blocked"], True)
+        self.assertEqual(blocked.details["runtime_gate_context"]["turn_allowed"], False)
         self.assertEqual(blocked.details["reason"], "critical_life_state")
         self.assertTrue(self.runtime._conservative_until_next_patrol)
 

@@ -28,6 +28,8 @@ class StateStoreTests(unittest.TestCase):
         self.assertTrue(str(paths.active_pressures_file).endswith("active_pressures.json"))
         self.assertTrue(str(paths.survival_log_file).endswith("survival_log.jsonl"))
         self.assertTrue(str(paths.response_history_file).endswith("response_history.jsonl"))
+        self.assertTrue(str(paths.deliberation_audit_file).endswith("deliberation_audit.jsonl"))
+        self.assertTrue(str(paths.cognitive_memory_stub_file).endswith("cognitive_memory_stub.jsonl"))
 
     def test_write_and_read_active_instance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -207,6 +209,43 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(entries[0]["response_id"], "resp-001")
             self.assertEqual(entries[1]["selected_action"], "escalate_integrity_risk")
 
+    def test_append_and_read_deliberation_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.append_deliberation_audit(
+                {
+                    "recorded_at": utc_now().isoformat(),
+                    "deliberation_input": {"signal_batch": {}, "drive_broadcast": {}, "runtime_gate_context": {}},
+                    "candidates": [{"candidate_id": "candidate-1"}],
+                    "assessments": [{"candidate_id": "candidate-1", "disposition": "withhold"}],
+                    "release_decision": {"outcome": "withhold"},
+                }
+            )
+            entries = store.read_deliberation_audit()
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["release_decision"]["outcome"], "withhold")
+
+    def test_append_and_read_cognitive_memory_stub(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.append_cognitive_memory_stub(
+                {
+                    "recorded_at": utc_now().isoformat(),
+                    "source": "l3_deliberation",
+                    "salience": "focused",
+                    "memory_type": "release_trace",
+                    "write_reason": "release_outcome=compatibility_release",
+                    "linked_audit_recorded_at": utc_now().isoformat(),
+                    "content": {"top_drive": "curiosity", "release_outcome": "compatibility_release"},
+                }
+            )
+            entries = store.read_cognitive_memory_stub()
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["source"], "l3_deliberation")
+            self.assertEqual(entries[0]["content"]["top_drive"], "curiosity")
+            self.assertEqual(entries[0]["memory_type"], "release_trace")
+            self.assertEqual(entries[0]["write_reason"], "release_outcome=compatibility_release")
+
     def test_runtime_state_overwrite_remains_readable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -227,6 +266,8 @@ class StateStoreTests(unittest.TestCase):
             self.assertNotIn("overall_status", payload)
             self.assertNotIn("pressures", payload)
             self.assertNotIn("drive", payload)
+            self.assertNotIn("release_decision", payload)
+            self.assertNotIn("memory", payload)
 
 
 if __name__ == "__main__":

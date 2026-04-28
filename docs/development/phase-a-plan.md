@@ -83,6 +83,7 @@ Phase A 的初始 drive 类型限定为：
 - broadcast 对高层是只读接口
 - L3 不得直接改写 drive
 - 当前 `response.py` 只允许通过兼容方式读取新 drive 接口，不再扩 action repertoire
+- 进入 B0 后，`drive_broadcast` 应作为 L2 -> L3 的 canonical read surface 冻结
 
 ## 4. 本阶段理论不变量
 
@@ -120,3 +121,4 @@ Phase A 完成后，至少应成立：
 - drive 不退化回离散跳表伪装
 - L3 无法直接写 drive state
 - 当前兼容通路可在新 drive 接口下继续工作
+- B0 最小输入合同可由 `drive_broadcast + signal_batch + runtime_gate_context` 明确表达

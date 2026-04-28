@@ -48,13 +48,14 @@ class DriveSummary:
 
 @dataclass(frozen=True)
 class DriveBroadcast:
-    """Read-only L2 broadcast projection derived from the current drive table."""
+    """Canonical read-only L2 broadcast projection for downstream consumers."""
 
     captured_at: str | None
     updated_at: str | None
     top_drive: str
     top_level: float
     drive_levels: dict[str, float]
+    drive_trends: dict[str, str]
     drives: dict[str, dict[str, object]]
 
     def to_dict(self) -> dict[str, object]:
@@ -66,6 +67,7 @@ class DriveBroadcast:
             "top_drive": self.top_drive,
             "top_level": self.top_level,
             "drive_levels": dict(self.drive_levels),
+            "drive_trends": dict(self.drive_trends),
             "drives": {drive_type: dict(payload) for drive_type, payload in self.drives.items()},
         }
 
@@ -133,6 +135,7 @@ def build_drive_broadcast(table: DriveStateTable) -> DriveBroadcast:
         top_drive=summary.top_drive,
         top_level=summary.top_level,
         drive_levels=dict(summary.drive_levels),
+        drive_trends={drive.drive_type: drive.trend for drive in table.drives},
         drives={
             drive.drive_type: {
                 "level": drive.level,

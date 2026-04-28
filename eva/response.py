@@ -229,6 +229,8 @@ def select_response_action(
     runtime_state: RuntimeState,
     candidates: list[ResponseCandidate],
     decisions: list[ResponseFilterDecision],
+    *,
+    bridge_policy: dict[str, Any] | None = None,
 ) -> ResponseSelection:
     """Select the final Step 2 action after filtering."""
 
@@ -238,12 +240,24 @@ def select_response_action(
     discouraged = [candidate.action for candidate in candidates if decisions_by_action[candidate.action].result == "discourage"]
     denied = tuple(candidate.action for candidate in candidates if decisions_by_action[candidate.action].result == "deny")
     preferred_action = _preferred_action_for_reason(pressure, runtime_state)
+    bridge_policy_applies = _bridge_policy_applies(pressure, runtime_state, bridge_policy)
+    bridge_preferred_action = _bridge_policy_action(bridge_policy, "preferred_action") if bridge_policy_applies else None
+    bridge_fallback_action = _bridge_policy_action(bridge_policy, "fallback_action") if bridge_policy_applies else None
+    bridge_default_path = _bridge_policy_default_path(bridge_policy) if bridge_policy_applies else None
 
-    if preferred_action in allowed:
+    if bridge_preferred_action in allowed:
+        selected_action = bridge_preferred_action
+    elif bridge_fallback_action in allowed:
+        selected_action = bridge_fallback_action
+    elif preferred_action in allowed and (not bridge_policy_applies or bridge_default_path == "pressure_default"):
         selected_action = preferred_action
     elif allowed:
         selected_action = allowed[0]
-    elif preferred_action in discouraged:
+    elif bridge_preferred_action in discouraged:
+        selected_action = bridge_preferred_action
+    elif bridge_fallback_action in discouraged:
+        selected_action = bridge_fallback_action
+    elif preferred_action in discouraged and (not bridge_policy_applies or bridge_default_path == "pressure_default"):
         selected_action = preferred_action
     elif discouraged:
         selected_action = discouraged[0]
@@ -255,7 +269,7 @@ def select_response_action(
         )
 
     selected_decision = decisions_by_action[selected_action]
-    selected_reason = _selection_reason(selected_action, preferred_action)
+    selected_reason = _selection_reason(selected_action, preferred_action, bridge_preferred_action, bridge_fallback_action)
     return ResponseSelection(
         pressure_id=pressure.pressure_id,
         selected_action=selected_action,
@@ -366,12 +380,15 @@ def append_response_history(
     execution_result: dict[str, Any],
     now: datetime,
     drive_context: dict[str, Any] | None = None,
+    release_context: dict[str, Any] | None = None,
+    response_mode: str = "pressure_led_compatibility",
 ) -> dict[str, Any]:
     """Append one complete Step 2 response record and return it."""
 
     payload = {
         "response_id": f"resp-{selection.pressure_id}-{int(now.timestamp())}",
         "recorded_at": to_iso8601(now),
+        "response_mode": response_mode,
         "pressure_id": pressure.pressure_id,
         "pressure_type": pressure.type,
         "pressure_severity": pressure.severity,
@@ -397,6 +414,8 @@ def append_response_history(
     }
     if drive_context is not None:
         payload["drive_context"] = drive_context
+    if release_context is not None:
+        payload["release_context"] = dict(release_context)
     store.append_response_history(payload)
     return payload
 
@@ -410,22 +429,45 @@ def respond_to_integrity_pressure(
     *,
     allow_repair_side_effects: bool = True,
     drive_context: DriveBroadcast | dict[str, Any] | None = None,
+    release_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run the full Step 2 v1 response closure for one integrity pressure."""
+    """Run the compatibility-only response closure for one integrity pressure."""
 
     candidates = build_integrity_response_candidates(pressure, runtime_state)
     decisions = filter_response_candidates(pressure, runtime_state, candidates)
-    selection = select_response_action(pressure, runtime_state, candidates, decisions)
+    selection = select_response_action(
+        pressure,
+        runtime_state,
+        candidates,
+        decisions,
+        bridge_policy=((release_context or {}).get("bridge_policy") if isinstance((release_context or {}).get("bridge_policy"), dict) else None),
+    )
+    normalized_release_context = None if release_context is None else dict(release_context)
+    effective_allow_repair_side_effects = _allow_repair_side_effects(
+        bridge_policy=((normalized_release_context or {}).get("bridge_policy") if isinstance((normalized_release_context or {}).get("bridge_policy"), dict) else None),
+        default=allow_repair_side_effects,
+    )
     execution_result = execute_response_action(
         store,
         pressure,
         runtime_state,
         selection,
         runtime=runtime,
-        allow_repair_side_effects=allow_repair_side_effects,
+        allow_repair_side_effects=effective_allow_repair_side_effects,
     )
+    response_mode = str((normalized_release_context or {}).get("response_mode") or "pressure_led_compatibility")
     drive_context_payload = None if drive_context is None else (drive_context.to_dict() if isinstance(drive_context, DriveBroadcast) else dict(drive_context))
-    append_response_history(store, pressure, runtime_state, selection, execution_result, now, drive_context=drive_context_payload)
+    append_response_history(
+        store,
+        pressure,
+        runtime_state,
+        selection,
+        execution_result,
+        now,
+        drive_context=drive_context_payload,
+        release_context=normalized_release_context,
+        response_mode=response_mode,
+    )
     return {
         "pressure_id": pressure.pressure_id,
         "pressure_type": pressure.type,
@@ -435,6 +477,7 @@ def respond_to_integrity_pressure(
         "pressure_outcome": execution_result["pressure_outcome"],
         "followup_needed": execution_result["followup_needed"],
         "drive_context": drive_context_payload,
+        "response_mode": response_mode,
     }
 
 
@@ -446,8 +489,9 @@ def maybe_respond_after_patrol(
     *,
     allow_repair_side_effects: bool = True,
     drive_context: DriveBroadcast | dict[str, Any] | None = None,
+    release_context: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Run the first minimal Step 2 response after a patrol, if an integrity pressure exists."""
+    """Run the compatibility-only post-patrol response when an integrity pressure exists."""
 
     pressure_table = store.read_active_pressures()
     for pressure in pressure_table.pressures:
@@ -460,6 +504,7 @@ def maybe_respond_after_patrol(
                 runtime=runtime,
                 allow_repair_side_effects=allow_repair_side_effects,
                 drive_context=drive_context,
+                release_context=release_context,
             )
     return None
 
@@ -470,22 +515,78 @@ def build_response_selected_event_details(
     work_slice: str,
     work_kind: str,
 ) -> dict[str, Any]:
-    """Build the minimal response_selected event details payload."""
+    """Build the minimal downstream response_selected event payload."""
 
-    payload = {
+    return {
         "work_slice": work_slice,
         "work_kind": work_kind,
         "pressure_id": response_summary["pressure_id"],
         "pressure_type": response_summary["pressure_type"],
         "selected_action": response_summary["selected_action"],
-        "selected_posture": response_summary["selected_posture"],
-        "execution_status": response_summary["execution_status"],
-        "pressure_outcome": response_summary["pressure_outcome"],
-        "followup_needed": response_summary["followup_needed"],
     }
-    if response_summary.get("drive_context") is not None:
-        payload["drive_context"] = response_summary["drive_context"]
-    return payload
+
+
+def _bridge_policy_applies(
+    pressure: ActivePressure,
+    runtime_state: RuntimeState,
+    bridge_policy: dict[str, Any] | None,
+) -> bool:
+    """Return whether the bridge policy applies in the current runtime context."""
+
+    if not isinstance(bridge_policy, dict):
+        return False
+    applicability = bridge_policy.get("applicability")
+    if not isinstance(applicability, dict):
+        return True
+    pressure_reasons = applicability.get("pressure_reasons")
+    if isinstance(pressure_reasons, list) and pressure_reasons and _pressure_reason(pressure) not in pressure_reasons:
+        return False
+    life_states = applicability.get("life_states")
+    if isinstance(life_states, list) and life_states and runtime_state.life_state not in life_states:
+        return False
+    return True
+
+
+def _bridge_policy_action(bridge_policy: dict[str, Any] | None, key: str) -> str | None:
+    """Return one action from the bridge policy selection contract."""
+
+    if not isinstance(bridge_policy, dict):
+        return None
+    selection = bridge_policy.get("selection")
+    if not isinstance(selection, dict):
+        return None
+    action = selection.get(key)
+    if action in {RECHECK_ACTION, REPAIR_ACTION, ESCALATE_ACTION}:
+        return str(action)
+    return None
+
+
+def _bridge_policy_default_path(bridge_policy: dict[str, Any] | None) -> str | None:
+    """Return the explicit default path from the bridge policy selection contract."""
+
+    if not isinstance(bridge_policy, dict):
+        return None
+    selection = bridge_policy.get("selection")
+    if not isinstance(selection, dict):
+        return None
+    default_path = selection.get("default_path")
+    if default_path in {"pressure_default", "first_allowed"}:
+        return str(default_path)
+    return None
+
+
+def _allow_repair_side_effects(*, bridge_policy: dict[str, Any] | None, default: bool) -> bool:
+    """Return whether repair side effects are permitted under the current bridge policy."""
+
+    if not isinstance(bridge_policy, dict):
+        return default
+    execution = bridge_policy.get("execution")
+    if not isinstance(execution, dict):
+        return default
+    configured = execution.get("allow_repair_side_effects")
+    if isinstance(configured, bool):
+        return configured
+    return default
 
 
 def _preferred_action_for_reason(pressure: ActivePressure, runtime_state: RuntimeState) -> str:
@@ -501,9 +602,18 @@ def _preferred_action_for_reason(pressure: ActivePressure, runtime_state: Runtim
     return RECHECK_ACTION
 
 
-def _selection_reason(selected_action: str, preferred_action: str) -> str:
+def _selection_reason(
+    selected_action: str,
+    preferred_action: str,
+    bridge_preferred_action: str | None,
+    bridge_fallback_action: str | None,
+) -> str:
     """Return the compact enum reason for the selected action."""
 
+    if bridge_preferred_action is not None and selected_action == bridge_preferred_action and selected_action != preferred_action:
+        return "bridge_policy_bias"
+    if bridge_fallback_action is not None and selected_action == bridge_fallback_action and selected_action != preferred_action:
+        return "bridge_policy_fallback"
     if selected_action != preferred_action:
         return "only_allowed_action"
     if selected_action == RECHECK_ACTION:
