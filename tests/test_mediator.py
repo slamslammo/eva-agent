@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from eva.l3_deliberation import apply_structural_anchors, build_deliberation_input
+from eva.l3_deliberation import CandidateAssessment, apply_structural_anchors, build_deliberation_input
 from eva.l3_deliberation.candidates import build_candidates
 from eva.l3_deliberation.mediator import decide_release
 from eva.l3_deliberation.value import assess_candidates
@@ -155,6 +155,63 @@ class MediatorTests(unittest.TestCase):
 
         self.assertEqual(decision.outcome, "defer")
         self.assertEqual(decision.selected_action, "compatibility_release")
+
+    def test_learning_bias_breaks_tie_within_allowed_candidates_only(self) -> None:
+        assessments = [
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-observe-first",
+                action="compatibility_release",
+                score=1.25,
+                disposition="allow",
+                reasons=("candidate_profile=observe_first",),
+                learning_bias=0.25,
+                bias_reasons=("positive_habit_bias",),
+            ),
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-stabilize-first",
+                action="compatibility_release",
+                score=1.0,
+                disposition="allow",
+                reasons=("candidate_profile=stabilize_first",),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+        ]
+
+        decision = decide_release(assessments)
+
+        self.assertEqual(decision.outcome, "compatibility_release")
+        self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-observe-first")
+        self.assertEqual(decision.learning_context["learning_bias"], 0.25)
+        self.assertEqual(decision.learning_context["bias_reasons"], ["positive_habit_bias"])
+
+    def test_learning_bias_cannot_override_higher_structural_score(self) -> None:
+        assessments = [
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-observe-first",
+                action="compatibility_release",
+                score=1.3,
+                disposition="allow",
+                reasons=("candidate_profile=observe_first",),
+                learning_bias=0.3,
+                bias_reasons=("positive_habit_bias",),
+            ),
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-stabilize-first",
+                action="compatibility_release",
+                score=1.6,
+                disposition="allow",
+                reasons=("candidate_profile=stabilize_first",),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+        ]
+
+        decision = decide_release(assessments)
+
+        self.assertEqual(decision.outcome, "compatibility_release")
+        self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-stabilize-first")
+        self.assertEqual(decision.learning_context["learning_bias"], 0.0)
 
 
 if __name__ == "__main__":

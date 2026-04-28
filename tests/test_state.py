@@ -30,6 +30,8 @@ class StateStoreTests(unittest.TestCase):
         self.assertTrue(str(paths.response_history_file).endswith("response_history.jsonl"))
         self.assertTrue(str(paths.deliberation_audit_file).endswith("deliberation_audit.jsonl"))
         self.assertTrue(str(paths.cognitive_memory_stub_file).endswith("cognitive_memory_stub.jsonl"))
+        self.assertTrue(str(paths.learning_outcomes_file).endswith("learning_outcomes.jsonl"))
+        self.assertTrue(str(paths.habit_bias_file).endswith("habit_bias.jsonl"))
 
     def test_write_and_read_active_instance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -245,6 +247,48 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(entries[0]["content"]["top_drive"], "curiosity")
             self.assertEqual(entries[0]["memory_type"], "release_trace")
             self.assertEqual(entries[0]["write_reason"], "release_outcome=compatibility_release")
+
+    def test_append_and_read_learning_outcomes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.append_learning_outcome(
+                {
+                    "recorded_at": utc_now().isoformat(),
+                    "source": "l3_learning",
+                    "linked_audit_recorded_at": utc_now().isoformat(),
+                    "expected_outcome": "stabilize_or_relieve_pressure",
+                    "observed_outcome": "relieved",
+                    "outcome_delta": 1.0,
+                    "rpe_like_score": 1.0,
+                    "evaluation_label": "positive",
+                    "confidence": 0.9,
+                    "content": {"situation_key": "integrity|STABLE|recent_yield_detected"},
+                }
+            )
+            entries = store.read_learning_outcomes()
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["evaluation_label"], "positive")
+            self.assertEqual(entries[0]["content"]["situation_key"], "integrity|STABLE|recent_yield_detected")
+
+    def test_append_and_read_habit_bias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.append_habit_bias(
+                {
+                    "recorded_at": utc_now().isoformat(),
+                    "situation_key": "integrity|STABLE|recent_yield_detected",
+                    "candidate_profile": "stabilize_first",
+                    "preferred_action": "shrink_to_conservative_mode",
+                    "support_count": 2,
+                    "failure_count": 0,
+                    "last_outcome_delta": 1.0,
+                    "bias_strength": 1.0,
+                }
+            )
+            entries = store.read_habit_bias()
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["candidate_profile"], "stabilize_first")
+            self.assertEqual(entries[0]["bias_strength"], 1.0)
 
     def test_runtime_state_overwrite_remains_readable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

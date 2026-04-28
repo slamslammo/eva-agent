@@ -143,6 +143,8 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(executed.details["deliberation"]["outcome"], "withhold")
         self.assertEqual(set(executed.details["deliberation"].keys()), {"outcome", "selected_action"})
         self.assertIn("curiosity", executed.details["drive_broadcast"]["drive_levels"])
+        self.assertIn("working_memory_context", self.store.read_deliberation_audit()[0]["deliberation_input"])
+        self.assertEqual(self.store.read_learning_outcomes(), [])
         response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
         self.assertEqual(response_events, [])
 
@@ -167,7 +169,25 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(blocked.details["runtime_gate_context"]["turn_allowed"], False)
         self.assertEqual(blocked.details["reason"], "critical_life_state")
         self.assertTrue(self.runtime._conservative_until_next_patrol)
+    def test_patrol_turn_writes_learning_outcome_after_compatibility_response(self) -> None:
+        now = utc_now()
+        self.runtime.pending_work.clear()
+        self.runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=now - timedelta(seconds=1)))
+        state = RuntimeState(
+            life_state=LifeState.STABLE.value,
+            instance_valid=False,
+            recovering_until=now - timedelta(seconds=1),
+        )
+        self.store.write_runtime_state(state)
 
+        later = now + timedelta(seconds=1)
+        executed = self.runtime.run_turn(state, next_heartbeat_at=later + timedelta(seconds=1), now=later)
 
-if __name__ == "__main__":
-    unittest.main()
+        self.assertTrue(executed.executed)
+        self.assertIn("response", executed.details)
+        learning_outcomes = self.store.read_learning_outcomes()
+        self.assertEqual(len(learning_outcomes), 1)
+        self.assertIn(learning_outcomes[0]["evaluation_label"], {"positive", "negative", "neutral", "uncertain"})
+        self.assertIn("situation_key", learning_outcomes[0]["content"])
+        habit_bias = self.store.read_habit_bias()
+        self.assertEqual(len(habit_bias), 1)

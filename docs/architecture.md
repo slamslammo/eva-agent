@@ -263,13 +263,14 @@ sensing -> signal classification -> drive update -> drive broadcast
 
 但这应被理解为：L1 / L2 baseline 已落地，当前进入 A5 strict closeout / audit，而不是直接把 Phase A 视为已正式关闭。
 
-同时，仓库已从 B0 进入 Phase B 最小骨架：L3 已具备独立 `eva/l3_deliberation/` 包、最小 candidate/value/mediator 结构，以及分离的 deliberation audit / memory stub 轨道。
+同时，仓库已完成 Phase B 最小骨架的评审后收口：L3 已具备独立 `eva/l3_deliberation/` 包、最小 candidate/value/mediator 结构，以及分离的 deliberation audit / memory stub 轨道。
 
-在当前口径下，需要继续明确并收紧：
+在当前口径下，下一步进入 Phase C 的 learning layer 第一段，需要继续保持并明确：
 - Signal Bus 当前已成立的是 normalized signal publication contract，而不是完整 routing layer
 - urgency semantics 仍未作为正式 Phase A contract 落地
 - `response.py` 仍是 pressure-led compatibility path，只在 mediator 允许时兼容执行
-- 完整 mediator、完整 anchor system 与完整 cognitive memory 仍属于后续阶段
+- 完整 mediator、完整 anchor system 与完整 cognitive memory retrieval 仍属于后续阶段
+- outcome delta / habit bias / working-memory abstraction 应建立在现有 L3 骨架之上，而不是改写当前 release boundary
 
 ## 7. 当前非目标
 

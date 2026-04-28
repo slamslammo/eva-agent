@@ -21,7 +21,7 @@ from .kernel import (
     utc_now,
 )
 from .l1_sensing import PatrolScheduler, execute_patrol
-from .l3_deliberation import build_deliberation_input, run_deliberation
+from .l3_deliberation import build_deliberation_input_from_store, build_learning_outcome_record, run_deliberation, summarize_habit_bias
 from .response import build_response_selected_event_details, maybe_respond_after_patrol
 
 
@@ -450,7 +450,8 @@ class LifecycleRuntime:
                     "drive_broadcast": patrol_result.drive_broadcast.to_dict(),
                 }
             )
-            deliberation_input = build_deliberation_input(
+            deliberation_input = build_deliberation_input_from_store(
+                self.store,
                 patrol_result.signal_batch,
                 patrol_result.drive_broadcast.to_dict(),
                 details["runtime_gate_context"],
@@ -490,6 +491,21 @@ class LifecycleRuntime:
                 conservative_mode=self._conservative_until_next_patrol,
             )
             if response_summary is not None:
+                response_history = self.store.read_response_history()
+                latest_response_history = response_history[-1] if response_history else None
+                learning_outcome = build_learning_outcome_record(
+                    deliberation_audit.recorded_at,
+                    deliberation_audit,
+                    response_summary,
+                    latest_response_history,
+                )
+                self.store.append_learning_outcome(learning_outcome.to_dict())
+                habit_bias_entries = [summary.to_dict() for summary in summarize_habit_bias(
+                    self.store.read_learning_outcomes(),
+                    situation_key=learning_outcome.content["situation_key"],
+                )]
+                if habit_bias_entries:
+                    self.store.append_habit_bias(habit_bias_entries[0])
                 details["response"] = {
                     "pressure_id": response_summary["pressure_id"],
                     "pressure_type": response_summary["pressure_type"],

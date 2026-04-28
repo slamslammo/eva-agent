@@ -214,6 +214,94 @@ class ValueJudgmentTests(unittest.TestCase):
         self.assertEqual(assessment.disposition, "withhold")
         self.assertIn("turn_not_allowed", assessment.reasons)
 
+    def test_positive_habit_bias_only_adjusts_score_within_boundary(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "integrity|STABLE|recent_yield_detected",
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": 1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.5,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+
+        self.assertGreater(assessments[0].learning_bias, 0.0)
+        self.assertEqual(assessments[0].disposition, "allow")
+        self.assertIn("positive_habit_bias", assessments[0].bias_reasons)
+        self.assertLessEqual(assessments[0].learning_bias, 0.35)
+
+    def test_learning_bias_cannot_cross_turn_boundary(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": False,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "integrity|STABLE|recent_yield_detected",
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": 1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.5,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+
+        self.assertEqual(assessments[0].disposition, "withhold")
+        self.assertIn("turn_not_allowed", assessments[0].reasons)
+
     def test_unknown_candidate_action_is_withheld(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={

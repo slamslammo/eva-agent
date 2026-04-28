@@ -1,4 +1,4 @@
-"""Rule-based value judgment for the minimal Phase B L3 skeleton."""
+"""Rule-based value judgment for the minimal Phase B / early Phase C L3 skeleton."""
 
 from __future__ import annotations
 
@@ -22,6 +22,8 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         critical_blocked = bool(candidate.parameter_domain.get("critical_blocked", False))
         life_state = str(candidate.parameter_domain.get("life_state") or "unknown")
         conservative_mode = bool(candidate.parameter_domain.get("conservative_mode", False))
+        learning_bias = 0.0
+        bias_reasons: list[str] = []
         if candidate.action == "compatibility_release":
             candidate_profile = str(candidate.parameter_domain.get("candidate_profile") or "unknown")
             compatibility_pressure_count = int(candidate.parameter_domain.get("compatibility_pressure_count", 0))
@@ -62,6 +64,11 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                     if compatibility_pressure_count == 0:
                         score += 0.25
                         reasons.append("low_pressure_bias_for_observe_first")
+                learning_bias, bias_reasons = _learning_bias_for_candidate_profile(
+                    deliberation_input,
+                    candidate_profile=candidate_profile,
+                )
+                score += learning_bias
             else:
                 disposition = "withhold"
                 reasons.append("no_release_pressure")
@@ -72,9 +79,34 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             CandidateAssessment(
                 candidate_id=candidate.candidate_id,
                 action=candidate.action,
-                score=score,
+                score=round(score, 6),
                 disposition=disposition,
                 reasons=tuple(reasons),
+                learning_bias=round(learning_bias, 6),
+                bias_reasons=tuple(bias_reasons),
             )
         )
     return assessments
+
+
+def _learning_bias_for_candidate_profile(
+    deliberation_input: DeliberationInput,
+    *,
+    candidate_profile: str,
+) -> tuple[float, list[str]]:
+    """Return the bounded learning bias for one candidate profile."""
+
+    working_memory_context = deliberation_input.working_memory_context or {}
+    bias_summaries = working_memory_context.get("bias_summaries")
+    if not isinstance(bias_summaries, list):
+        return 0.0, []
+    for summary in bias_summaries:
+        if str(summary.get("candidate_profile") or "") != candidate_profile:
+            continue
+        bias_strength = float(summary.get("bias_strength", 0.0))
+        bounded_bias = max(-0.35, min(0.35, bias_strength * 0.25))
+        if bounded_bias == 0.0:
+            return 0.0, []
+        reason = "positive_habit_bias" if bounded_bias > 0 else "negative_habit_bias"
+        return bounded_bias, [reason]
+    return 0.0, []

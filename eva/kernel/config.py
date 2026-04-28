@@ -20,6 +20,8 @@ class EvaPaths:
     response_history_file: Path
     deliberation_audit_file: Path
     cognitive_memory_stub_file: Path
+    learning_outcomes_file: Path
+    habit_bias_file: Path
     events_file: Path
     lock_file: Path
     distress_injection_file: Path
@@ -88,6 +90,8 @@ def build_runtime_paths(base_dir: str | Path) -> EvaPaths:
         response_history_file=runtime_dir / "response_history.jsonl",
         deliberation_audit_file=runtime_dir / "deliberation_audit.jsonl",
         cognitive_memory_stub_file=runtime_dir / "cognitive_memory_stub.jsonl",
+        learning_outcomes_file=runtime_dir / "learning_outcomes.jsonl",
+        habit_bias_file=runtime_dir / "habit_bias.jsonl",
         events_file=runtime_dir / "events.jsonl",
         lock_file=runtime_dir / "eva.lock",
         distress_injection_file=runtime_dir / "distress_injection.json",

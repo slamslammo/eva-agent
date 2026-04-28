@@ -545,6 +545,32 @@ class StateStore:
         lines = self.paths.cognitive_memory_stub_file.read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
 
+    def append_learning_outcome(self, payload: dict[str, Any]) -> None:
+        """Append one Phase C learning outcome record."""
+
+        self._append_jsonl(self.paths.learning_outcomes_file, payload)
+
+    def read_learning_outcomes(self) -> list[dict[str, Any]]:
+        """Read the append-only Phase C learning outcome log."""
+
+        if not self.paths.learning_outcomes_file.exists():
+            return []
+        lines = self.paths.learning_outcomes_file.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
+    def append_habit_bias(self, payload: dict[str, Any]) -> None:
+        """Append one Phase C habit-bias summary record."""
+
+        self._append_jsonl(self.paths.habit_bias_file, payload)
+
+    def read_habit_bias(self) -> list[dict[str, Any]]:
+        """Read the append-only Phase C habit-bias log."""
+
+        if not self.paths.habit_bias_file.exists():
+            return []
+        lines = self.paths.habit_bias_file.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
     def append_event(self, event: EventRecord) -> None:
         """Append one lifecycle event to events.jsonl."""
 

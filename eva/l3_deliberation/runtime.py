@@ -1,17 +1,18 @@
-"""Runtime assembly for the minimal Phase B L3 skeleton."""
+"""Runtime assembly for the minimal Phase B / early Phase C L3 skeleton."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
 
-from ..kernel import ActivePressureTable, to_iso8601
+from ..kernel import ActivePressureTable, StateStore, to_iso8601
 from .anchors import apply_structural_anchors
 from .candidates import build_candidates
 from .contracts import DeliberationAuditRecord, DeliberationInput
 from .mediator import decide_release
 from .memory import build_memory_stub
 from .value import assess_candidates
+from .working_memory import build_working_memory_context_from_store
 
 
 def build_deliberation_input(
@@ -19,6 +20,8 @@ def build_deliberation_input(
     drive_broadcast: dict[str, Any],
     runtime_gate_context: dict[str, Any],
     pressure_table: ActivePressureTable | dict[str, Any] | None = None,
+    *,
+    working_memory_context: dict[str, Any] | None = None,
 ) -> DeliberationInput:
     """Assemble the frozen L3 input from B0 contracts and optional pressure context."""
 
@@ -32,6 +35,32 @@ def build_deliberation_input(
         drive_broadcast=dict(drive_broadcast),
         runtime_gate_context=dict(runtime_gate_context),
         compatibility_pressure_table=pressure_payload,
+        working_memory_context=None if working_memory_context is None else dict(working_memory_context),
+    )
+
+
+def build_deliberation_input_from_store(
+    store: StateStore,
+    signal_batch: dict[str, Any],
+    drive_broadcast: dict[str, Any],
+    runtime_gate_context: dict[str, Any],
+    pressure_table: ActivePressureTable | dict[str, Any] | None = None,
+) -> DeliberationInput:
+    """Assemble deliberation input and attach optional working-memory context from the store."""
+
+    base_input = build_deliberation_input(
+        signal_batch,
+        drive_broadcast,
+        runtime_gate_context,
+        pressure_table,
+    )
+    working_memory_context = build_working_memory_context_from_store(store, base_input).to_dict()
+    return build_deliberation_input(
+        signal_batch,
+        drive_broadcast,
+        runtime_gate_context,
+        pressure_table,
+        working_memory_context=working_memory_context,
     )
 
 

@@ -13,12 +13,13 @@
 - 当前已落地的 L1 / L2 baseline（state + rate sensing、minimal signal publication、continuous drive state、read-only drive broadcast）
 - compatibility pressure view / history / minimal action path
 
-当前判断：**Phase A 主干已落地并完成 B0 输入冻结；Phase B 已进入 L3 最小骨架的首轮实现。**
+当前判断：**Phase A 主干已落地并完成 B0 输入冻结；Phase B 最小骨架已完成评审后收口；Phase C 已进入规划启动状态。**
 
-因此，下一步重点不再是解释 B0，而是继续收紧 **Phase B：L3 最小骨架** 的合同、验证与表达边界，尤其是：
-- `turn_completed.details.deliberation` 只暴露 `{ outcome, selected_action }`
-- `turn_completed.details.response` 只暴露 `{ pressure_id, pressure_type, selected_action }`
-- `response_selected` 只保留最小 downstream surface，完整执行细节回收到 append-only history / audit
+因此，下一步重点不再是继续扩写 Phase B compatibility path，而是以当前最小 L3 骨架为前提，进入 **Phase C：学习能力** 的首轮规划与实现准备，尤其是：
+- 建立 `outcome delta` 与 `RPE-like evaluation` 的最小后验学习闭环
+- 建立 `habit bias / skill crystallization` 的最小偏置摘要，而不是新的独立执行通路
+- 建立可替换的 `working-memory interface`，但不把它提升为新的架构 prerequisite
+- 保持 `turn_completed.details.*` 与 `response_selected.details` 的最小 downstream surface 不扩张
 
 ## 2. Phase A：L1 / L2 结构升级（主干已落地，A5 closeout 进行中）
 
@@ -54,7 +55,7 @@ sensing -> signal classification -> drive update -> drive broadcast
 - `active_pressures.json` 明确降级为 compatibility projection
 - `response.py` 明确冻结为 pressure-led compatibility path
 
-## 4. Phase B：L3 最小骨架（进行中）
+## 4. Phase B：L3 最小骨架（已完成评审后收口）
 
 ### 目标
 先建立 L3 的结构性核心，而不是先追求复杂推理。
@@ -79,13 +80,19 @@ sensing -> signal classification -> drive update -> drive broadcast
 ### 重点
 - outcome delta
 - RPE-like evaluation
-- habit track / skill crystallization
+- habit bias / skill crystallization 的最小版本
 - 可替换的 working-memory interface
+
+### 首轮边界
+- Phase C 当前启动的是 learning layer 第一段，而不是宣告 L3 已完整完成
+- learning 只能在现有 mediator / compatibility bridge 边界内回流为 bounded bias，不能扩成新的 release authority
+- `response.py` 仍保持 pressure-led compatibility path，不在本阶段退场
+- LLM 只能作为 working-memory / reasoning adapter，而不是 release authority
 
 ### 完成后应成立
 - 历史 outcome 能影响后续 candidate 释放倾向
-- 部分常见情境能从 deliberative path 迁移到 habit track
-- LLM 只能作为 working-memory / reasoning adapter，而不是 release authority
+- 部分常见情境能形成可复用的 habit bias summary
+- working-memory interface 可被本地 rule-based adapter 实现，并为后续替换预留边界
 
 ## 6. Phase D：L4 雏形
 
@@ -105,3 +112,5 @@ L4 只有在前面几层已经积累出足够多的行为史与 memory 史之后
 - `docs/architecture.md`
 - `docs/development/phase-a-plan.md`
 - `docs/development/phase-a-progress.md`
+- `docs/development/phase-c-plan.md`
+- `docs/development/phase-c-progress.md`

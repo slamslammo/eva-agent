@@ -178,6 +178,42 @@ class CandidateGenerationTests(unittest.TestCase):
         self.assertEqual(build_candidates(deliberation_input)[0].parameter_domain["compatibility_pressure_count"], 1)
         self.assertEqual(build_candidates(deliberation_input)[1].parameter_domain["compatibility_pressure_count"], 1)
 
+    def test_build_deliberation_input_accepts_working_memory_context(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "curiosity|STABLE|none",
+                "bias_summaries": [],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.0,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        self.assertEqual(deliberation_input.working_memory_context["situation_key"], "curiosity|STABLE|none")
+        self.assertIn("working_memory_context", deliberation_input.to_dict())
+
     def test_structural_anchors_only_restrict_parameter_domain(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={

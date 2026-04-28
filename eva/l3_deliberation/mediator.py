@@ -10,7 +10,15 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
 
     allowed = [assessment for assessment in assessments if assessment.disposition == "allow"]
     if allowed:
-        selected = max(allowed, key=lambda assessment: (assessment.score, assessment.candidate_id))
+        selected = max(
+            allowed,
+            key=lambda assessment: (
+                round(assessment.score - assessment.learning_bias, 6),
+                round(assessment.learning_bias, 6),
+                assessment.score,
+                assessment.candidate_id,
+            ),
+        )
         candidate_profile = _candidate_profile_from_id(selected.candidate_id)
         return ReleaseDecision(
             outcome="compatibility_release",
@@ -23,6 +31,12 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
                 "candidate_profile": candidate_profile,
                 "bridge_policy": _bridge_policy_for_candidate_profile(candidate_profile),
             },
+            expected_outcome=_expected_outcome_for_candidate_profile(candidate_profile),
+            learning_context={
+                "candidate_profile": candidate_profile,
+                "learning_bias": selected.learning_bias,
+                "bias_reasons": list(selected.bias_reasons),
+            },
         )
 
     deferred = [assessment for assessment in assessments if assessment.disposition == "defer"]
@@ -33,6 +47,12 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
             selected_action=selected.action,
             selected_candidate_id=selected.candidate_id,
             rationale=selected.reasons,
+            expected_outcome="wait_for_safer_boundary",
+            learning_context={
+                "candidate_profile": _candidate_profile_from_id(selected.candidate_id),
+                "learning_bias": selected.learning_bias,
+                "bias_reasons": list(selected.bias_reasons),
+            },
         )
 
     selected = assessments[0] if assessments else None
@@ -41,6 +61,12 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
         selected_action=None,
         selected_candidate_id=None,
         rationale=() if selected is None else selected.reasons,
+        expected_outcome="no_external_change",
+        learning_context={} if selected is None else {
+            "candidate_profile": _candidate_profile_from_id(selected.candidate_id),
+            "learning_bias": selected.learning_bias,
+            "bias_reasons": list(selected.bias_reasons),
+        },
     )
 
 
@@ -101,3 +127,13 @@ def _bridge_policy_for_candidate_profile(candidate_profile: str) -> dict[str, ob
             "allow_repair_side_effects": True,
         },
     }
+
+
+def _expected_outcome_for_candidate_profile(candidate_profile: str) -> str:
+    """Return the minimal expected outcome label for one internal candidate profile."""
+
+    if candidate_profile == "observe_first":
+        return "improve_information_under_pressure"
+    if candidate_profile == "stabilize_first":
+        return "stabilize_or_relieve_pressure"
+    return "bounded_pressure_response"

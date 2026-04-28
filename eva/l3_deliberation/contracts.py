@@ -1,4 +1,4 @@
-"""Phase B minimal L3 contracts built on top of the B0 input surfaces."""
+"""Phase B / early Phase C L3 contracts built on top of the B0 input surfaces."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ class DeliberationInput:
     drive_broadcast: dict[str, Any]
     runtime_gate_context: dict[str, Any]
     compatibility_pressure_table: dict[str, Any] | None = None
+    working_memory_context: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Validate that the canonical B0 inputs are present and complete."""
@@ -53,6 +54,8 @@ class DeliberationInput:
         )
         if self.compatibility_pressure_table is not None:
             object.__setattr__(self, "compatibility_pressure_table", dict(self.compatibility_pressure_table))
+        if self.working_memory_context is not None:
+            object.__setattr__(self, "working_memory_context", dict(self.working_memory_context))
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the assembled L3 input."""
@@ -64,6 +67,8 @@ class DeliberationInput:
         }
         if self.compatibility_pressure_table is not None:
             payload["compatibility_pressure_table"] = dict(self.compatibility_pressure_table)
+        if self.working_memory_context is not None:
+            payload["working_memory_context"] = dict(self.working_memory_context)
         return payload
 
 
@@ -98,17 +103,24 @@ class CandidateAssessment:
     score: float
     disposition: str
     reasons: tuple[str, ...] = ()
+    learning_bias: float = 0.0
+    bias_reasons: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize one candidate assessment."""
 
-        return {
+        payload = {
             "candidate_id": self.candidate_id,
             "action": self.action,
             "score": self.score,
             "disposition": self.disposition,
             "reasons": list(self.reasons),
         }
+        if self.learning_bias != 0.0:
+            payload["learning_bias"] = self.learning_bias
+        if self.bias_reasons:
+            payload["bias_reasons"] = list(self.bias_reasons)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -120,6 +132,8 @@ class ReleaseDecision:
     selected_candidate_id: str | None = None
     rationale: tuple[str, ...] = ()
     release_context: dict[str, Any] = field(default_factory=dict)
+    expected_outcome: str | None = None
+    learning_context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the mediator decision."""
@@ -134,6 +148,10 @@ class ReleaseDecision:
             payload["selected_candidate_id"] = self.selected_candidate_id
         if self.release_context:
             payload["release_context"] = dict(self.release_context)
+        if self.expected_outcome is not None:
+            payload["expected_outcome"] = self.expected_outcome
+        if self.learning_context:
+            payload["learning_context"] = dict(self.learning_context)
         return payload
 
 
@@ -182,4 +200,113 @@ class MemoryWriteStub:
             "write_reason": self.write_reason,
             "linked_audit_recorded_at": self.linked_audit_recorded_at,
             "content": dict(self.content),
+        }
+
+
+@dataclass(frozen=True)
+class LearningOutcomeRecord:
+    """Append-only Phase C learning record linking release intent to actual outcome."""
+
+    recorded_at: str
+    source: str
+    linked_audit_recorded_at: str
+    linked_response_id: str | None = None
+    selected_action: str | None = None
+    candidate_profile: str | None = None
+    response_mode: str | None = None
+    pressure_id: str | None = None
+    pressure_type: str | None = None
+    pressure_reason: str | None = None
+    expected_outcome: str = "unknown"
+    observed_outcome: str = "unknown"
+    outcome_delta: float = 0.0
+    rpe_like_score: float = 0.0
+    evaluation_label: str = "uncertain"
+    confidence: float = 0.0
+    content: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the learning outcome payload."""
+
+        payload = {
+            "recorded_at": self.recorded_at,
+            "source": self.source,
+            "linked_audit_recorded_at": self.linked_audit_recorded_at,
+            "expected_outcome": self.expected_outcome,
+            "observed_outcome": self.observed_outcome,
+            "outcome_delta": self.outcome_delta,
+            "rpe_like_score": self.rpe_like_score,
+            "evaluation_label": self.evaluation_label,
+            "confidence": self.confidence,
+            "content": dict(self.content),
+        }
+        if self.linked_response_id is not None:
+            payload["linked_response_id"] = self.linked_response_id
+        if self.selected_action is not None:
+            payload["selected_action"] = self.selected_action
+        if self.candidate_profile is not None:
+            payload["candidate_profile"] = self.candidate_profile
+        if self.response_mode is not None:
+            payload["response_mode"] = self.response_mode
+        if self.pressure_id is not None:
+            payload["pressure_id"] = self.pressure_id
+        if self.pressure_type is not None:
+            payload["pressure_type"] = self.pressure_type
+        if self.pressure_reason is not None:
+            payload["pressure_reason"] = self.pressure_reason
+        return payload
+
+
+@dataclass(frozen=True)
+class HabitBiasSummary:
+    """Minimal Phase C habit-bias summary for one recurring situation."""
+
+    recorded_at: str
+    situation_key: str
+    candidate_profile: str
+    preferred_action: str | None = None
+    avoid_action: str | None = None
+    support_count: int = 0
+    failure_count: int = 0
+    last_outcome_delta: float = 0.0
+    bias_strength: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize one habit-bias summary."""
+
+        payload = {
+            "recorded_at": self.recorded_at,
+            "situation_key": self.situation_key,
+            "candidate_profile": self.candidate_profile,
+            "support_count": self.support_count,
+            "failure_count": self.failure_count,
+            "last_outcome_delta": self.last_outcome_delta,
+            "bias_strength": self.bias_strength,
+        }
+        if self.preferred_action is not None:
+            payload["preferred_action"] = self.preferred_action
+        if self.avoid_action is not None:
+            payload["avoid_action"] = self.avoid_action
+        return payload
+
+
+@dataclass(frozen=True)
+class WorkingMemoryContext:
+    """Replaceable Phase C working-memory payload read by L3."""
+
+    situation_key: str
+    bias_summaries: list[dict[str, Any]] = field(default_factory=list)
+    recent_relevant_outcomes: list[dict[str, Any]] = field(default_factory=list)
+    confidence: float = 0.0
+    source_backend: str = "local_rule_based"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the working-memory context payload."""
+
+        return {
+            "situation_key": self.situation_key,
+            "bias_summaries": [dict(summary) for summary in self.bias_summaries],
+            "recent_relevant_outcomes": [dict(outcome) for outcome in self.recent_relevant_outcomes],
+            "confidence": self.confidence,
+            "source_backend": self.source_backend,
         }
