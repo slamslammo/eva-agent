@@ -97,16 +97,59 @@ def _learning_bias_for_candidate_profile(
     """Return the bounded learning bias for one candidate profile."""
 
     working_memory_context = deliberation_input.working_memory_context or {}
+    total_bias = 0.0
+    reasons: list[str] = []
+
     bias_summaries = working_memory_context.get("bias_summaries")
-    if not isinstance(bias_summaries, list):
+    if isinstance(bias_summaries, list):
+        for summary in bias_summaries:
+            if str(summary.get("candidate_profile") or "") != candidate_profile:
+                continue
+            summary_bias = _bounded_learning_bias(float(summary.get("bias_strength", 0.0)) * 0.25)
+            if summary_bias != 0.0:
+                total_bias += summary_bias
+                reasons.append("positive_habit_bias" if summary_bias > 0 else "negative_habit_bias")
+            break
+
+    recent_relevant_outcomes = working_memory_context.get("recent_relevant_outcomes")
+    if isinstance(recent_relevant_outcomes, list):
+        recent_outcome_bias = _recent_negative_outcome_bias(
+            recent_relevant_outcomes,
+            candidate_profile=candidate_profile,
+        )
+        if recent_outcome_bias != 0.0:
+            total_bias += recent_outcome_bias
+            reasons.append("recent_negative_outcome_bias")
+
+    bounded_bias = _bounded_learning_bias(total_bias)
+    if bounded_bias == 0.0:
         return 0.0, []
-    for summary in bias_summaries:
-        if str(summary.get("candidate_profile") or "") != candidate_profile:
+    return bounded_bias, reasons
+
+
+
+def _recent_negative_outcome_bias(
+    recent_relevant_outcomes: list[dict[str, object]],
+    *,
+    candidate_profile: str,
+) -> float:
+    """Return a small negative bias from the most recent matching negative outcome."""
+
+    for outcome in reversed(recent_relevant_outcomes):
+        if str(outcome.get("candidate_profile") or "") != candidate_profile:
             continue
-        bias_strength = float(summary.get("bias_strength", 0.0))
-        bounded_bias = max(-0.35, min(0.35, bias_strength * 0.25))
-        if bounded_bias == 0.0:
-            return 0.0, []
-        reason = "positive_habit_bias" if bounded_bias > 0 else "negative_habit_bias"
-        return bounded_bias, [reason]
-    return 0.0, []
+        outcome_delta = float(outcome.get("outcome_delta", 0.0))
+        evaluation_label = str(outcome.get("evaluation_label") or "unknown")
+        if outcome_delta < 0.0:
+            return _bounded_learning_bias(max(-0.2, outcome_delta * 0.15))
+        if evaluation_label == "negative":
+            return -0.1
+        return 0.0
+    return 0.0
+
+
+
+def _bounded_learning_bias(raw_bias: float) -> float:
+    """Clamp learning bias so it stays advisory and bounded."""
+
+    return max(-0.35, min(0.35, raw_bias))

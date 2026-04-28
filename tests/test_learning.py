@@ -187,6 +187,65 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(summaries[1].candidate_profile, "stabilize_first")
         self.assertLess(summaries[1].bias_strength, 0.0)
 
+    def test_build_working_memory_context_uses_latest_append_only_habit_bias_entry(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        context = build_working_memory_context(
+            deliberation_input,
+            learning_outcomes=[],
+            habit_bias_entries=[
+                {
+                    "recorded_at": "2026-04-29T10:00:01+00:00",
+                    "situation_key": "integrity|STABLE|none",
+                    "candidate_profile": "observe_first",
+                    "bias_strength": 0.8,
+                    "support_count": 1,
+                    "failure_count": 0,
+                    "last_outcome_delta": 1.0,
+                },
+                {
+                    "recorded_at": "2026-04-29T10:00:02+00:00",
+                    "situation_key": "integrity|STABLE|none",
+                    "candidate_profile": "observe_first",
+                    "bias_strength": -1.0,
+                    "support_count": 1,
+                    "failure_count": 1,
+                    "last_outcome_delta": -1.0,
+                    "avoid_action": "recheck_runtime_integrity",
+                },
+            ],
+            response_history=[],
+            memory_stubs=[],
+        )
+
+        self.assertEqual(len(context.bias_summaries), 1)
+        self.assertEqual(context.bias_summaries[0]["candidate_profile"], "observe_first")
+        self.assertEqual(context.bias_summaries[0]["bias_strength"], -1.0)
+        self.assertEqual(context.bias_summaries[0]["avoid_action"], "recheck_runtime_integrity")
+
 
 if __name__ == "__main__":
     unittest.main()

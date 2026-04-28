@@ -302,6 +302,99 @@ class ValueJudgmentTests(unittest.TestCase):
         self.assertEqual(assessments[0].disposition, "withhold")
         self.assertIn("turn_not_allowed", assessments[0].reasons)
 
+    def test_recent_negative_outcome_adds_bounded_negative_bias(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "integrity|STABLE|recent_yield_detected",
+                "bias_summaries": [],
+                "recent_relevant_outcomes": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "selected_action": "recheck_runtime_integrity",
+                        "evaluation_label": "negative",
+                        "outcome_delta": -1.0,
+                    }
+                ],
+                "confidence": 0.5,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+
+        self.assertLess(assessments[0].learning_bias, 0.0)
+        self.assertIn("recent_negative_outcome_bias", assessments[0].bias_reasons)
+        self.assertEqual(assessments[0].disposition, "allow")
+        self.assertGreaterEqual(assessments[0].learning_bias, -0.35)
+
+    def test_recent_negative_outcome_only_affects_matching_profile(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "integrity|STABLE|recent_yield_detected",
+                "bias_summaries": [],
+                "recent_relevant_outcomes": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "selected_action": "recheck_runtime_integrity",
+                        "evaluation_label": "negative",
+                        "outcome_delta": -1.0,
+                    }
+                ],
+                "confidence": 0.5,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+
+        self.assertLess(assessments[0].learning_bias, 0.0)
+        self.assertEqual(assessments[1].learning_bias, 0.0)
+        self.assertNotIn("recent_negative_outcome_bias", assessments[1].bias_reasons)
+
     def test_unknown_candidate_action_is_withheld(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={

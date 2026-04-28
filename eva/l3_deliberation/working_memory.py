@@ -50,7 +50,10 @@ def build_working_memory_context(
         if str(entry.get("situation_key") or "") == situation_key
     ]
     if matching_habit_bias:
-        bias_summaries = matching_habit_bias[:max_bias_summaries]
+        bias_summaries = _latest_habit_bias_summaries(
+            matching_habit_bias,
+            max_bias_summaries=max_bias_summaries,
+        )
     else:
         bias_summaries = [
             summary.to_dict()
@@ -202,6 +205,28 @@ def _recent_learning_outcomes(learning_outcomes: list[dict[str, Any]], *, situat
         }
         for record in recent
     ]
+
+
+def _latest_habit_bias_summaries(
+    habit_bias_entries: list[dict[str, Any]],
+    *,
+    max_bias_summaries: int,
+) -> list[dict[str, Any]]:
+    """Return the latest append-only habit-bias entry per candidate profile."""
+
+    latest_by_profile: dict[str, dict[str, Any]] = {}
+    for entry in habit_bias_entries:
+        candidate_profile = str(entry.get("candidate_profile") or "unknown")
+        latest_by_profile[candidate_profile] = dict(entry)
+    latest = sorted(
+        latest_by_profile.values(),
+        key=lambda entry: (
+            -abs(float(entry.get("bias_strength", 0.0))),
+            -int(entry.get("support_count", 0)),
+            str(entry.get("candidate_profile") or "unknown"),
+        ),
+    )
+    return latest[:max_bias_summaries]
 
 
 def _recent_response_history(

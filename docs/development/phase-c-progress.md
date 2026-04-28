@@ -24,6 +24,8 @@
   - `WorkingMemoryContext`
   - `HabitBiasSummary`
 - 本地 rule-based working-memory adapter 已建立，并可从本地轨道压缩出 bias summary
+- working memory 现在按 append-only 语义读取 `habit_bias.jsonl`，对同一 `candidate_profile` 取最新 bias 条目，而不是复用旧摘要
+- recent negative outcome 现在可在同情境、同 profile 下回流为有界负偏置，但仍只作为 advisory bias，不改变 hard boundary
 - compatibility response 之后已接入 post-hoc outcome evaluation，可生成：
   - `expected_outcome`
   - `observed_outcome`
@@ -58,6 +60,8 @@
 - bounded bias 不能跨越 turn / critical 等硬边界
 - compatibility response 后写入 learning outcome 与 habit bias
 - mediator tie-break 只在 allowed 候选内生效
+- latest append-only habit bias 会覆盖同 profile 的旧 bias 读取
+- recent negative outcome 只影响 matching profile，且负偏置保持 bounded
 
 ## 5. 下一步
 
