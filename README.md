@@ -18,15 +18,15 @@
 - 当前已落地的 L1 / L2 baseline：state + rate sensing、deterministic judgment、minimal signal publication、continuous drive state、read-only drive broadcast
 - compatibility projection layer：pressure 视图、survival history、temporary minimal action path
 
-当前状态应理解为：**Phase A 主干已落地，当前进入 A5 strict closeout / audit；B0 已冻结 L3 最小输入合同；Phase B 最小骨架已完成评审后收口；Phase C 已进入规划启动状态。**
+当前状态应理解为：**Phase A 主干已落地，当前进入 A5 strict closeout / audit；B0 已冻结 L3 最小输入合同；Phase B 最小骨架已完成评审后收口；Phase C 已完成 C-1，C-2 learning reinforcement 已基本收口，C-3 habit crystallization closeout 已完成，当前进入 C-4 LLM working-memory adapter 的 protocol / placeholder baseline。**
 
 ## 当前 Phase C 重点
 
-当前已进入 Phase C 规划启动，首轮 learning layer 重点包括：
-- `outcome delta`
-- `RPE-like evaluation`
-- `habit bias / skill crystallization` 的最小版本
-- 可替换的 `working-memory interface`
+当前 Phase C 已不再只是规划启动，当前已形成的主线包括：
+- **C-1 已完成**：`outcome delta`、`RPE-like evaluation`、post-hoc learning outcome、bounded bias 回流
+- **C-2 已基本收口**：evidence / recency / stability / confidence gating 已进入 learning / working-memory 读侧
+- **C-3 closeout 已完成**：crystallized habit skill、单一强 skill 的 bounded candidate narrowing、以及对应 observability / explainability 已成立
+- **C-4 当前处于 baseline**：可替换 `working-memory interface`、`local_rule_based / auto / llm_assisted` backend seam、`inert / heuristic` placeholder、以及独立 model-client shell / config shell 已成立
 
 当前 `active_pressures.json` 与 `response.py` 仍保留，但只作为 compatibility layer，不是未来 L3 的 owner。
 

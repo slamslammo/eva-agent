@@ -13,13 +13,14 @@
 - 当前已落地的 L1 / L2 baseline（state + rate sensing、minimal signal publication、continuous drive state、read-only drive broadcast）
 - compatibility pressure view / history / minimal action path
 
-当前判断：**Phase A 主干已落地并完成 B0 输入冻结；Phase B 最小骨架已完成评审后收口；Phase C 已进入规划启动状态。**
+当前判断：**Phase A 主干已落地并完成 B0 输入冻结；Phase B 最小骨架已完成评审后收口；Phase C 已完成 C-1，C-2 learning reinforcement 已基本收口，C-3 habit crystallization closeout 已完成，当前进入 C-4 LLM working-memory adapter 的 protocol / placeholder baseline。**
 
-因此，下一步重点不再是继续扩写 Phase B compatibility path，而是以当前最小 L3 骨架为前提，进入 **Phase C：学习能力** 的首轮规划与实现准备，尤其是：
-- 建立 `outcome delta` 与 `RPE-like evaluation` 的最小后验学习闭环
-- 建立 `habit bias / skill crystallization` 的最小偏置摘要，而不是新的独立执行通路
-- 建立可替换的 `working-memory interface`，但不把它提升为新的架构 prerequisite
-- 保持 `turn_completed.details.*` 与 `response_selected.details` 的最小 downstream surface 不扩张
+因此，下一步重点不再是继续扩写 Phase B compatibility path，也不再只是 Phase C-3 closeout，而是以当前最小 L3 骨架为前提，沿着 **Phase C-4：LLM working-memory adapter** 继续完善受控 advisory seam。当前已明确落地的主线包括：
+- `outcome delta` 与 `RPE-like evaluation` 的最小后验学习闭环
+- `habit bias / skill crystallization` 的 bounded local path，而不是新的独立执行通路
+- 可替换的 `working-memory interface`，且本地 rule-based adapter 已具备较完整 observability
+- C-4 已建立 `local_rule_based / auto / llm_assisted` backend seam、`inert / heuristic` built-in adapter mode，以及独立 model-client shell
+- `turn_completed.details.*` 与 `response_selected.details` 仍保持最小 downstream surface，不被 learning payload 反向膨胀
 
 ## 2. Phase A：L1 / L2 结构升级（主干已落地，A5 closeout 进行中）
 
@@ -75,24 +76,31 @@ sensing -> signal classification -> drive update -> drive broadcast
 ## 5. Phase C：学习能力
 
 ### 目标
-在既有 L3 结构上引入 outcome-based adaptation。
+在既有 L3 结构上引入 outcome-based adaptation，并逐步推进到 habit crystallization 与 llm-assisted working memory。
 
 ### 重点
 - outcome delta
 - RPE-like evaluation
-- habit bias / skill crystallization 的最小版本
+- habit bias / skill crystallization
 - 可替换的 working-memory interface
 
-### 首轮边界
-- Phase C 当前启动的是 learning layer 第一段，而不是宣告 L3 已完整完成
+### 当前拆分
+- **Phase C-1**：最小 learning slice（已完成）
+- **Phase C-2**：learning reinforcement（已基本收口）
+- **Phase C-3**：habit crystallization（closeout 已完成）
+- **Phase C-4**：LLM working-memory adapter（当前处于 protocol / placeholder baseline）
+
+### 边界
 - learning 只能在现有 mediator / compatibility bridge 边界内回流为 bounded bias，不能扩成新的 release authority
+- habit path 只能缩窄或优先候选，不能绕过 runtime gate、anchors、mediator
 - `response.py` 仍保持 pressure-led compatibility path，不在本阶段退场
 - LLM 只能作为 working-memory / reasoning adapter，而不是 release authority
+- 未来真实模型调用只能经 `WorkingMemoryModelClient` -> `ClientBackedWorkingMemoryAdapter` 的受控壳层进入 advisory context，不能直接穿透到 runtime / mediator
 
 ### 完成后应成立
 - 历史 outcome 能影响后续 candidate 释放倾向
-- 部分常见情境能形成可复用的 habit bias summary
-- working-memory interface 可被本地 rule-based adapter 实现，并为后续替换预留边界
+- 部分常见情境能形成可复用的 habit bias / habit skill
+- working-memory interface 可先由本地 rule-based adapter 实现，并为后续 LLM adapter 预留边界
 
 ## 6. Phase D：L4 雏形
 

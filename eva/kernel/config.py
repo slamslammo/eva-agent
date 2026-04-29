@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,11 @@ class RuntimeConfig:
     lifecycle: LifecycleConfig = LifecycleConfig()
     external_life: ExternalLifeConfig = ExternalLifeConfig()
     control: LoopControl = LoopControl()
+    working_memory_backend: str = "local_rule_based"
+    working_memory_adapter: Any | None = None
+    working_memory_adapter_mode: str = "inert"
+    working_memory_model_client_mode: str = "inert"
+    working_memory_model_client_config: Any | None = None
 
 
 def build_runtime_paths(base_dir: str | Path) -> EvaPaths:
@@ -104,12 +110,27 @@ def build_runtime_config(
     lifecycle: LifecycleConfig | None = None,
     external_life: ExternalLifeConfig | None = None,
     control: LoopControl | None = None,
+    working_memory_backend: str = "local_rule_based",
+    working_memory_adapter: Any | None = None,
+    working_memory_adapter_mode: str = "inert",
+    working_memory_model_client_mode: str = "inert",
+    working_memory_model_client_config: Any | None = None,
 ) -> RuntimeConfig:
     """Build a runtime config and fill in omitted sections with defaults."""
+
+    if working_memory_model_client_config is None:
+        from eva.l3_deliberation.working_memory_model_client import WorkingMemoryModelClientConfig
+
+        working_memory_model_client_config = WorkingMemoryModelClientConfig()
 
     return RuntimeConfig(
         paths=build_runtime_paths(base_dir),
         lifecycle=lifecycle or LifecycleConfig(),
         external_life=external_life or ExternalLifeConfig(),
         control=control or LoopControl(),
+        working_memory_backend=working_memory_backend,
+        working_memory_adapter=working_memory_adapter,
+        working_memory_adapter_mode=working_memory_adapter_mode,
+        working_memory_model_client_mode=working_memory_model_client_mode,
+        working_memory_model_client_config=working_memory_model_client_config,
     )

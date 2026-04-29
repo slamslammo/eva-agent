@@ -259,7 +259,7 @@ class LearningOutcomeRecord:
 
 @dataclass(frozen=True)
 class HabitBiasSummary:
-    """Minimal Phase C habit-bias summary for one recurring situation."""
+    """Phase C habit-bias summary for one recurring situation."""
 
     recorded_at: str
     situation_key: str
@@ -268,8 +268,16 @@ class HabitBiasSummary:
     avoid_action: str | None = None
     support_count: int = 0
     failure_count: int = 0
+    evidence_count: int = 0
+    habit_skill_hit_count: int = 0
+    habit_narrowed_count: int = 0
+    recent_negative_count: int = 0
     last_outcome_delta: float = 0.0
     bias_strength: float = 0.0
+    stability_score: float = 0.0
+    confidence: float = 0.0
+    habit_eligible: bool = False
+    habit_eligibility_reasons: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize one habit-bias summary."""
@@ -280,8 +288,16 @@ class HabitBiasSummary:
             "candidate_profile": self.candidate_profile,
             "support_count": self.support_count,
             "failure_count": self.failure_count,
+            "evidence_count": self.evidence_count,
+            "habit_skill_hit_count": self.habit_skill_hit_count,
+            "habit_narrowed_count": self.habit_narrowed_count,
+            "recent_negative_count": self.recent_negative_count,
             "last_outcome_delta": self.last_outcome_delta,
             "bias_strength": self.bias_strength,
+            "stability_score": self.stability_score,
+            "confidence": self.confidence,
+            "habit_eligible": self.habit_eligible,
+            "habit_eligibility_reasons": list(self.habit_eligibility_reasons),
         }
         if self.preferred_action is not None:
             payload["preferred_action"] = self.preferred_action
@@ -291,14 +307,50 @@ class HabitBiasSummary:
 
 
 @dataclass(frozen=True)
+class HabitSkillSummary:
+    """Phase C-3 crystallized habit skill summary for one recurring situation."""
+
+    recorded_at: str
+    situation_key: str
+    candidate_profile: str
+    preferred_action: str | None = None
+    evidence_count: int = 0
+    stability_score: float = 0.0
+    confidence: float = 0.0
+    crystallized: bool = False
+    crystallization_reasons: tuple[str, ...] = ()
+    source: str = "habit_bias"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize one habit-skill summary."""
+
+        payload = {
+            "recorded_at": self.recorded_at,
+            "situation_key": self.situation_key,
+            "candidate_profile": self.candidate_profile,
+            "evidence_count": self.evidence_count,
+            "stability_score": self.stability_score,
+            "confidence": self.confidence,
+            "crystallized": self.crystallized,
+            "crystallization_reasons": list(self.crystallization_reasons),
+            "source": self.source,
+        }
+        if self.preferred_action is not None:
+            payload["preferred_action"] = self.preferred_action
+        return payload
+
+
+@dataclass(frozen=True)
 class WorkingMemoryContext:
     """Replaceable Phase C working-memory payload read by L3."""
 
     situation_key: str
     bias_summaries: list[dict[str, Any]] = field(default_factory=list)
+    habit_skills: list[dict[str, Any]] = field(default_factory=list)
     recent_relevant_outcomes: list[dict[str, Any]] = field(default_factory=list)
     confidence: float = 0.0
     source_backend: str = "local_rule_based"
+    advisory_context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the working-memory context payload."""
@@ -306,7 +358,9 @@ class WorkingMemoryContext:
         return {
             "situation_key": self.situation_key,
             "bias_summaries": [dict(summary) for summary in self.bias_summaries],
+            "habit_skills": [dict(skill) for skill in self.habit_skills],
             "recent_relevant_outcomes": [dict(outcome) for outcome in self.recent_relevant_outcomes],
             "confidence": self.confidence,
             "source_backend": self.source_backend,
+            "advisory_context": dict(self.advisory_context),
         }

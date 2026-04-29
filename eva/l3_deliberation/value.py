@@ -16,6 +16,8 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
     assessments: list[CandidateAssessment] = []
     for candidate in candidates:
         reasons: list[str] = [f"top_drive={top_drive}"]
+        if "habit_candidate_narrowing" in candidate.justification:
+            reasons.append("habit_candidate_narrowing")
         score = 0.0
         turn_allowed = bool(candidate.parameter_domain.get("turn_allowed", False))
         instance_valid = bool(candidate.parameter_domain.get("instance_valid", False))
@@ -28,6 +30,24 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             candidate_profile = str(candidate.parameter_domain.get("candidate_profile") or "unknown")
             compatibility_pressure_count = int(candidate.parameter_domain.get("compatibility_pressure_count", 0))
             reasons.append(f"candidate_profile={candidate_profile}")
+            if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
+                disposition = "withhold"
+                reasons.append("unknown_candidate_profile")
+            else:
+                habitual_trace = str(candidate.parameter_domain.get("habitual_trace") or "habitual_neutral")
+                if habitual_trace == "habitual_suppression":
+                    reasons.append("habitual_suppression_trace")
+                elif habitual_trace == "habitual_support":
+                    reasons.append("habitual_support_trace")
+                if not bool(candidate.parameter_domain.get("habit_eligible", False)):
+                    habit_eligibility_reasons = candidate.parameter_domain.get("habit_eligibility_reasons") or []
+                    if isinstance(habit_eligibility_reasons, list):
+                        reasons.extend(
+                            f"habit_ineligible:{reason}"
+                            for reason in habit_eligibility_reasons
+                            if isinstance(reason, str) and reason
+                        )
+
             if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
                 disposition = "withhold"
                 reasons.append("unknown_candidate_profile")
@@ -69,6 +89,10 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                     candidate_profile=candidate_profile,
                 )
                 score += learning_bias
+                habit_priority_bonus = _habit_skill_priority_bonus(candidate.parameter_domain)
+                if habit_priority_bonus != 0.0:
+                    score += habit_priority_bonus
+                    reasons.append("crystallized_habit_skill_hint")
             else:
                 disposition = "withhold"
                 reasons.append("no_release_pressure")
@@ -105,10 +129,14 @@ def _learning_bias_for_candidate_profile(
         for summary in bias_summaries:
             if str(summary.get("candidate_profile") or "") != candidate_profile:
                 continue
-            summary_bias = _bounded_learning_bias(float(summary.get("bias_strength", 0.0)) * 0.25)
-            if summary_bias != 0.0:
-                total_bias += summary_bias
-                reasons.append("positive_habit_bias" if summary_bias > 0 else "negative_habit_bias")
+            evidence_count = int(summary.get("evidence_count", 0))
+            confidence = float(summary.get("confidence", 0.0))
+            stability_score = float(summary.get("stability_score", 0.0))
+            if evidence_count >= 2 and confidence >= 0.5 and stability_score >= 0.5:
+                summary_bias = _bounded_learning_bias(float(summary.get("bias_strength", 0.0)) * 0.25)
+                if summary_bias != 0.0:
+                    total_bias += summary_bias
+                    reasons.append("positive_habit_bias" if summary_bias > 0 else "negative_habit_bias")
             break
 
     recent_relevant_outcomes = working_memory_context.get("recent_relevant_outcomes")
@@ -133,11 +161,14 @@ def _recent_negative_outcome_bias(
     *,
     candidate_profile: str,
 ) -> float:
-    """Return a small negative bias from the most recent matching negative outcome."""
+    """Return a small negative bias from a recent, confident matching negative outcome."""
 
     for outcome in reversed(recent_relevant_outcomes):
         if str(outcome.get("candidate_profile") or "") != candidate_profile:
             continue
+        confidence = float(outcome.get("confidence", 0.0))
+        if confidence < 0.75:
+            return 0.0
         outcome_delta = float(outcome.get("outcome_delta", 0.0))
         evaluation_label = str(outcome.get("evaluation_label") or "unknown")
         if outcome_delta < 0.0:
@@ -146,6 +177,19 @@ def _recent_negative_outcome_bias(
             return -0.1
         return 0.0
     return 0.0
+
+
+
+def _habit_skill_priority_bonus(parameter_domain: dict[str, object]) -> float:
+    """Return a tiny bounded bonus for a crystallized habit-skill candidate hint."""
+
+    if not bool(parameter_domain.get("habit_skill_match", False)):
+        return 0.0
+    confidence = float(parameter_domain.get("habit_skill_confidence", 0.0))
+    evidence_count = int(parameter_domain.get("habit_skill_evidence_count", 0))
+    if confidence < 0.6 or evidence_count < 3:
+        return 0.0
+    return min(0.1, confidence * 0.1)
 
 
 

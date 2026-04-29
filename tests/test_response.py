@@ -532,6 +532,34 @@ class ResponseTests(unittest.TestCase):
             },
         )
 
+    def test_build_response_selected_event_details_includes_narrowing_metadata_when_present(self) -> None:
+        payload = build_response_selected_event_details(
+            {
+                "pressure_id": "pressure-integrity-recent_yield_detected",
+                "pressure_type": "integrity",
+                "selected_action": RECHECK_ACTION,
+            },
+            work_slice="deep",
+            work_kind="patrol",
+            selected_candidate_id="candidate-compatibility-observe-first",
+            habit_narrowed=True,
+            habit_narrowed_from=2,
+        )
+
+        self.assertEqual(
+            payload,
+            {
+                "work_slice": "deep",
+                "work_kind": "patrol",
+                "pressure_id": "pressure-integrity-recent_yield_detected",
+                "pressure_type": "integrity",
+                "selected_action": RECHECK_ACTION,
+                "selected_candidate_id": "candidate-compatibility-observe-first",
+                "habit_narrowed": True,
+                "habit_narrowed_from": 2,
+            },
+        )
+
     def test_maybe_respond_after_patrol_returns_none_without_integrity_pressure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))

@@ -40,6 +40,7 @@ def build_learning_outcome_record(
         life_state=life_state,
         pressure_reason=pressure_reason,
     )
+    learning_context = dict(release_decision.get("learning_context") or {})
     content = {
         "execution_status": history.get("execution_status") or response_summary.get("execution_status"),
         "pressure_outcome": history.get("pressure_outcome") or response_summary.get("pressure_outcome"),
@@ -53,6 +54,8 @@ def build_learning_outcome_record(
         "life_state": life_state,
         "pressure_reason": pressure_reason,
         "situation_key": situation_key,
+        "habit_skill_match": candidate_profile in {"observe_first", "stabilize_first"},
+        "habit_narrowed": bool(learning_context.get("habit_narrowed", False)),
     }
     return LearningOutcomeRecord(
         recorded_at=recorded_at,

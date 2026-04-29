@@ -20,6 +20,17 @@ from .kernel import (
     emit_log_line,
     utc_now,
 )
+from .l3_deliberation import (
+    ADAPTER_MODE_HEURISTIC,
+    ADAPTER_MODE_INERT,
+    ClientBackedWorkingMemoryAdapter,
+    MODEL_CLIENT_MODE_HEURISTIC,
+    MODEL_CLIENT_MODE_INERT,
+    NullWorkingMemoryAdapter,
+    WorkingMemoryAdapter,
+    WorkingMemoryModelClientConfig,
+    build_builtin_working_memory_adapter,
+)
 from .lifecycle import LifecycleRuntime
 
 
@@ -34,7 +45,11 @@ class RunSummary:
     runtime_dir: str
 
 
-def run_runtime(config: RuntimeConfig) -> RunSummary:
+def run_runtime(
+    config: RuntimeConfig,
+    *,
+    working_memory_adapter: WorkingMemoryAdapter | None = None,
+) -> RunSummary:
     """Run the lifecycle loop until one of the configured bounds is reached."""
 
     store = StateStore(config.paths)
@@ -52,7 +67,14 @@ def run_runtime(config: RuntimeConfig) -> RunSummary:
     store.append_event(EventRecord(event_type="startup", timestamp=now, instance_id=active_record.instance_id, generation=active_record.generation, details={"runtime_dir": str(config.paths.runtime_dir)}))
     emit_log_line("startup", instance=active_record.instance_id, generation=active_record.generation, runtime_dir=str(config.paths.runtime_dir))
 
-    runtime = LifecycleRuntime(store, instance_guard, config.lifecycle, config.external_life)
+    runtime = LifecycleRuntime(
+        store,
+        instance_guard,
+        config.lifecycle,
+        config.external_life,
+        config.working_memory_backend,
+        _resolve_working_memory_adapter(config, explicit_adapter=working_memory_adapter),
+    )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()
     ticks = 0
@@ -97,6 +119,36 @@ def run_runtime(config: RuntimeConfig) -> RunSummary:
         instance_guard.release()
 
 
+def _resolve_working_memory_adapter(
+    config: RuntimeConfig,
+    *,
+    explicit_adapter: WorkingMemoryAdapter | None,
+) -> WorkingMemoryAdapter | None:
+    """Resolve the runtime working-memory adapter while keeping default behavior inert."""
+
+    if explicit_adapter is not None:
+        return explicit_adapter
+    if config.working_memory_adapter is not None:
+        return config.working_memory_adapter
+    if config.working_memory_backend == "llm_assisted":
+        if config.working_memory_adapter_mode != ADAPTER_MODE_INERT:
+            return build_builtin_working_memory_adapter(config.working_memory_adapter_mode)
+        return ClientBackedWorkingMemoryAdapter(
+            client_mode=config.working_memory_model_client_mode,
+            client_config=config.working_memory_model_client_config or WorkingMemoryModelClientConfig(),
+        )
+    if config.working_memory_backend == "auto":
+        if config.working_memory_adapter_mode != ADAPTER_MODE_INERT:
+            return build_builtin_working_memory_adapter(config.working_memory_adapter_mode)
+        if config.working_memory_model_client_mode != MODEL_CLIENT_MODE_INERT:
+            return ClientBackedWorkingMemoryAdapter(
+                client_mode=config.working_memory_model_client_mode,
+                client_config=config.working_memory_model_client_config,
+            )
+        return NullWorkingMemoryAdapter()
+    return None
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for local runs and verification scenarios."""
 
@@ -114,6 +166,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--deep-patrol-interval", type=float, default=1800.0)
     parser.add_argument("--full-report-interval", type=float, default=86400.0)
     parser.add_argument("--recent-event-window", type=float, default=1800.0)
+    parser.add_argument("--working-memory-backend", choices=["local_rule_based", "auto", "llm_assisted"], default="local_rule_based")
+    parser.add_argument("--working-memory-adapter-mode", choices=[ADAPTER_MODE_INERT, ADAPTER_MODE_HEURISTIC], default=ADAPTER_MODE_INERT)
+    parser.add_argument("--working-memory-model-client-mode", choices=[MODEL_CLIENT_MODE_INERT, MODEL_CLIENT_MODE_HEURISTIC], default=MODEL_CLIENT_MODE_INERT)
+    parser.add_argument("--working-memory-model-client-provider", default="placeholder")
+    parser.add_argument("--working-memory-model-client-model", default="bounded-local-placeholder")
+    parser.add_argument("--working-memory-model-client-timeout-sec", type=float, default=5.0)
     return parser.parse_args()
 
 
@@ -139,7 +197,20 @@ def main() -> None:
         max_runtime_sec=args.max_runtime_sec,
         idle_sleep_sec=args.idle_sleep_sec,
     )
-    config = build_runtime_config(args.runtime_dir, lifecycle=lifecycle, external_life=external_life, control=control)
+    config = build_runtime_config(
+        args.runtime_dir,
+        lifecycle=lifecycle,
+        external_life=external_life,
+        control=control,
+        working_memory_backend=args.working_memory_backend,
+        working_memory_adapter_mode=args.working_memory_adapter_mode,
+        working_memory_model_client_mode=args.working_memory_model_client_mode,
+        working_memory_model_client_config=WorkingMemoryModelClientConfig(
+            provider=args.working_memory_model_client_provider,
+            model=args.working_memory_model_client_model,
+            request_timeout_sec=args.working_memory_model_client_timeout_sec,
+        ),
+    )
     summary = run_runtime(config)
     print(f"runtime_dir={summary.runtime_dir}")
     print(f"ticks={summary.ticks}")

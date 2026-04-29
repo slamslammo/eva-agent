@@ -36,6 +36,7 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
                 "candidate_profile": candidate_profile,
                 "learning_bias": selected.learning_bias,
                 "bias_reasons": list(selected.bias_reasons),
+                "habit_narrowed": "habit_candidate_narrowing" in selected.reasons,
             },
         )
 
@@ -52,6 +53,7 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
                 "candidate_profile": _candidate_profile_from_id(selected.candidate_id),
                 "learning_bias": selected.learning_bias,
                 "bias_reasons": list(selected.bias_reasons),
+                "habit_narrowed": "habit_candidate_narrowing" in selected.reasons,
             },
         )
 
@@ -66,6 +68,7 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
             "candidate_profile": _candidate_profile_from_id(selected.candidate_id),
             "learning_bias": selected.learning_bias,
             "bias_reasons": list(selected.bias_reasons),
+            "habit_narrowed": "habit_candidate_narrowing" in selected.reasons,
         },
     )
 

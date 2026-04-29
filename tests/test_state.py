@@ -262,13 +262,19 @@ class StateStoreTests(unittest.TestCase):
                     "rpe_like_score": 1.0,
                     "evaluation_label": "positive",
                     "confidence": 0.9,
-                    "content": {"situation_key": "integrity|STABLE|recent_yield_detected"},
+                    "content": {
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                        "habit_skill_match": True,
+                        "habit_narrowed": True,
+                    },
                 }
             )
             entries = store.read_learning_outcomes()
             self.assertEqual(len(entries), 1)
             self.assertEqual(entries[0]["evaluation_label"], "positive")
             self.assertEqual(entries[0]["content"]["situation_key"], "integrity|STABLE|recent_yield_detected")
+            self.assertTrue(entries[0]["content"]["habit_skill_match"])
+            self.assertTrue(entries[0]["content"]["habit_narrowed"])
 
     def test_append_and_read_habit_bias(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

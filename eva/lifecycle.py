@@ -21,7 +21,13 @@ from .kernel import (
     utc_now,
 )
 from .l1_sensing import PatrolScheduler, execute_patrol
-from .l3_deliberation import build_deliberation_input_from_store, build_learning_outcome_record, run_deliberation, summarize_habit_bias
+from .l3_deliberation import (
+    WorkingMemoryAdapter,
+    build_deliberation_input_from_store,
+    build_learning_outcome_record,
+    run_deliberation,
+    summarize_habit_bias,
+)
 from .response import build_response_selected_event_details, maybe_respond_after_patrol
 
 
@@ -93,11 +99,15 @@ class LifecycleRuntime:
         instance_guard: InstanceGuard,
         lifecycle: LifecycleConfig,
         external_life: ExternalLifeConfig | None = None,
+        working_memory_backend: str = "local_rule_based",
+        working_memory_adapter: WorkingMemoryAdapter | None = None,
     ) -> None:
         self.store = store
         self.instance_guard = instance_guard
         self.lifecycle = lifecycle
         self.external_life = external_life or ExternalLifeConfig()
+        self.working_memory_backend = working_memory_backend
+        self.working_memory_adapter = working_memory_adapter
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -456,14 +466,41 @@ class LifecycleRuntime:
                 patrol_result.drive_broadcast.to_dict(),
                 details["runtime_gate_context"],
                 patrol_result.pressure_table,
+                working_memory_backend=self.working_memory_backend,
+                llm_adapter=self.working_memory_adapter,
             )
             deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)
             self.store.append_deliberation_audit(deliberation_audit.to_dict())
             if memory_stub is not None:
                 self.store.append_cognitive_memory_stub(memory_stub)
+            release_decision = deliberation_audit.release_decision
+            learning_context = release_decision.get("learning_context") if isinstance(release_decision.get("learning_context"), dict) else {}
+            selected_candidate_id = release_decision.get("selected_candidate_id")
+            selected_candidate = next(
+                (
+                    candidate
+                    for candidate in deliberation_audit.candidates
+                    if candidate.get("candidate_id") == selected_candidate_id
+                ),
+                None,
+            )
+            selected_parameter_domain = (
+                selected_candidate.get("parameter_domain")
+                if isinstance(selected_candidate, dict) and isinstance(selected_candidate.get("parameter_domain"), dict)
+                else {}
+            )
+            habit_narrowed = bool(learning_context.get("habit_narrowed", False))
+            habit_narrowed_from = (
+                int(selected_parameter_domain.get("habit_narrowed_from", 0)) or None
+                if habit_narrowed
+                else None
+            )
             details["deliberation"] = {
-                "outcome": deliberation_audit.release_decision.get("outcome"),
-                "selected_action": deliberation_audit.release_decision.get("selected_action"),
+                "outcome": release_decision.get("outcome"),
+                "selected_action": release_decision.get("selected_action"),
+                "selected_candidate_id": selected_candidate_id,
+                "habit_narrowed": habit_narrowed,
+                "habit_narrowed_from": habit_narrowed_from,
             }
             conservative_before_patrol = self._conservative_until_next_patrol
             if conservative_before_patrol:
@@ -510,6 +547,8 @@ class LifecycleRuntime:
                     "pressure_id": response_summary["pressure_id"],
                     "pressure_type": response_summary["pressure_type"],
                     "selected_action": response_summary["selected_action"],
+                    "habit_narrowed": habit_narrowed,
+                    "habit_narrowed_from": habit_narrowed_from,
                 }
                 self.store.append_event(
                     EventRecord(
@@ -521,6 +560,9 @@ class LifecycleRuntime:
                             response_summary,
                             work_slice=work_slice.name,
                             work_kind=work_slice.kind,
+                            selected_candidate_id=selected_candidate_id,
+                            habit_narrowed=habit_narrowed,
+                            habit_narrowed_from=habit_narrowed_from,
                         ),
                     )
                 )

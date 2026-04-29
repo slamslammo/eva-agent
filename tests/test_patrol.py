@@ -132,7 +132,13 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertIn("curiosity", result.details["drive_broadcast"]["drive_levels"])
         self.assertIn("deliberation", result.details)
         self.assertEqual(result.details["deliberation"]["outcome"], "withhold")
-        self.assertEqual(set(result.details["deliberation"].keys()), {"outcome", "selected_action"})
+        self.assertEqual(
+            set(result.details["deliberation"].keys()),
+            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from"},
+        )
+        self.assertIsNone(result.details["deliberation"]["selected_candidate_id"])
+        self.assertFalse(result.details["deliberation"]["habit_narrowed"])
+        self.assertIsNone(result.details["deliberation"]["habit_narrowed_from"])
         self.assertFalse(self.store.paths.deliberation_audit_file.exists() == False)
         self.assertFalse(self.store.paths.cognitive_memory_stub_file.exists())
         self.assertNotIn("response", result.details)
@@ -191,6 +197,9 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(first.details["drive_summary"]["top_drive"], "integrity")
         self.assertIn("deliberation", first.details)
         self.assertEqual(first.details["deliberation"]["outcome"], "compatibility_release")
+        self.assertEqual(first.details["deliberation"]["selected_candidate_id"], "candidate-compatibility-stabilize-first")
+        self.assertFalse(first.details["deliberation"]["habit_narrowed"])
+        self.assertIsNone(first.details["deliberation"]["habit_narrowed_from"])
 
         pressure_table = self.store.read_active_pressures()
         self.assertEqual(len(pressure_table.pressures), 1)
@@ -203,6 +212,8 @@ class PatrolRuntimeTests(unittest.TestCase):
                 "pressure_id": pressure_table.pressures[0].pressure_id,
                 "pressure_type": "integrity",
                 "selected_action": RECHECK_ACTION,
+                "habit_narrowed": False,
+                "habit_narrowed_from": None,
             },
         )
         response_history = self.store.read_response_history()
@@ -243,6 +254,7 @@ class PatrolRuntimeTests(unittest.TestCase):
                 "pressure_id": pressure_table.pressures[0].pressure_id,
                 "pressure_type": "integrity",
                 "selected_action": RECHECK_ACTION,
+                "selected_candidate_id": "candidate-compatibility-stabilize-first",
             },
         )
 
@@ -295,7 +307,13 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertIn("drive_trends", result.details["drive_broadcast"])
         self.assertIn("deliberation", result.details)
         self.assertEqual(result.details["deliberation"]["outcome"], "withhold")
-        self.assertEqual(set(result.details["deliberation"].keys()), {"outcome", "selected_action"})
+        self.assertEqual(
+            set(result.details["deliberation"].keys()),
+            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from"},
+        )
+        self.assertIsNone(result.details["deliberation"]["selected_candidate_id"])
+        self.assertFalse(result.details["deliberation"]["habit_narrowed"])
+        self.assertIsNone(result.details["deliberation"]["habit_narrowed_from"])
         self.assertEqual(
             set(result.details["runtime_gate_context"].keys()),
             {"instance_valid", "turn_allowed", "critical_blocked", "conservative_mode", "life_state"},
@@ -323,6 +341,7 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertTrue(first.executed)
         self.assertIn("response", first.details)
         self.assertEqual(first.details["response"]["selected_action"], REPAIR_ACTION)
+        self.assertFalse(first.details["response"]["habit_narrowed"])
         self.assertTrue(self.runtime._conservative_until_next_patrol)
         response_history = self.store.read_response_history()
         self.assertEqual(response_history[0]["side_effects"], ["temporary_conservative_until_next_patrol"])

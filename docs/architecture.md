@@ -197,10 +197,10 @@ memory 不能替代 audit，audit 也不等于 memory。
 
 ### 4.6 当前最小下游暴露面
 
-当前 Phase B 骨架已明确把 patrol 后的下游可见面收紧为：
-- `turn_completed.details.deliberation = { outcome, selected_action }`
-- `turn_completed.details.response = { pressure_id, pressure_type, selected_action }`
-- `response_selected.details = { work_slice, work_kind, pressure_id, pressure_type, selected_action }`
+当前 Phase B / Phase C 骨架已明确把 patrol 后的下游可见面收紧为：
+- `turn_completed.details.deliberation = { outcome, selected_action, selected_candidate_id, habit_narrowed, habit_narrowed_from }`
+- `turn_completed.details.response = { pressure_id, pressure_type, selected_action, habit_narrowed, habit_narrowed_from }`
+- `response_selected.details = { work_slice, work_kind, pressure_id, pressure_type, selected_action, selected_candidate_id, habit_narrowed, habit_narrowed_from }`
 
 这意味着：
 - 完整 candidate / assessment / release rationale 不经 lifecycle turn details 下发
@@ -233,7 +233,14 @@ memory 不能替代 audit，audit 也不等于 memory。
 - 完整 anchor-bounded candidate generation
 - 完整 mediator policy layer
 - salience-weighted cognitive memory retrieval
-- outcome delta / habit track / working-memory abstraction
+- llm-assisted working-memory adapter
+
+当前代码已进入 **Phase C-3 habit crystallization closeout**：
+- crystallized habit skill 已可从 append-only learning artifact 中派生
+- 单一强 skill 命中时可 bounded 地收窄候选集
+- hit / narrowed 计数、recent negative degradation、crystallization reasons、habit eligibility、habitual trace 已进入 working-memory / audit 观测面
+
+因此，此处不再把 “crystallized habit skill layer” 视为尚未建立，而应理解为：其首轮 bounded local path 已成立，但仍未扩展为更完整的 habitual execution layer。
 
 ### 5.3 当前过渡结构的定位
 
@@ -265,12 +272,27 @@ sensing -> signal classification -> drive update -> drive broadcast
 
 同时，仓库已完成 Phase B 最小骨架的评审后收口：L3 已具备独立 `eva/l3_deliberation/` 包、最小 candidate/value/mediator 结构，以及分离的 deliberation audit / memory stub 轨道。
 
-在当前口径下，下一步进入 Phase C 的 learning layer 第一段，需要继续保持并明确：
+在当前口径下，Phase C-1 已完成最小 learning slice：独立 `learning_outcomes.jsonl` / `habit_bias.jsonl`、post-hoc outcome evaluation、replaceable local working-memory adapter，以及 bounded bias 回流到 value judgment / mediator tie-break。
+
+当前已不再只是 C-2 reinforcement，而是：**C-3 habit crystallization closeout 已完成，当前进入 C-4 LLM working-memory adapter 的 protocol / placeholder baseline**：
+- recurring bias summary 已可派生 crystallized habit skill
+- 单一强 skill 命中时可在 candidate generation 阶段发生 bounded narrowing
+- `selected_candidate_id`、`habit_narrowed`、`habit_narrowed_from` 已进入运行态最小观测面
+- candidate / assessment / audit 已可解释本轮为什么 narrow 或为什么未 narrow
+- working-memory advisory path 已显式使用 `WorkingMemoryAdapterRequest / WorkingMemoryAdapterResponse`
+- 当前已提供 `NullWorkingMemoryAdapter` 与 `HeuristicWorkingMemoryAdapter` 两种 built-in placeholder
+- 当前已提供独立 `WorkingMemoryModelClientConfig / WorkingMemoryModelClient*` shell、`ClientBackedWorkingMemoryAdapter`，以及 runtime / CLI 级别的受控选择口径
+
+后续 Phase C-4 仍需继续保持并明确：
 - Signal Bus 当前已成立的是 normalized signal publication contract，而不是完整 routing layer
 - urgency semantics 仍未作为正式 Phase A contract 落地
 - `response.py` 仍是 pressure-led compatibility path，只在 mediator 允许时兼容执行
 - 完整 mediator、完整 anchor system 与完整 cognitive memory retrieval 仍属于后续阶段
-- outcome delta / habit bias / working-memory abstraction 应建立在现有 L3 骨架之上，而不是改写当前 release boundary
+- learning reinforcement、habit crystallization 与 llm-assisted working memory 都必须建立在现有 L3 骨架之上，而不是改写当前 release boundary
+- 当前 C-4 已有最小 backend seam：`local_rule_based / auto / llm_assisted`，但 llm path 仍只停留在 bounded advisory context，不直接参与 release authority
+- 当前 C-4 还提供 `inert / heuristic` 两种 built-in adapter mode：默认 `inert` 不产生 advisory payload，可选 `heuristic` 只基于现有 request surface 产出本地 advisory strings，不构成真实模型依赖
+- 当前 C-4 还已拆出独立 model-client shell：未来若引入真实模型调用，只能经由 `WorkingMemoryModelClient` 被 `ClientBackedWorkingMemoryAdapter` 包装后进入 advisory context，而不能直接穿透到 runtime / mediator
+- 当前 runtime / CLI 还已支持受控 `working_memory_model_client_mode / provider / model / timeout` 选择口径，用于保持未来真实 client 只经单一受控替换点接入
 
 ## 7. 当前非目标
 

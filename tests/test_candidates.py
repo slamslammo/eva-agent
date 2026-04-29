@@ -205,6 +205,7 @@ class CandidateGenerationTests(unittest.TestCase):
             working_memory_context={
                 "situation_key": "curiosity|STABLE|none",
                 "bias_summaries": [],
+                "habit_skills": [],
                 "recent_relevant_outcomes": [],
                 "confidence": 0.0,
                 "source_backend": "local_rule_based",
@@ -212,7 +213,222 @@ class CandidateGenerationTests(unittest.TestCase):
         )
 
         self.assertEqual(deliberation_input.working_memory_context["situation_key"], "curiosity|STABLE|none")
+        self.assertEqual(deliberation_input.working_memory_context["habit_skills"], [])
         self.assertIn("working_memory_context", deliberation_input.to_dict())
+
+    def test_single_strong_crystallized_habit_skill_can_narrow_candidates(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "curiosity|STABLE|none",
+                "bias_summaries": [],
+                "habit_skills": [
+                    {
+                        "candidate_profile": "stabilize_first",
+                        "preferred_action": "shrink_to_conservative_mode",
+                        "evidence_count": 4,
+                        "stability_score": 0.8,
+                        "confidence": 0.85,
+                        "crystallized": True,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.85,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        candidates = build_candidates(deliberation_input)
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].parameter_domain["candidate_profile"], STABILIZE_FIRST_PROFILE)
+        self.assertTrue(candidates[0].parameter_domain["habit_narrowed"])
+        self.assertEqual(candidates[0].parameter_domain["habit_narrowed_from"], 2)
+        self.assertEqual(candidates[0].parameter_domain["habitual_trace"], "habitual_neutral")
+        self.assertTrue(candidates[0].parameter_domain["habit_eligible"])
+        self.assertIn("habit_candidate_narrowing", candidates[0].justification)
+
+    def test_candidate_building_surfaces_habitual_suppression_explanation(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "curiosity|STABLE|none",
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "habit_eligible": False,
+                        "habit_eligibility_reasons": ["recent_negative_streak"],
+                    }
+                ],
+                "habit_skills": [],
+                "recent_relevant_outcomes": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "habitual_trace": "habitual_suppression",
+                        "habitual_trace_reasons": ["recent_negative_feedback"],
+                    }
+                ],
+                "confidence": 0.5,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        candidates = build_candidates(deliberation_input)
+
+        self.assertEqual(candidates[0].parameter_domain["candidate_profile"], OBSERVE_FIRST_PROFILE)
+        self.assertEqual(candidates[0].parameter_domain["habitual_trace"], "habitual_suppression")
+        self.assertIn("recent_negative_feedback", candidates[0].parameter_domain["habitual_trace_reasons"])
+        self.assertFalse(candidates[0].parameter_domain["habit_eligible"])
+        self.assertIn("habitual_suppression_trace", candidates[0].justification)
+
+    def test_multiple_crystallized_habit_skills_do_not_narrow_candidates(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "curiosity|STABLE|none",
+                "bias_summaries": [],
+                "habit_skills": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "preferred_action": "recheck_runtime_integrity",
+                        "evidence_count": 4,
+                        "stability_score": 0.85,
+                        "confidence": 0.9,
+                        "crystallized": True,
+                    },
+                    {
+                        "candidate_profile": "stabilize_first",
+                        "preferred_action": "shrink_to_conservative_mode",
+                        "evidence_count": 4,
+                        "stability_score": 0.8,
+                        "confidence": 0.85,
+                        "crystallized": True,
+                    },
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.9,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        candidates = build_candidates(deliberation_input)
+
+        self.assertEqual(len(candidates), 2)
+        self.assertFalse(candidates[0].parameter_domain.get("habit_narrowed", False))
+
+    def test_crystallized_habit_skill_reorders_candidate_priority_without_removing_candidates(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "curiosity|STABLE|none",
+                "bias_summaries": [],
+                "habit_skills": [
+                    {
+                        "candidate_profile": "stabilize_first",
+                        "preferred_action": "shrink_to_conservative_mode",
+                        "evidence_count": 3,
+                        "stability_score": 0.7,
+                        "confidence": 0.75,
+                        "crystallized": True,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.75,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        candidates = build_candidates(deliberation_input)
+
+        self.assertEqual(len(candidates), 2)
+        self.assertEqual(candidates[0].parameter_domain["candidate_profile"], STABILIZE_FIRST_PROFILE)
+        self.assertTrue(candidates[0].parameter_domain["habit_skill_match"])
+        self.assertEqual(candidates[0].parameter_domain["habit_preferred_action"], "shrink_to_conservative_mode")
+        self.assertEqual(candidates[1].parameter_domain["candidate_profile"], OBSERVE_FIRST_PROFILE)
 
     def test_structural_anchors_only_restrict_parameter_domain(self) -> None:
         deliberation_input = build_deliberation_input(

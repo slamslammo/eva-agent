@@ -514,16 +514,26 @@ def build_response_selected_event_details(
     *,
     work_slice: str,
     work_kind: str,
+    selected_candidate_id: str | None = None,
+    habit_narrowed: bool = False,
+    habit_narrowed_from: int | None = None,
 ) -> dict[str, Any]:
     """Build the minimal downstream response_selected event payload."""
 
-    return {
+    payload = {
         "work_slice": work_slice,
         "work_kind": work_kind,
         "pressure_id": response_summary["pressure_id"],
         "pressure_type": response_summary["pressure_type"],
         "selected_action": response_summary["selected_action"],
     }
+    if selected_candidate_id is not None:
+        payload["selected_candidate_id"] = selected_candidate_id
+    if habit_narrowed:
+        payload["habit_narrowed"] = True
+    if habit_narrowed_from is not None:
+        payload["habit_narrowed_from"] = int(habit_narrowed_from)
+    return payload
 
 
 def _bridge_policy_applies(

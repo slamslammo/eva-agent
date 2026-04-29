@@ -8,10 +8,36 @@ import unittest
 from pathlib import Path
 
 from eva.kernel import ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
+from eva.l3_deliberation.working_memory_adapter import WorkingMemoryAdapterRequest, WorkingMemoryAdapterResponse
 from eva.main import run_runtime
 
 
+class CapturingRuntimeWorkingMemoryAdapter:
+    def __init__(self) -> None:
+        self.called = False
+        self.request: WorkingMemoryAdapterRequest | None = None
+
+    def build_advisory_context(self, request: WorkingMemoryAdapterRequest) -> WorkingMemoryAdapterResponse | None:
+        self.called = True
+        self.request = request
+        return WorkingMemoryAdapterResponse(
+            candidate_suggestions=("observe_first",),
+            prediction_hints=("bounded_runtime_hint",),
+            reasoning_trace=("runtime_adapter_invoked",),
+            confidence=0.62,
+        )
+
+
 class MainLoopTests(unittest.TestCase):
+    def test_runtime_config_carries_working_memory_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(temp_dir, working_memory_backend="auto")
+            self.assertEqual(config.working_memory_backend, "auto")
+            self.assertIsNone(config.working_memory_adapter)
+            self.assertEqual(config.working_memory_adapter_mode, "inert")
+            self.assertEqual(config.working_memory_model_client_mode, "inert")
+            self.assertEqual(config.working_memory_model_client_config.provider, "placeholder")
+
     def test_bounded_run_creates_runtime_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = build_runtime_config(
@@ -102,7 +128,10 @@ class MainLoopTests(unittest.TestCase):
             self.assertIn("runtime_gate_context", patrol_turns[0]["details"])
             self.assertIn("turn_allowed", patrol_turns[0]["details"]["runtime_gate_context"])
             self.assertIn("deliberation", patrol_turns[0]["details"])
-            self.assertEqual(set(patrol_turns[0]["details"]["deliberation"].keys()), {"outcome", "selected_action"})
+            self.assertEqual(
+                set(patrol_turns[0]["details"]["deliberation"].keys()),
+                {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from"},
+            )
             self.assertIn("outcome", patrol_turns[0]["details"]["deliberation"])
             self.assertTrue(config.paths.deliberation_audit_file.exists())
             self.assertTrue(config.paths.cognitive_memory_stub_file.exists())
@@ -112,7 +141,231 @@ class MainLoopTests(unittest.TestCase):
                 self.assertIn("write_reason", memory_entries[0])
                 self.assertIn("linked_audit_recorded_at", memory_entries[0])
 
-    def test_cli_bounded_run_succeeds(self) -> None:
+    def test_runtime_defaults_to_inert_null_adapter_for_llm_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                working_memory_backend="llm_assisted",
+            )
+            run_runtime(config)
+            audits = StateStore(config.paths).read_deliberation_audit()
+            self.assertGreaterEqual(len(audits), 1)
+            working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
+            self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertEqual(working_memory_context["advisory_context"], {})
+
+    def test_runtime_uses_explicit_working_memory_adapter_when_provided(self) -> None:
+        adapter = CapturingRuntimeWorkingMemoryAdapter()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                working_memory_backend="llm_assisted",
+            )
+            run_runtime(config, working_memory_adapter=adapter)
+            audits = StateStore(config.paths).read_deliberation_audit()
+            self.assertGreaterEqual(len(audits), 1)
+            working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
+            self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertEqual(
+                working_memory_context["advisory_context"],
+                {
+                    "candidate_suggestions": ["observe_first"],
+                    "prediction_hints": ["bounded_runtime_hint"],
+                    "reasoning_trace": ["runtime_adapter_invoked"],
+                    "confidence": 0.62,
+                },
+            )
+            self.assertTrue(adapter.called)
+            self.assertIsNotNone(adapter.request)
+            assert adapter.request is not None
+            self.assertEqual(adapter.request.situation_key, working_memory_context["situation_key"])
+
+    def test_runtime_uses_builtin_heuristic_adapter_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                working_memory_backend="llm_assisted",
+                working_memory_adapter_mode="heuristic",
+            )
+            run_runtime(config)
+            audits = StateStore(config.paths).read_deliberation_audit()
+            self.assertGreaterEqual(len(audits), 1)
+            working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
+            self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertIn("candidate_suggestions", working_memory_context["advisory_context"])
+            self.assertIn("prediction_hints", working_memory_context["advisory_context"])
+            self.assertIn("reasoning_trace", working_memory_context["advisory_context"])
+
+    def test_runtime_uses_heuristic_model_client_shell_for_llm_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                working_memory_backend="llm_assisted",
+                working_memory_model_client_mode="heuristic",
+            )
+            run_runtime(config)
+            audits = StateStore(config.paths).read_deliberation_audit()
+            self.assertGreaterEqual(len(audits), 1)
+            working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
+            advisory_context = working_memory_context["advisory_context"]
+            self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertEqual(advisory_context["candidate_suggestions"], ["observe_first"])
+            self.assertIn("model_client_provider_heuristic", advisory_context["reasoning_trace"])
+            self.assertIn("model_client_bounded-local-placeholder", advisory_context["reasoning_trace"])
+
+    def test_cli_accepts_working_memory_backend_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(__file__).resolve().parents[1]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "eva.main",
+                    "--runtime-dir",
+                    temp_dir,
+                    "--heartbeat-interval",
+                    "0.2",
+                    "--lease-duration",
+                    "1.0",
+                    "--recovering-window",
+                    "0.05",
+                    "--turn-guard-window",
+                    "0.01",
+                    "--shallow-patrol-interval",
+                    "0.01",
+                    "--deep-patrol-interval",
+                    "0.02",
+                    "--full-report-interval",
+                    "0.03",
+                    "--recent-event-window",
+                    "60",
+                    "--max-turns",
+                    "2",
+                    "--max-runtime-sec",
+                    "1",
+                    "--idle-sleep-sec",
+                    "0.01",
+                    "--working-memory-backend",
+                    "auto",
+                    "--working-memory-adapter-mode",
+                    "heuristic",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertIn("event=startup", result.stdout)
+            self.assertTrue((Path(temp_dir) / "events.jsonl").exists())
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(__file__).resolve().parents[1]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "eva.main",
+                    "--runtime-dir",
+                    temp_dir,
+                    "--heartbeat-interval",
+                    "0.2",
+                    "--lease-duration",
+                    "1.0",
+                    "--recovering-window",
+                    "0.05",
+                    "--turn-guard-window",
+                    "0.01",
+                    "--shallow-patrol-interval",
+                    "0.01",
+                    "--deep-patrol-interval",
+                    "0.02",
+                    "--full-report-interval",
+                    "0.03",
+                    "--recent-event-window",
+                    "60",
+                    "--max-turns",
+                    "3",
+                    "--max-runtime-sec",
+                    "1",
+                    "--idle-sleep-sec",
+                    "0.01",
+                    "--working-memory-backend",
+                    "llm_assisted",
+                    "--working-memory-model-client-mode",
+                    "heuristic",
+                    "--working-memory-model-client-provider",
+                    "cli-test-provider",
+                    "--working-memory-model-client-model",
+                    "cli-test-model",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertIn("event=startup", result.stdout)
+            audits = StateStore(build_runtime_config(temp_dir).paths).read_deliberation_audit()
+            self.assertGreaterEqual(len(audits), 1)
+            advisory_context = audits[0]["deliberation_input"]["working_memory_context"]["advisory_context"]
+            self.assertIn("model_client_provider_cli-test-provider", advisory_context["reasoning_trace"])
+            self.assertIn("model_client_cli-test-model", advisory_context["reasoning_trace"])
+
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(__file__).resolve().parents[1]
             env = os.environ.copy()

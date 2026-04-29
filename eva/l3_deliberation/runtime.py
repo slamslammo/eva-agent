@@ -13,6 +13,7 @@ from .mediator import decide_release
 from .memory import build_memory_stub
 from .value import assess_candidates
 from .working_memory import build_working_memory_context_from_store
+from .working_memory_adapter import WorkingMemoryAdapter
 
 
 def build_deliberation_input(
@@ -45,6 +46,9 @@ def build_deliberation_input_from_store(
     drive_broadcast: dict[str, Any],
     runtime_gate_context: dict[str, Any],
     pressure_table: ActivePressureTable | dict[str, Any] | None = None,
+    *,
+    working_memory_backend: str = "local_rule_based",
+    llm_adapter: WorkingMemoryAdapter | None = None,
 ) -> DeliberationInput:
     """Assemble deliberation input and attach optional working-memory context from the store."""
 
@@ -54,7 +58,12 @@ def build_deliberation_input_from_store(
         runtime_gate_context,
         pressure_table,
     )
-    working_memory_context = build_working_memory_context_from_store(store, base_input).to_dict()
+    working_memory_context = build_working_memory_context_from_store(
+        store,
+        base_input,
+        backend=working_memory_backend,
+        llm_adapter=llm_adapter,
+    ).to_dict()
     return build_deliberation_input(
         signal_batch,
         drive_broadcast,

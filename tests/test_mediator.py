@@ -213,6 +213,25 @@ class MediatorTests(unittest.TestCase):
         self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-stabilize-first")
         self.assertEqual(decision.learning_context["learning_bias"], 0.0)
 
+    def test_habit_candidate_narrowing_sets_learning_context_trace(self) -> None:
+        assessments = [
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-observe-first",
+                action="compatibility_release",
+                score=1.35,
+                disposition="allow",
+                reasons=("candidate_profile=observe_first", "habit_candidate_narrowing"),
+                learning_bias=0.0,
+                bias_reasons=(),
+            )
+        ]
+
+        decision = decide_release(assessments)
+
+        self.assertEqual(decision.outcome, "compatibility_release")
+        self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-observe-first")
+        self.assertTrue(decision.learning_context["habit_narrowed"])
+
 
 if __name__ == "__main__":
     unittest.main()
