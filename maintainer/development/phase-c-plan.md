@@ -1,10 +1,12 @@
 # Phase C 计划
 
-本文档定义当前 **Phase C：学习能力** 的公开计划。当前应将其理解为一个分轮推进的阶段，而不是单次实现：
+本文档定义当前 **Phase C：学习能力** 的本地计划记录。
+
+当前应将其理解为一个分轮推进的阶段，而不是单次实现：
 - **Phase C-1**：最小 learning slice（已完成）
-- **Phase C-2**：learning reinforcement
-- **Phase C-3**：habit crystallization
-- **Phase C-4**：LLM working-memory adapter
+- **Phase C-2**：learning reinforcement（已完成）
+- **Phase C-3**：habit crystallization（已完成）
+- **Phase C-4**：LLM working-memory adapter（baseline 已形成，后续扩展暂时挂起）
 
 ## 1. 总目标
 
@@ -28,14 +30,16 @@ release intent -> compatibility execution outcome -> outcome delta -> bounded le
 - `deliberation_audit.jsonl`、`cognitive_memory_stub.jsonl`、`response_history.jsonl` 的分轨持久化
 - patrol 后先经 deliberation，再在 `compatibility_release + bridge_target == pressure_led_compatibility` 时进入 compatibility response
 
-当前 Phase C-1 已经建立：
+当前已经完成：
 - `learning_outcomes.jsonl`
 - `habit_bias.jsonl`
 - `LearningOutcomeRecord / WorkingMemoryContext / HabitBiasSummary`
 - compatibility response 之后的 post-hoc outcome evaluation
 - bounded learning bias 回流到 value judgment / mediator tie-break
+- recurring learning artifact 到 habit skill 的 bounded crystallization path
+- working-memory adapter 的 protocol / placeholder baseline
 
-因此，后续 Phase C-2 / C-3 / C-4 不应重写当前 lifecycle 主链，也不应把 `response.py` 重新提升为 future owner。
+因此，后续 Phase C 的工作不应重写 lifecycle 主链，也不应把 `response.py` 重新提升为 future owner。
 
 ## 3. 子迭代拆分
 
@@ -48,32 +52,22 @@ release intent -> compatibility execution outcome -> outcome delta -> bounded le
 - replaceable local rule-based working-memory adapter
 - bounded bias 回流到 L3
 
-### C-2. Learning reinforcement
+### C-2. Learning reinforcement（已完成）
 
-目标：
-- 强化 evidence / recency / stability / confidence gating
-- 让 learning effect 更稳定、可解释、可观测
-- 保持当前 release authority 结构不变
-
-重点：
-- 强化 `HabitBiasSummary` 与 `WorkingMemoryContext` 的稳定性字段
+已完成方向：
+- evidence / recency / stability / confidence gating
 - 对低证据、旧证据、混杂证据降权
-- recent negative outcome 仅在近几轮且高置信度时生效
-- 仍只允许 advisory bias，不能越过 hard boundary
+- recent negative outcome 的 bounded 生效条件
+- 继续保持当前 release authority 结构不变
 
-### C-3. Habit crystallization
+### C-3. Habit crystallization（已完成）
 
-目标：
-- 把 recurring bias summary 推进为可复用的 habit skill
-- 允许在稳定情境下缩窄候选搜索面，降低 deliberative 成本
-- 但不能绕过 runtime gate、anchors、mediator、compatibility bridge
+已完成方向：
+- 从 recurring bias summary 派生 habit skill
+- 在稳定情境下缩窄候选搜索面，降低 deliberative 成本
+- 继续保持 runtime gate、anchors、mediator、compatibility bridge 不被绕过
 
-重点：
-- 引入 skill-like summary / library
-- 形成 stable situation -> preferred candidate/profile/action hint 的 crystallized mapping
-- 让 habit 影响候选优先级或候选集合，而不是直接执行
-
-### C-4. LLM working-memory adapter
+### C-4. LLM working-memory adapter（baseline 已形成）
 
 目标：
 - 把 LLM 放在 `working_memory.py` 的 adapter 位置
@@ -90,10 +84,6 @@ release intent -> compatibility execution outcome -> outcome delta -> bounded le
   - `prediction_hints`
   - `reasoning_trace`
   - `confidence`
-- `selected_action`、`tool_calls`、`override_drive` 等越权字段会被丢弃
-- `auto` 当前遵循最小本地优先策略：
-  - 高置信且已有 crystallized habit skill 时继续走本地 path
-  - 本地上下文较弱且存在 adapter 时，才切到 llm-assisted
 - 当前已新增正式 protocol / placeholder baseline：
   - `WorkingMemoryAdapterRequest`
   - `WorkingMemoryAdapterResponse`
@@ -107,19 +97,19 @@ release intent -> compatibility execution outcome -> outcome delta -> bounded le
   - `NullWorkingMemoryModelClient`
   - `HeuristicWorkingMemoryModelClient`
   - `ClientBackedWorkingMemoryAdapter`
-- 当前 adapter seam 已从裸 `dict -> dict` callable 收紧为显式 request/response 协议，便于后续真实 adapter 受控接入
-- 当前还提供了本地 `heuristic` built-in mode，用于在不接外部模型的前提下验证 advisory-only runtime path
-- 当前还提供了独立 model-client shell，用于把未来真实模型调用端约束在 adapter 之后、runtime 之前的单一替换点
-- 当前 runtime / CLI 还已支持受控 `working_memory_model_client_mode / provider / model / timeout` 选择口径，用于在不接真实外部模型的前提下验证 client-backed advisory path
+- runtime / CLI 已支持受控 `working_memory_model_client_mode / provider / model / timeout` 选择口径，用于在不接真实外部模型的前提下验证 client-backed advisory path
 
-重点：
-- LLM 只作为 working-memory / reasoning adapter
-- 不直接 release
-- 不直接 tool use
-- 不 override drive
-- 不成为 release authority
+### 当前暂停点
 
-### C-3 当前 closeout 判断
+当前不直接继续扩写 C-4，而是在进入后续 C-4 之前先完成一次 **alignment / consolidation gate**。
+
+这个 gate 的目标是把以下链条对齐：
+- 完整 v0.5 理论架构
+- 完整 v0.5 工程架构
+- 完整 v0.5 开发落地方案
+- eva-agent 当前落地进展
+
+## 4. C-3 当前完成判断
 
 截至当前代码状态，C-3 已经完成首轮核心落地：
 - crystallized habit skill 已形成独立 summary / derivation path
@@ -129,15 +119,7 @@ release intent -> compatibility execution outcome -> outcome delta -> bounded le
 
 因此，C-3 当前剩余工作不再是补主功能，而主要是 closeout、口径对齐与为 C-4 预留干净入口。
 
-### C-4 进入条件
-
-在进入 C-4 前，应至少满足：
-- 本地 rule-based working-memory path 的 observability / explainability 已基本收口
-- C-3 相关回归稳定通过
-- 文档已明确当前代码处于 C-3 closeout，而不是仍停留在 C-2
-- LLM adapter 的职责被限制在 working-memory seam，不侵入 mediator authority
-
-### C-4 当前 baseline 判断
+## 5. C-4 当前 baseline 判断
 
 截至当前代码状态，C-4 已不再只是 seam 预设，而是已经形成首轮 protocol baseline：
 - working-memory advisory path 已显式使用 `WorkingMemoryAdapterRequest / WorkingMemoryAdapterResponse`
@@ -145,12 +127,19 @@ release intent -> compatibility execution outcome -> outcome delta -> bounded le
 - `HeuristicWorkingMemoryAdapter` 已可作为本地 bounded placeholder 验证 advisory-only runtime path，而不接入真实模型
 - `ClientBackedWorkingMemoryAdapter + WorkingMemoryModelClient` 已形成独立 shell，使未来真实模型接入只需替换 client
 - runtime 已支持受控 `working_memory_adapter` 注入；未显式提供 adapter 时，`auto/llm_assisted` 仍保持 inert，不隐式接入真实模型执行端
-- 当前 client-backed path 还支持 `inert / heuristic` 两种 built-in model-client mode：默认 `inert` 不产生 advisory payload，可选 `heuristic` 只产出本地 bounded placeholder advisory
-- 测试已覆盖 protocol 序列化、null adapter 空返回、heuristic placeholder 输出、client-backed adapter shell、llm-assisted backend 接入协议对象，以及 auto/local-first policy 在协议口径下继续成立
+- 当前 client-backed path 还支持 `inert / heuristic` 两种 built-in model-client mode
 
-因此，C-4 下一步不再是“是否建立 adapter seam”，而是：在保持 advisory-only 与 default inert 边界不变的前提下，为真实 llm-assisted adapter 预留受控注入点。
+因此，C-4 下一步不再是“是否建立 adapter seam”，而是：**在 alignment gate 完成后，再决定是否继续推进真实 llm-assisted adapter。**
 
-## 4. 本阶段硬约束
+## 6. 当前进入条件
+
+在继续推进 C-4 之前，应至少满足：
+- 本地 rule-based working-memory path 的 observability / explainability 已基本收口
+- C-3 相关回归稳定通过
+- `README.md` / `docs/eva-agent-full-implementation.md` / `docs/current-status.md` / `maintainer/development/roadmap.md` / `maintainer/development/phase-c-progress.md` 口径已经对齐
+- LLM adapter 的职责被限制在 working-memory seam，不侵入 mediator authority
+
+## 7. 本阶段硬约束
 
 Phase C 期间必须保持：
 - `signal_batch + drive_broadcast + runtime_gate_context` 仍是唯一强制 B0 输入
@@ -161,7 +150,7 @@ Phase C 期间必须保持：
 - LLM 只能作为 working-memory / reasoning adapter，不是 release authority
 - lifecycle turn details 与 `response_selected.details` 的最小 surface 不扩张
 
-## 5. 本阶段不做
+## 8. 本阶段不做
 
 Phase C 当前不做：
 - 完整 anchor system
@@ -171,8 +160,9 @@ Phase C 当前不做：
 - habit track 的独立自动执行通路
 - 将 `response.py` 退场
 - 提前进入完整 L4 / L5
+- 在 alignment gate 完成前继续扩写真实 llm-assisted adapter
 
-## 6. 当前完成标准与后续完成标准
+## 9. 当前完成标准与后续完成标准
 
 ### C-1 已完成标准
 - 释放前 intent 与释放后 actual outcome 之间已建立最小 learning record
@@ -181,21 +171,21 @@ Phase C 当前不做：
 - learning 能以 bounded bias 影响后续 candidate release tendency
 - compatibility boundary 未被突破
 
-### C-2 完成后应成立
+### C-2 已完成标准
 - 同一 `situation_key` / `candidate_profile` 的稳定正负证据可有界影响倾向
 - 低证据 / 旧证据 / 混杂证据不会产生过强偏置
 - learning effect 在测试和 append-only artifact 中可解释、可观测
 
-### C-3 完成后应成立
+### C-3 已完成标准
 - 部分常见高频情境能形成可复用的 habit skill / crystallized preference
 - habitual path 可以减少 deliberative 负担，但不越权
 
-### C-4 完成后应成立
+### C-4 后续完成标准
 - LLM 可在复杂情境中提供合理 suggestion / prediction / trace
 - 高置信度 habitual 情境优先本地 path，不滥用 LLM
 - LLM 始终受 runtime / anchor / mediator / bridge 约束
 
-## 7. 验证重点
+## 10. 验证重点
 
 需要重点验证：
 - learning outcome 只在 compatibility response 之后写入
@@ -207,3 +197,4 @@ Phase C 当前不做：
 - `response.py` 仍只作为 compatibility path 存在
 - `runtime_state.json` 仍保持 kernel-only 语义
 - `turn_completed.details.*` 与 `response_selected.details` 未扩张为 richer learning payload
+- alignment gate 完成后，Phase C 文档与总路线、目标架构、工程架构口径一致

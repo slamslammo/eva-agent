@@ -1,8 +1,18 @@
 # Phase B 计划
 
-本文档定义当前 **Phase B：L3 最小骨架** 的公开计划。
+本文档定义 **Phase B：L3 最小骨架** 的本地计划记录。
 
-## 1. 目标
+Phase B 当前已经完成首轮落地；本文保留为该阶段的计划记录与范围说明，供后续回看 Phase B 当时要建立哪些最小结构边界。
+
+## 1. 当前角色
+
+- Phase B 已不是当前活跃实施阶段
+- Phase B 的最小骨架已经完成，并作为 Phase C 的结构前提保留
+- 当前项目主线已经进入 Phase C 之后的 alignment / consolidation gate
+
+因此，本文档的职责是保留 Phase B 的目标、范围与完成标准，而不是继续作为当前实施清单。
+
+## 2. 目标
 
 Phase B 的第一步不是追求复杂 reasoning，而是先把 L3 的结构主干搭正确：
 
@@ -15,7 +25,7 @@ B0 inputs -> candidate generation -> value judgment -> mediator -> compatibility
 - `drive_broadcast`
 - `runtime_gate_context`
 
-## 2. 本阶段起点
+## 3. 本阶段起点
 
 进入 Phase B 前，仓库已经具备：
 - kernel baseline
@@ -26,7 +36,7 @@ B0 inputs -> candidate generation -> value judgment -> mediator -> compatibility
 
 因此，Phase B 不应从 `active_pressures.json` 重新起步，也不应继续扩写 `response.py`。
 
-## 3. 工作重点
+## 4. 工作重点
 
 ### B1. 建立独立 L3 包
 
@@ -58,7 +68,7 @@ B0 inputs -> candidate generation -> value judgment -> mediator -> compatibility
 
 其中 `compatibility_release` 仍只通向当前 `response.py`，不新增外部动作谱系。
 
-当前进一步收紧为：
+进一步收紧为：
 - mediator 在允许 release 时同时输出最小 `release_context`
 - `release_context` 当前至少声明：
   - `bridge_target`
@@ -76,7 +86,7 @@ B0 inputs -> candidate generation -> value judgment -> mediator -> compatibility
 - `response_history.jsonl`
 - `events.jsonl`
 
-当前进一步收紧为：
+进一步收紧为：
 - memory stub 不是每轮都写
 - 只有 threat trace 或 release trace 才写入最小 memory stub
 - memory stub 至少显式携带：
@@ -103,7 +113,7 @@ patrol 后对下游暴露的最小 surface 应明确收紧为：
 - `deliberation_audit.jsonl`
 - `response_history.jsonl`
 
-## 4. 本阶段硬约束
+## 5. 本阶段硬约束
 
 Phase B 期间必须保持：
 - L3 只读 `drive_broadcast + signal_batch + runtime_gate_context`
@@ -112,7 +122,7 @@ Phase B 期间必须保持：
 - response 仍是 pressure-led compatibility path
 - `active_pressures.json` 仍只是 compatibility projection
 
-## 5. 本阶段不做
+## 6. 本阶段不做
 
 Phase B 当前不做：
 - 完整 mediator policy engine
@@ -122,7 +132,7 @@ Phase B 当前不做：
 - 用 LLM 作为 release authority
 - Phase C 的学习能力
 
-## 6. 完成标准
+## 7. 完成标准
 
 Phase B 最小骨架完成后，至少应成立：
 - L3 有独立目录与清晰合同
@@ -131,7 +141,7 @@ Phase B 最小骨架完成后，至少应成立：
 - compatibility response 只能在 mediator 允许时触发
 - `response.py` 仍不是 L3 owner
 
-## 7. 验证重点
+## 8. 验证重点
 
 需要重点验证：
 - `DeliberationInput` 只消费 B0 输入面

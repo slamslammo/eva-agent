@@ -1,6 +1,8 @@
 # Phase A Implementation Contract
 
-本文档定义当前 **Phase A：L1 / L2 结构升级** 的实施合同。
+本文档定义 **Phase A：L1 / L2 结构升级** 的实施合同。
+
+Phase A 当前已经完成主干落地；本文保留为该阶段的模块级实施合同记录与边界基线，供后续回看 Phase A 当时冻结了哪些工程接缝。
 
 它回答的是：**在不破坏当前 heartbeat-first baseline 的前提下，Phase A 应该改哪些模块、冻结哪些边界、通过什么验证推进。**
 

@@ -1,12 +1,12 @@
 # Phase B 进展
 
-本文档记录当前 **Phase B：L3 最小骨架** 的进展。
+本文档记录 **Phase B：L3 最小骨架** 的进展结论。
 
 ## 1. 当前状态
 
-- 日期：2026-04-29
-- 阶段状态：**Phase B 评审后收口完成，可进入 Phase C 规划**
-- 判断：当前已经建立最小 L3 包、最小 mediator、独立 deliberation audit / selective memory stub 轨道，并完成 lifecycle 接入、合同收紧、事件边界收紧、candidate profile -> bridge 的 structured bridge policy handoff，以及 anchors / value judgment 边界收紧与最终回归收口；当前评审结论已确认可以在该最小骨架上规划 Phase C learning layer，但不应把当前 L3 误判为完整 adaptive deliberation
+- 日期：2026-04-30
+- 阶段状态：**Phase B 评审后收口已完成；当前作为已完成基线保留**
+- 判断：当前已经建立最小 L3 包、最小 mediator、独立 deliberation audit / selective memory stub 轨道，并完成 lifecycle 接入、合同收紧、事件边界收紧、candidate profile -> bridge 的 structured bridge policy handoff，以及 anchors / value judgment 边界收紧与最终回归收口。本文档当前的角色，是保留 Phase B 的已完成事实；当前项目活跃主线已经进入 Phase C 之后的 alignment / consolidation gate
 
 ## 2. 已完成工作
 
@@ -43,8 +43,8 @@
 - value judgment 当前只基于 drive / signal pressure 与 anchored runtime boundary 做 disposition / score 判断
 - `candidate_profile` 当前已显式映射进 compatibility bridge，并通过 structured `bridge_policy` handoff 到 response bridge：
   - policy 已分成 `selection`、`applicability`、`execution` 三个子合同
-  - `observe_first` 会下发 `observe_first_bias`，通过 `selection.preferred_action / fallback_action / default_path`、`applicability.*` 与 `execution.allow_repair_side_effects=false` 来约束 bridge
-  - `stabilize_first` 会下发 `stabilize_first_bias`，通过同一子合同结构把 bridge 保持在 bounded repair-first compatibility path 中
+  - `observe_first` 会下发 `observe_first_bias`
+  - `stabilize_first` 会下发 `stabilize_first_bias`
 - compatibility release 仍只流向 `response.py`
 
 ### 持久化分轨
@@ -91,14 +91,16 @@ PYTHONPATH="/Users/mojiawen/Documents/claude_projects/eva-agent" python -m unitt
 
 最近一次结果：`78 tests, OK`
 
-## 5. 评审结论与下一步
+## 5. 当前在总主线中的位置
 
-当前评审结论：
-1. Phase B 最小骨架已完成到足以进入 Phase C 的结构前提
-2. 当前可启动的是 Phase C 的 learning layer 第一段，而不是将当前 L3 视为完整完成态
-3. 当前 compatibility boundary 保持不变：`response.py` 仍为 pressure-led compatibility path，LLM 仍不能成为 release authority
+Phase B 当前应被理解为：
+- 其最小骨架目标已经完成
+- 它为 Phase C 的 learning layer 提供了结构前提
+- 它明确了 release / audit / memory stub / compatibility bridge 的最小 owner 关系
+- 它现在不再是当前活跃实施阶段，而是已完成基线的一部分
 
-下一步进入：
-1. 启动 `phase-c-plan.md` 与 `phase-c-progress.md`
-2. 先建立 outcome delta / RPE-like evaluation / habit bias / working-memory interface 的最小合同与文档口径
-3. 仅在上述 Phase C 首轮 scope 内推进实现，不提前扩张为完整 anchor system、完整 cognitive memory retrieval 或新的外部动作谱系
+其后续关系也已经明确：
+- 其“进入 Phase C”这一历史下一步已经完成
+- Phase C 的 C-1 / C-2 / C-3 已完成
+- C-4 baseline 已形成
+- 当前主线已切到 alignment / consolidation gate，而不是回到 Phase B 继续扩张

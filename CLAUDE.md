@@ -7,9 +7,10 @@
 
 ## 当前主线
 当前后续工作统一遵循：
-- `docs/architecture.md`
-- `docs/development/roadmap.md`
-- 当前激活 phase 对应的 `docs/development/phase-*-plan.md` 与 `phase-*-progress.md`
+- `docs/eva-agent-full-implementation.md`
+- `docs/current-status.md`
+- `maintainer/development/roadmap.md`
+- 当前激活 phase 对应的 `maintainer/development/phase-*-plan.md` 与 `phase-*-progress.md`
 
 当前仓库状态应理解为：
 1. 已形成 **kernel baseline**：heartbeat-first、`tick / turn`、`instance_valid`、状态持久化、distress / yield
@@ -37,12 +38,13 @@
 - 优先保证概念边界清晰、可解释、可持续迭代
 - 不要提前跳到复杂工具、经济系统或高层成长机制实现，除非当前 architecture / roadmap / phase 文档已明确进入对应阶段
 - 后续开发中的 Python 代码质量、可读性、风格一致性与变更纪律，统一遵循维护者内部规范，不再作为公开文档主线暴露
+- 对外公开文档保持英文；本地维护文档可继续使用中文
 
 ## 文档更新要求
 当前阶段至少维护：
-1. `README.md`、`docs/architecture.md` 与 `docs/development/` 之间的一致性
+1. `README.md`、`docs/eva-agent-full-implementation.md` 与 `docs/current-status.md` 之间的一致性
 2. 公开主线与维护者参考材料的边界清晰
-3. 当前激活 phase 的计划文档与进展文档同步更新
+3. 当前激活 phase 的计划文档与进展文档在 `maintainer/development/` 下同步更新
 
 ## 边界
 - 持续执行、实现和文档沉淀都在 `eva-agent/` 项目目录内推进

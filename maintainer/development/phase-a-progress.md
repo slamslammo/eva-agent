@@ -1,19 +1,20 @@
 # Phase A 进展
 
-本文档记录当前 **Phase A：L1 / L2 结构升级** 的进展。
+本文档记录 **Phase A：L1 / L2 结构升级** 的进展结论。
 
 ## 1. 当前状态
 
-- 日期：2026-04-28
-- 阶段状态：**A5 strict closeout / audit 进行中**
-- 判断：A1 ~ A4 主干已经落地并通过现阶段回归，但当前仍在收紧合同、补 targeted verification、修正文档口径，暂不直接宣告 Phase A 正式关闭
+- 日期：2026-04-30
+- 阶段状态：**Phase A 主干与 A5 strict closeout 已完成；当前作为已完成基线保留**
+- 判断：A1 ~ A4 主干、B0 最小输入冻结与 A5 closeout 已完成。本文档当前的角色，是保留 Phase A 的已完成事实与验证结论；当前项目活跃主线已经进入 Phase C 之后的 alignment / consolidation gate
 
 ## 2. 已完成工作
 
 ### 前置整理
-- 公开文档已按 EVA v0.5 主线完成重构
-- 已建立 `docs/architecture.md` 作为公开总方案
-- 已建立 `docs/development/roadmap.md`
+- 公开文档已按 EVA v0.5 主线完成首轮重构
+- 已建立 `docs/eva-agent-full-implementation.md` 作为英文公开目标架构主文
+- 已建立 `docs/current-status.md` 作为英文公开当前状态文档
+- 已建立 `maintainer/development/roadmap.md`
 - 已建立当前 Phase A 的计划、实施合同与进展文档
 - 旧 baseline / runbook / governance 文档已退出公开主线
 
@@ -39,7 +40,7 @@
 - 已新增 `DriveBroadcast` 与 `build_drive_broadcast()`
 - patrol 结果已显式携带 `drive_broadcast`
 - lifecycle turn details 已暴露 `drive_broadcast`
-- 当前 `drive_broadcast` 已补充 `drive_trends`，并作为 B0 的 canonical L2 -> L3 read surface 冻结
+- `drive_broadcast` 已补充 `drive_trends`，并作为 B0 的 canonical L2 -> L3 read surface 冻结
 - 当前兼容 response path 已能以只读 `drive_context` 形式读取新 drive 接口
 - response 仍不拥有 drive update / write 权限
 
@@ -108,12 +109,15 @@ PYTHONPATH="/Users/mojiawen/Documents/claude_projects/eva-agent" python -m unitt
 - response 仍通过 compatibility path 触发，不扩动作谱系
 - L3 / response 仍不能写 drive
 
-## 6. 下一步
+## 6. 当前在总主线中的位置
 
-A5 当前仍在进行中，并已进入 B0 启动门槛冻结。
+Phase A 当前应被理解为：
+- 其主干目标已经完成
+- 它为 B0 与 Phase B 提供了稳定输入面
+- 它为当前 Phase C 的 learning layer 提供了上游结构前提
+- 它现在不再是当前活跃实施阶段，而是已完成基线的一部分
 
-下一步应继续：
-1. 冻结 `drive_broadcast + signal_batch + runtime_gate_context` 作为 L3 最小输入合同
-2. 继续补 canonical broadcast usage、runtime gate、response compatibility boundary 的 targeted verification
-3. 完成 README / architecture / roadmap / phase-a docs 的 B0 对齐
-4. 在 B0 合同与验证稳定后，已进入 Phase B 最小骨架的首轮落地
+因此，当前项目主线不再回到 Phase A 实施本身，而是继续围绕：
+- 已完成阶段之间的口径一致性
+- 当前 alignment / consolidation gate
+- 后续 C-4 是否继续推进的再判断

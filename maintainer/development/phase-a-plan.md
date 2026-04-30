@@ -1,8 +1,18 @@
 # Phase A 计划
 
-本文档定义当前 **Phase A：L1 / L2 结构升级** 的公开计划。
+本文档定义 **Phase A：L1 / L2 结构升级** 的本地计划记录。
 
-## 1. 目标
+Phase A 主干当前已经完成落地；本文保留为该阶段的计划记录与范围说明，供后续回看 A 阶段最初要解决什么、冻结了哪些边界。
+
+## 1. 当前角色
+
+- Phase A 已不是当前活跃实施阶段
+- Phase A 的主干目标已经落地，并已进入后续 Phase B / Phase C
+- 当前项目主线已经进入 Phase C 之后的 alignment / consolidation gate
+
+因此，本文档的职责是保留 Phase A 的目标、范围与完成标准，而不是继续作为当前实施清单。
+
+## 2. 目标
 
 Phase A 的目标不是扩动作，而是先建立一条符合 EVA v0.5 的基础通路：
 
@@ -12,7 +22,7 @@ sensing -> signal classification -> drive update -> drive broadcast
 
 在这一阶段，即使 L3 仍只有占位结构，也必须先把 L1 / L2 的骨架搭正确。
 
-## 2. 起点资产
+## 3. 起点资产
 
 Phase A 不是从零开始。当前仓库已经有以下资产可直接作为起点：
 
@@ -25,7 +35,7 @@ Phase A 不是从零开始。当前仓库已经有以下资产可直接作为起
 
 这些资产应被重组、扩展和降级，而不是继续被当作最终形态放大。
 
-## 3. 工作包
+## 4. 工作包
 
 ### A1. 补齐 rate sensing
 
@@ -55,8 +65,8 @@ Phase A 不是从零开始。当前仓库已经有以下资产可直接作为起
 - `rate_context`
 
 约束：
-- 当前 Phase A 至少保证标准化 signal publication，而不是完整 routing engine
-- `threat` 是当前唯一保留给 future fast path 的信号类别
+- Phase A 至少保证标准化 signal publication，而不是完整 routing engine
+- `threat` 是唯一保留给 future fast path 的信号类别
 - `status` 与 `background` 作为 drive update 与后续 deliberation 的输入保留
 - urgency semantics 若尚未进入正式字段，应在 closeout 中明确 defer
 
@@ -85,7 +95,7 @@ Phase A 的初始 drive 类型限定为：
 - 当前 `response.py` 只允许通过兼容方式读取新 drive 接口，不再扩 action repertoire
 - 进入 B0 后，`drive_broadcast` 应作为 L2 -> L3 的 canonical read surface 冻结
 
-## 4. 本阶段理论不变量
+## 5. 本阶段理论不变量
 
 Phase A 期间必须始终保持：
 - heartbeat deadline 不被 ordinary work 抢占
@@ -95,7 +105,7 @@ Phase A 期间必须始终保持：
 - 当前最小 action path 只保留兼容角色，不继续扩动作谱系
 - 文档不得把 urgency / routing seam 写成已经完整落地的能力
 
-## 5. 本阶段不做的事
+## 6. 本阶段不做的事
 
 Phase A 明确不做：
 - 扩当前 minimal action path 的动作谱系
@@ -104,7 +114,7 @@ Phase A 明确不做：
 - 提前把 memory 升级为完整 cognitive memory
 - 提前把 LLM 接成架构 prerequisite
 
-## 6. 完成标准
+## 7. 完成标准
 
 Phase A 完成后，至少应成立：
 - 系统具备 state + rate 的最小 L1 能力
@@ -113,11 +123,11 @@ Phase A 完成后，至少应成立：
 - drive broadcast 对高层是只读的
 - 当前兼容 action path 仍可运行，但不再是未来扩展中心
 
-## 7. 验证重点
+## 8. 验证重点
 
 需要重点验证：
 - heartbeat deadline 仍不被 ordinary work 抢占
-- `threat` signal contract 被保留，且当前文档/测试不再过度宣称完整 fast path 已落地
+- `threat` signal contract 被保留，且文档/测试不再过度宣称完整 fast path 已落地
 - drive 不退化回离散跳表伪装
 - L3 无法直接写 drive state
 - 当前兼容通路可在新 drive 接口下继续工作
