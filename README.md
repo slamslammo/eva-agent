@@ -1,5 +1,11 @@
 # eva-agent
 
+<p align="center">
+  <a >
+    <img src="eva_theory.png" alt="EVA Theory identifier" width="280" />
+  </a>
+</p>
+
 `eva-agent` is an EVA v0.5-aligned, existence-centered agent architecture experiment.
 
 Instead of starting from a task-first agent and adding more orchestration, the project starts from structural questions: how an agent remains the same running subject, how drive shapes behavior as context, how candidate generation is constrained before release, and how memory and learning stay inside explicit boundaries.

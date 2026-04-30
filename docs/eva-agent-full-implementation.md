@@ -108,6 +108,8 @@ L5 → L4 → L3 → L2 → L1 → Infrastructure / Kernel
 
 Higher layers depend on lower ones. Lower layers must not depend on higher-level reasoning semantics.
 
+This arrow expresses dependency direction, not the runtime closed loop itself; the runtime loop is described separately in Section 11.
+
 Key boundary rules:
 
 - Kernel does not depend on high-level cognition.
@@ -237,6 +239,8 @@ Infrastructure must provide two separate internal communication forms:
 - **Drive broadcast**: continuous, present-tense state; pull semantics; read by downstream layers as environment
 
 Drive must not be delivered as an instruction stream.
+
+More precisely, Infrastructure / Kernel provides the transport, publication, and persistence substrate for these communication forms, while the semantic ownership of `drive_state` and `drive_broadcast` remains in L2.
 
 ![Event bus](./assets/architecture/event_bus_two_channels.svg)
 
@@ -371,7 +375,7 @@ L2 also contains a formal fast path for minimal urgent responses:
 - conservative shrink
 - heartbeat protection
 
-This path bypasses L3 but remains narrowly bounded.
+This path bypasses L3 but remains narrowly bounded. It exists only for pre-defined, low-complexity, life-boundary responses, and must not expand into a second general execution channel.
 
 ![L2 reflex arc](./assets/architecture/l2_reflex_arc_parallel_to_broadcast.svg)
 
@@ -474,6 +478,8 @@ Its role is to:
 - gate release timing
 - carry pathway updates that can be shaped by outcome
 
+It owns candidate selection and default-inhibition timing, but does not itself authorize external side effects.
+
 ![L3 basal ganglia](./assets/architecture/l3_basal_ganglia_overview.svg)
 
 ### 7.5 Tool Edge and mediated release
@@ -481,6 +487,8 @@ Its role is to:
 Tool Edge is the only legitimate route by which the agent produces external side effects.
 
 Before a tool call, a candidate must pass through a **formal release boundary**. Even a selected candidate still needs mediator approval before execution.
+
+Peer Circuit / Basal Ganglia determines which candidate acquires release intent; mediator determines whether that release intent receives side-effect authorization.
 
 ![L3 tool edge](./assets/architecture/l3_tool_edge_position.svg)
 
@@ -513,7 +521,7 @@ Tool outputs are normalized into structured outcomes.
 
 #### RPE computation
 
-A reward prediction error compares predicted and actual outcome. It measures discrepancy or surprise, not generic “goodness.”
+A reward prediction error compares predicted and actual outcome. It measures discrepancy or surprise, not generic “goodness.” It is evaluated relative to predicted versus observed outcome under the current drive and continuity context, not as a generic reward-maximization score.
 
 ![L3 RPE computation](./assets/architecture/l3_rpe_computation.svg)
 
@@ -708,6 +716,8 @@ The loop begins with heartbeat cadence and runtime posture, then proceeds throug
 - absorbing them into continuous drive state
 
 Signals shape internal environment before anything becomes action.
+
+External task input also enters this loop as signal, not as direct command.
 
 ### 11.2 Drive → candidate shaping
 
