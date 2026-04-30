@@ -9,6 +9,7 @@ from ..kernel import ActivePressureTable, DriveStateTable, ExternalLifeConfig, E
 from ..l2_drive import DriveBroadcast, DriveSummary, build_active_pressure_table, build_drive_broadcast, update_drive_state
 from .history import persist_patrol_artifacts
 from .judgment import determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
+from .routing import RoutingDecision, build_routing_decision
 from .sensing import collect_external_life_inputs
 from .signal_bus import SignalRecord, SignalDispatchSummary, build_patrol_signals, build_signal_batch_payload, summarize_signal_dispatch
 
@@ -41,6 +42,7 @@ class PatrolResult:
     signals: list[SignalRecord]
     signal_summary: SignalDispatchSummary
     signal_batch: dict[str, object]
+    routing_decision: RoutingDecision
     drive_state: DriveStateTable
     drive_summary: DriveSummary
     drive_broadcast: DriveBroadcast
@@ -119,6 +121,7 @@ def execute_patrol(
     signals = build_patrol_signals(snapshot, pressure_table)
     signal_summary = summarize_signal_dispatch(signals)
     signal_batch = build_signal_batch_payload(signals)
+    routing_decision = build_routing_decision(signals)
     previous_drive_state = store.read_drive_state()
     drive_state, drive_summary = update_drive_state(previous_drive_state, snapshot, signals)
     drive_broadcast = build_drive_broadcast(drive_state)
@@ -141,6 +144,7 @@ def execute_patrol(
         signals=signals,
         signal_summary=signal_summary,
         signal_batch=signal_batch,
+        routing_decision=routing_decision,
         drive_state=drive_state,
         drive_summary=drive_summary,
         drive_broadcast=drive_broadcast,

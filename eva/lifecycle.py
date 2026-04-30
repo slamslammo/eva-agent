@@ -456,6 +456,7 @@ class LifecycleRuntime:
                     "resolved_count": patrol_result.resolved_count,
                     "signal_summary": patrol_result.signal_summary.to_dict(),
                     "signal_batch": patrol_result.signal_batch,
+                    "signal_routing": patrol_result.routing_decision.to_dict(),
                     "drive_summary": patrol_result.drive_summary.to_dict(),
                     "drive_broadcast": patrol_result.drive_broadcast.to_dict(),
                 }

@@ -70,6 +70,11 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(result.signal_summary.status_signal_count, 1)
         self.assertEqual(result.signal_summary.threat_signal_count, 0)
         self.assertFalse(result.signal_summary.has_threat_signal)
+        self.assertEqual(result.routing_decision.urgency, "normal")
+        self.assertEqual(result.routing_decision.dispatch_hint, "deliberation_only")
+        self.assertFalse(result.routing_decision.has_threat_signal)
+        self.assertFalse(result.routing_decision.compatibility_bridge_candidate)
+        self.assertEqual(result.routing_decision.reasons, ("status_signal_present",))
         self.assertEqual(len(result.signals), 1)
         self.assertEqual({drive.drive_type for drive in result.drive_state.drives}, {"survival", "integrity", "continuity", "curiosity"})
         self.assertEqual(result.drive_summary.top_drive, "curiosity")
@@ -122,6 +127,17 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(result.details["signal_summary"]["status_signal_count"], 1)
         self.assertEqual(result.details["signal_summary"]["threat_signal_count"], 0)
         self.assertFalse(result.details["signal_summary"]["has_threat_signal"])
+        self.assertEqual(
+            result.details["signal_routing"],
+            {
+                "urgency": "normal",
+                "dispatch_hint": "deliberation_only",
+                "has_threat_signal": False,
+                "deliberation_allowed": True,
+                "compatibility_bridge_candidate": False,
+                "reasons": ["status_signal_present"],
+            },
+        )
         self.assertEqual(result.details["drive_summary"]["top_drive"], "curiosity")
         self.assertEqual(result.details["runtime_gate_context"]["instance_valid"], True)
         self.assertEqual(result.details["runtime_gate_context"]["turn_allowed"], True)
@@ -194,6 +210,17 @@ class PatrolRuntimeTests(unittest.TestCase):
         self.assertEqual(first.details["signal_summary"]["status_signal_count"], 1)
         self.assertEqual(first.details["signal_summary"]["threat_signal_count"], 1)
         self.assertTrue(first.details["signal_summary"]["has_threat_signal"])
+        self.assertEqual(
+            first.details["signal_routing"],
+            {
+                "urgency": "high",
+                "dispatch_hint": "protective_lane",
+                "has_threat_signal": True,
+                "deliberation_allowed": True,
+                "compatibility_bridge_candidate": True,
+                "reasons": ["threat_signal_present"],
+            },
+        )
         self.assertEqual(first.details["drive_summary"]["top_drive"], "integrity")
         self.assertIn("deliberation", first.details)
         self.assertEqual(first.details["deliberation"]["outcome"], "compatibility_release")
@@ -303,6 +330,11 @@ class PatrolRuntimeTests(unittest.TestCase):
 
         self.assertTrue(result.executed)
         self.assertEqual(set(result.details["signal_batch"].keys()), {"signals", "summary"})
+        self.assertIn("signal_routing", result.details)
+        self.assertEqual(
+            set(result.details["signal_routing"].keys()),
+            {"urgency", "dispatch_hint", "has_threat_signal", "deliberation_allowed", "compatibility_bridge_candidate", "reasons"},
+        )
         self.assertIn("drive_broadcast", result.details)
         self.assertIn("drive_trends", result.details["drive_broadcast"])
         self.assertIn("deliberation", result.details)

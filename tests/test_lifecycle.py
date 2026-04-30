@@ -136,6 +136,17 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(executed.details["signal_batch"]["signals"][0]["class"], "status")
         self.assertEqual(executed.details["signal_summary"]["status_signal_count"], 1)
         self.assertEqual(executed.details["signal_summary"]["threat_signal_count"], 0)
+        self.assertEqual(
+            executed.details["signal_routing"],
+            {
+                "urgency": "normal",
+                "dispatch_hint": "deliberation_only",
+                "has_threat_signal": False,
+                "deliberation_allowed": True,
+                "compatibility_bridge_candidate": False,
+                "reasons": ["status_signal_present"],
+            },
+        )
         self.assertEqual(executed.details["drive_summary"]["top_drive"], "curiosity")
         self.assertEqual(executed.details["runtime_gate_context"]["instance_valid"], True)
         self.assertEqual(executed.details["runtime_gate_context"]["turn_allowed"], True)
