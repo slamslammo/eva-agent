@@ -5,7 +5,7 @@ import unittest
 from datetime import timedelta
 
 from eva.kernel import ActiveInstanceRecord, DimensionSnapshot, EventRecord, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, build_runtime_paths, utc_now
-from eva.l1_sensing import collect_external_life_inputs
+from eva.l1_sensing import collect_external_life_inputs, default_sensor_registry
 
 
 class SensingTests(unittest.TestCase):
@@ -57,6 +57,32 @@ class SensingTests(unittest.TestCase):
             self.assertIn("rate_context", inputs["host_continuity"])
             self.assertFalse(inputs["host_continuity"]["rate_context"]["available"])
             self.assertEqual(inputs["runtime_integrity"]["rate_context"]["direction"], "unknown")
+            self.assertEqual(
+                tuple(sensor.name for sensor in default_sensor_registry().sensors),
+                ("host_continuity", "runtime_integrity", "resource_state", "anomaly_accumulation"),
+            )
+
+    def test_default_sensor_registry_collects_current_dimension_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.ensure_runtime_dir()
+            now = utc_now()
+            runtime_state = RuntimeState(instance_valid=True, heartbeat_ok=True, tick_ok=True, updated_at=now)
+            store.write_runtime_state(runtime_state)
+
+            inputs = collect_external_life_inputs(
+                store,
+                runtime_state,
+                ExternalLifeConfig(recent_event_window_sec=60.0),
+                now,
+            )
+
+            self.assertEqual(
+                set(inputs.keys()),
+                {"host_continuity", "runtime_integrity", "resource_state", "anomaly_accumulation"},
+            )
+            registry = default_sensor_registry()
+            self.assertEqual(tuple(sensor.name for sensor in registry.sensors), tuple(inputs.keys()))
 
     def test_collect_external_life_inputs_adds_rate_context_from_previous_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
