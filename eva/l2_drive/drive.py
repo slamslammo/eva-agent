@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from ..kernel import DimensionSnapshot, DriveState, DriveStateTable, ExternalLifeSnapshot, to_iso8601
-from ..l1_sensing.signal_bus import SignalRecord
+
+if TYPE_CHECKING:
+    from ..l1_sensing.signal_bus import SignalRecord
 
 DRIVE_TYPES = ("survival", "integrity", "continuity", "curiosity")
 DRIVE_TYPE_BY_DIMENSION = {

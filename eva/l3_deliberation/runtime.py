@@ -6,14 +6,11 @@ from datetime import datetime
 from typing import Any
 
 from ..kernel import ActivePressureTable, StateStore, to_iso8601
-from .anchors import apply_structural_anchors
-from .candidates import build_candidates
+from ..anchor import apply_structural_anchors
 from .contracts import DeliberationAuditRecord, DeliberationInput
-from .mediator import decide_release
-from .memory import build_memory_stub
-from .value import assess_candidates
-from .working_memory import build_working_memory_context_from_store
-from .working_memory_adapter import WorkingMemoryAdapter
+from .memory import WorkingMemoryAdapter, build_memory_stub
+from .peer_circuit import decide_release
+from .reasoning import assess_candidates, build_candidates, build_working_memory_context_from_store
 
 
 def build_deliberation_input(
@@ -49,6 +46,7 @@ def build_deliberation_input_from_store(
     *,
     working_memory_backend: str = "local_rule_based",
     llm_adapter: WorkingMemoryAdapter | None = None,
+    response_history: list[dict[str, Any]] | None = None,
 ) -> DeliberationInput:
     """Assemble deliberation input and attach optional working-memory context from the store."""
 
@@ -63,6 +61,7 @@ def build_deliberation_input_from_store(
         base_input,
         backend=working_memory_backend,
         llm_adapter=llm_adapter,
+        response_history=response_history,
     ).to_dict()
     return build_deliberation_input(
         signal_batch,

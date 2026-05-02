@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from ..kernel import ActivePressureTable, DriveStateTable, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore
-from ..l2_drive import DriveBroadcast, DriveSummary, build_active_pressure_table, build_drive_broadcast, update_drive_state
+from ..l2_drive.drive import DriveBroadcast, DriveSummary, build_drive_broadcast, update_drive_state
+from ..l2_drive.pressure import build_active_pressure_table
 from .history import persist_patrol_artifacts
 from .judgment import determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
 from .routing import RoutingDecision, build_routing_decision

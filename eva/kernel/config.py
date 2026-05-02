@@ -119,7 +119,7 @@ def build_runtime_config(
     """Build a runtime config and fill in omitted sections with defaults."""
 
     if working_memory_model_client_config is None:
-        from eva.l3_deliberation.working_memory_model_client import WorkingMemoryModelClientConfig
+        from eva.l3_deliberation.memory import WorkingMemoryModelClientConfig
 
         working_memory_model_client_config = WorkingMemoryModelClientConfig()
 

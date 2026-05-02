@@ -1,7 +1,6 @@
 """Minimal Phase B / early Phase C L3 deliberation skeleton."""
 
-from .anchors import apply_structural_anchors
-from .candidates import build_candidates
+from ..anchor import apply_structural_anchors
 from .contracts import (
     Candidate,
     CandidateAssessment,
@@ -14,41 +13,39 @@ from .contracts import (
     ReleaseDecision,
     WorkingMemoryContext,
 )
-from .learning import build_learning_outcome_record, evaluate_response_outcome
-from .mediator import decide_release
-from .memory import build_memory_stub
-from .runtime import build_deliberation_input, build_deliberation_input_from_store, run_deliberation
-from .skill_library import derive_habit_skills
-from .value import assess_candidates
-from .working_memory import (
+from .memory import (
+    ADAPTER_MODE_HEURISTIC,
+    ADAPTER_MODE_INERT,
+    ClientBackedWorkingMemoryAdapter,
+    HeuristicWorkingMemoryAdapter,
+    HeuristicWorkingMemoryModelClient,
+    MODEL_CLIENT_MODE_HEURISTIC,
+    MODEL_CLIENT_MODE_INERT,
+    NullWorkingMemoryAdapter,
+    NullWorkingMemoryModelClient,
+    WorkingMemoryAdapter,
+    WorkingMemoryAdapterRequest,
+    WorkingMemoryAdapterResponse,
+    WorkingMemoryModelClient,
+    WorkingMemoryModelClientConfig,
+    WorkingMemoryModelClientRequest,
+    WorkingMemoryModelClientResponse,
+    build_builtin_working_memory_adapter,
+    build_builtin_working_memory_model_client,
+    build_memory_stub,
+    derive_habit_skills,
+)
+from .peer_circuit import build_learning_outcome_record, decide_release, evaluate_response_outcome
+from .reasoning import (
+    assess_candidates,
+    build_candidates,
     build_llm_working_memory_context,
     build_situation_key,
     build_working_memory_context,
     build_working_memory_context_from_store,
     summarize_habit_bias,
 )
-from .working_memory_adapter import (
-    ADAPTER_MODE_HEURISTIC,
-    ADAPTER_MODE_INERT,
-    ClientBackedWorkingMemoryAdapter,
-    HeuristicWorkingMemoryAdapter,
-    NullWorkingMemoryAdapter,
-    WorkingMemoryAdapter,
-    WorkingMemoryAdapterRequest,
-    WorkingMemoryAdapterResponse,
-    build_builtin_working_memory_adapter,
-)
-from .working_memory_model_client import (
-    HeuristicWorkingMemoryModelClient,
-    MODEL_CLIENT_MODE_HEURISTIC,
-    MODEL_CLIENT_MODE_INERT,
-    NullWorkingMemoryModelClient,
-    WorkingMemoryModelClient,
-    WorkingMemoryModelClientConfig,
-    WorkingMemoryModelClientRequest,
-    WorkingMemoryModelClientResponse,
-    build_builtin_working_memory_model_client,
-)
+from .runtime import build_deliberation_input, build_deliberation_input_from_store, run_deliberation
 
 __all__ = [
     "Candidate",
