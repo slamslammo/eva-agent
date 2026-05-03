@@ -1,24 +1,17 @@
 """Minimal Phase B / early Phase C L3 deliberation skeleton."""
 
 from ..anchor import apply_structural_anchors
-from .contracts import (
-    Candidate,
-    CandidateAssessment,
-    DeliberationAuditRecord,
-    DeliberationInput,
-    HabitBiasSummary,
-    HabitSkillSummary,
-    LearningOutcomeRecord,
-    MemoryWriteStub,
-    ReleaseDecision,
-    WorkingMemoryContext,
-)
+from .contracts import Candidate, CandidateAssessment, DeliberationAuditRecord, DeliberationInput, ReleaseDecision
 from .memory import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,
     ClientBackedWorkingMemoryAdapter,
+    HabitBiasSummary,
+    HabitSkillSummary,
     HeuristicWorkingMemoryAdapter,
     HeuristicWorkingMemoryModelClient,
+    LearningOutcomeRecord,
+    MemoryWriteStub,
     MODEL_CLIENT_MODE_HEURISTIC,
     MODEL_CLIENT_MODE_INERT,
     NullWorkingMemoryAdapter,
@@ -32,18 +25,22 @@ from .memory import (
     WorkingMemoryModelClientResponse,
     build_builtin_working_memory_adapter,
     build_builtin_working_memory_model_client,
+    build_learning_outcome_record,
     build_memory_stub,
+    build_situation_key_from_values,
     derive_habit_skills,
+    evaluate_response_outcome,
+    summarize_habit_bias,
 )
-from .peer_circuit import build_learning_outcome_record, decide_release, evaluate_response_outcome
+from .peer_circuit import decide_release
 from .reasoning import (
+    WorkingMemoryContext,
     assess_candidates,
     build_candidates,
     build_llm_working_memory_context,
     build_situation_key,
     build_working_memory_context,
     build_working_memory_context_from_store,
-    summarize_habit_bias,
 )
 from .runtime import build_deliberation_input, build_deliberation_input_from_store, run_deliberation
 
@@ -81,9 +78,11 @@ __all__ = [
     "build_candidates",
     "build_deliberation_input",
     "build_deliberation_input_from_store",
+    "build_learning_outcome_record",
     "build_llm_working_memory_context",
     "build_memory_stub",
     "build_situation_key",
+    "build_situation_key_from_values",
     "build_working_memory_context",
     "build_working_memory_context_from_store",
     "decide_release",

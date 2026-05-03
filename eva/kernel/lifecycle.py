@@ -21,6 +21,12 @@ from ..l3_deliberation import (
     run_deliberation,
     summarize_habit_bias,
 )
+from ..l3_deliberation.memory import (
+    append_cognitive_memory_stub,
+    append_habit_bias,
+    append_learning_outcome,
+    read_learning_outcomes,
+)
 from ..l3_deliberation.tool_edge import build_response_selected_event_details, maybe_respond_after_patrol
 
 __all__ = [
@@ -489,7 +495,7 @@ class LifecycleRuntime:
             deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)
             self.store.append_deliberation_audit(deliberation_audit.to_dict())
             if memory_stub is not None:
-                self.store.append_cognitive_memory_stub(memory_stub)
+                append_cognitive_memory_stub(self.store, memory_stub)
             release_decision = deliberation_audit.release_decision
             learning_context = release_decision.get("learning_context") if isinstance(release_decision.get("learning_context"), dict) else {}
             selected_candidate_id = release_decision.get("selected_candidate_id")
@@ -554,13 +560,13 @@ class LifecycleRuntime:
                     response_summary,
                     latest_response_history,
                 )
-                self.store.append_learning_outcome(learning_outcome.to_dict())
+                append_learning_outcome(self.store, learning_outcome.to_dict())
                 habit_bias_entries = [summary.to_dict() for summary in summarize_habit_bias(
-                    self.store.read_learning_outcomes(),
+                    read_learning_outcomes(self.store),
                     situation_key=learning_outcome.content["situation_key"],
                 )]
                 if habit_bias_entries:
-                    self.store.append_habit_bias(habit_bias_entries[0])
+                    append_habit_bias(self.store, habit_bias_entries[0])
                 details["response"] = {
                     "pressure_id": response_summary["pressure_id"],
                     "pressure_type": response_summary["pressure_type"],

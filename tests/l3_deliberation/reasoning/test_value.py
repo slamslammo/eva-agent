@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation import Candidate, apply_structural_anchors, build_deliberation_input
-from eva.l3_deliberation.reasoning.candidates import OBSERVE_FIRST_PROFILE, build_candidates
-from eva.l3_deliberation.reasoning.value import assess_candidates
+from eva.l3_deliberation.reasoning.candidate_generation import OBSERVE_FIRST_PROFILE, build_candidates
+from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
 
 
 class ValueJudgmentTests(unittest.TestCase):

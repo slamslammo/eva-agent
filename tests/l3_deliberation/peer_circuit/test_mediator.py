@@ -4,8 +4,8 @@ import unittest
 
 from eva.l3_deliberation import CandidateAssessment, apply_structural_anchors, build_deliberation_input
 from eva.l3_deliberation.peer_circuit.mediator import decide_release
-from eva.l3_deliberation.reasoning.candidates import build_candidates
-from eva.l3_deliberation.reasoning.value import assess_candidates
+from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
+from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
 
 
 class MediatorTests(unittest.TestCase):
@@ -231,6 +231,79 @@ class MediatorTests(unittest.TestCase):
         self.assertEqual(decision.outcome, "compatibility_release")
         self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-observe-first")
         self.assertTrue(decision.learning_context["habit_narrowed"])
+    def test_deferred_path_uses_first_deferred_assessment(self) -> None:
+        assessments = [
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-observe-first",
+                action="compatibility_release",
+                score=0.0,
+                disposition="withhold",
+                reasons=("candidate_profile=observe_first", "no_release_pressure"),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-stabilize-first",
+                action="compatibility_release",
+                score=0.0,
+                disposition="defer",
+                reasons=("candidate_profile=stabilize_first", "critical_runtime_boundary"),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-observe-first-alt",
+                action="compatibility_release",
+                score=0.0,
+                disposition="defer",
+                reasons=("candidate_profile=observe_first", "conservative_mode_active"),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+        ]
+
+        decision = decide_release(assessments)
+
+        self.assertEqual(decision.outcome, "defer")
+        self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-stabilize-first")
+        self.assertEqual(decision.rationale, ("candidate_profile=stabilize_first", "critical_runtime_boundary"))
+
+    def test_withhold_path_uses_first_assessment_for_trace_context(self) -> None:
+        assessments = [
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-observe-first",
+                action="compatibility_release",
+                score=0.0,
+                disposition="withhold",
+                reasons=("candidate_profile=observe_first", "no_release_pressure"),
+                learning_bias=-0.1,
+                bias_reasons=("negative_habit_bias",),
+            ),
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-stabilize-first",
+                action="compatibility_release",
+                score=0.0,
+                disposition="withhold",
+                reasons=("candidate_profile=stabilize_first", "no_release_pressure"),
+                learning_bias=0.2,
+                bias_reasons=("positive_habit_bias",),
+            ),
+        ]
+
+        decision = decide_release(assessments)
+
+        self.assertEqual(decision.outcome, "withhold")
+        self.assertIsNone(decision.selected_candidate_id)
+        self.assertEqual(decision.rationale, ("candidate_profile=observe_first", "no_release_pressure"))
+        self.assertEqual(
+            decision.learning_context,
+            {
+                "candidate_profile": "observe_first",
+                "learning_bias": -0.1,
+                "bias_reasons": ["negative_habit_bias"],
+                "habit_narrowed": False,
+            },
+        )
 
 
 if __name__ == "__main__":

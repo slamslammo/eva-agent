@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 from ...kernel import ActivePressure, RuntimeState, StateStore, to_iso8601
 
 if TYPE_CHECKING:
-    from .compatibility import ResponseSelection
+    from .tool_registry import ResponseSelection
 
 __all__ = ["append_response_history", "build_response_selected_event_details"]
 

@@ -1,7 +1,8 @@
-"""Memory-side subpackage for stubs, habit skills, and advisory adapters."""
-
-from .skill_library import derive_habit_skills
-from .stub import build_memory_stub
+from .encoding import LearningOutcomeRecord, build_learning_outcome_record, evaluate_response_outcome
+from .episodic import append_cognitive_memory_stub, append_habit_bias, append_learning_outcome, read_cognitive_memory_stub, read_habit_bias, read_learning_outcomes
+from .retrieval import latest_habit_bias_summaries, pressure_reason_from_input, recent_cognitive_memory_stub_traces, recent_learning_outcomes, recent_outcome_trace, recent_response_history
+from .skill_library import HabitBiasSummary, HabitSkillSummary, build_situation_key_from_values, derive_habit_skills, summarize_habit_bias
+from .stub import MemoryWriteStub, build_memory_stub
 from .working_memory_adapter import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,
@@ -26,7 +27,27 @@ from .working_memory_model_client import (
 )
 
 __all__ = [
+    "HabitBiasSummary",
+    "HabitSkillSummary",
+    "LearningOutcomeRecord",
+    "MemoryWriteStub",
+    "append_cognitive_memory_stub",
+    "append_habit_bias",
+    "append_learning_outcome",
+    "latest_habit_bias_summaries",
+    "pressure_reason_from_input",
+    "read_cognitive_memory_stub",
+    "read_habit_bias",
+    "read_learning_outcomes",
+    "recent_cognitive_memory_stub_traces",
+    "recent_learning_outcomes",
+    "recent_outcome_trace",
+    "recent_response_history",
+    "build_situation_key_from_values",
     "derive_habit_skills",
+    "summarize_habit_bias",
+    "build_learning_outcome_record",
+    "evaluate_response_outcome",
     "build_memory_stub",
     "ADAPTER_MODE_INERT",
     "ADAPTER_MODE_HEURISTIC",

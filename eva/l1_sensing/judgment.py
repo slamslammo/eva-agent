@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from ..kernel import DimensionSnapshot, ExternalLifeConfig, ExternalLifeSnapshot
@@ -198,6 +199,33 @@ def evaluate_dimensions(inputs: dict[str, dict[str, object]], config: ExternalLi
         "resource_state": _resource_state_snapshot(inputs["resource_state"], config),
         "anomaly_accumulation": _anomaly_accumulation_snapshot(inputs["anomaly_accumulation"], config),
     }
+
+
+def build_external_life_snapshot(
+    cadence: str,
+    inputs: dict[str, dict[str, object]],
+    config: ExternalLifeConfig,
+    now: datetime,
+    *,
+    previous_snapshot: ExternalLifeSnapshot | None = None,
+) -> ExternalLifeSnapshot:
+    """Build one judged patrol snapshot from raw sensing inputs."""
+
+    dimensions = evaluate_dimensions(inputs, config)
+    overall_status = determine_overall_status(dimensions)
+    return ExternalLifeSnapshot(
+        captured_at=now,
+        source_patrol=cadence,
+        dimensions=dimensions,
+        overall_status=overall_status,
+        primary_gap=determine_primary_gap(dimensions),
+        trend=determine_trend(
+            overall_status,
+            previous_snapshot,
+            current_dimensions=dimensions,
+        ),
+        updated_at=now,
+    )
 
 
 def _dimension_trend(

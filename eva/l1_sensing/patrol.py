@@ -6,13 +6,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from ..kernel import ActivePressureTable, DriveStateTable, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore
-from ..l2_drive.drive import DriveBroadcast, DriveSummary, build_drive_broadcast, update_drive_state
-from ..l2_drive.pressure import build_active_pressure_table
+from ..l2_drive.broadcast import DriveBroadcast, build_drive_broadcast
+from ..l2_drive.drive_state import DriveSummary, update_drive_state
+from ..l2_drive.pressure_to_drive import build_active_pressure_table
 from .history import persist_patrol_artifacts
-from .judgment import determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
+from .judgment import build_external_life_snapshot
 from .routing import RoutingDecision, build_routing_decision
 from .sensing import collect_external_life_inputs
-from .signal_bus import SignalRecord, SignalDispatchSummary, build_patrol_signals, build_signal_batch_payload, summarize_signal_dispatch
+from .signal_bus import SignalRecord, SignalDispatchSummary, build_patrol_signal_artifacts
 
 PATROL_ORDER = ("shallow", "deep", "full")
 PATROL_INTERVAL_SECONDS = {
@@ -102,26 +103,16 @@ def execute_patrol(
         due_at=due_at,
         previous_snapshot=previous_snapshot,
     )
-    dimensions = evaluate_dimensions(inputs, config)
-    overall_status = determine_overall_status(dimensions)
-    snapshot = ExternalLifeSnapshot(
-        captured_at=now,
-        source_patrol=cadence,
-        dimensions=dimensions,
-        overall_status=overall_status,
-        primary_gap=determine_primary_gap(dimensions),
-        trend=determine_trend(
-            overall_status,
-            previous_snapshot,
-            current_dimensions=dimensions,
-        ),
-        updated_at=now,
+    snapshot = build_external_life_snapshot(
+        cadence,
+        inputs,
+        config,
+        now,
+        previous_snapshot=previous_snapshot,
     )
     previous_pressures = store.read_active_pressures()
     pressure_table, opened_pressures, resolved_pressures = build_active_pressure_table(snapshot, previous_pressures)
-    signals = build_patrol_signals(snapshot, pressure_table)
-    signal_summary = summarize_signal_dispatch(signals)
-    signal_batch = build_signal_batch_payload(signals)
+    signals, signal_summary, signal_batch = build_patrol_signal_artifacts(snapshot, pressure_table)
     routing_decision = build_routing_decision(signals)
     previous_drive_state = store.read_drive_state()
     drive_state, drive_summary = update_drive_state(previous_drive_state, snapshot, signals)

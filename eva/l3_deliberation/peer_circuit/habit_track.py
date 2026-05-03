@@ -1,4 +1,4 @@
-"""Candidate generation for the minimal Phase B L3 skeleton."""
+"""Canonical habit-path candidate-shaping helpers for the peer-circuit."""
 
 from __future__ import annotations
 
@@ -12,50 +12,30 @@ MIN_HABIT_NARROWING_EVIDENCE = 4
 MIN_HABIT_NARROWING_STABILITY = 0.75
 MIN_HABIT_NARROWING_CONFIDENCE = 0.8
 
+__all__ = [
+    "crystallized_habit_skill_hints",
+    "habitual_candidate_explanations",
+    "shape_candidates_with_habit_track",
+]
 
-def build_candidates(deliberation_input: DeliberationInput) -> list[Candidate]:
-    """Build the minimal internal candidate set from B0 input surfaces."""
 
-    signal_summary = deliberation_input.signal_batch.get("summary", {})
-    drive_broadcast = deliberation_input.drive_broadcast
-    threat_count = int(signal_summary.get("threat_signal_count", 0))
-    top_drive = str(drive_broadcast.get("top_drive") or "unknown")
-    compatibility_pressure_count = 0
-    if deliberation_input.compatibility_pressure_table is not None:
-        pressures = deliberation_input.compatibility_pressure_table.get("pressures", [])
-        if isinstance(pressures, list):
-            compatibility_pressure_count = len(pressures)
+def shape_candidates_with_habit_track(
+    candidates: list[Candidate],
+    deliberation_input: DeliberationInput,
+) -> list[Candidate]:
+    """Apply habit-path candidate shaping from already-assembled working memory."""
 
-    common_domain = {
-        "top_drive": top_drive,
-        "threat_signal_count": threat_count,
-        "compatibility_pressure_count": compatibility_pressure_count,
-    }
-    common_justification = (
-        f"top_drive={top_drive}",
-        f"threat_signal_count={threat_count}",
-    )
-    habit_skill_hints = _crystallized_habit_skill_hints(deliberation_input)
-    habitual_explanations = _habitual_candidate_explanations(deliberation_input)
-    candidates = [
-        _build_candidate(
-            candidate_id="candidate-compatibility-observe-first",
-            candidate_profile=OBSERVE_FIRST_PROFILE,
-            common_domain=common_domain,
-            common_justification=common_justification,
-            habit_skill_hint=habit_skill_hints.get(OBSERVE_FIRST_PROFILE),
-            habitual_explanation=habitual_explanations.get(OBSERVE_FIRST_PROFILE),
-        ),
-        _build_candidate(
-            candidate_id="candidate-compatibility-stabilize-first",
-            candidate_profile=STABILIZE_FIRST_PROFILE,
-            common_domain=common_domain,
-            common_justification=common_justification,
-            habit_skill_hint=habit_skill_hints.get(STABILIZE_FIRST_PROFILE),
-            habitual_explanation=habitual_explanations.get(STABILIZE_FIRST_PROFILE),
-        ),
+    habit_skill_hints = crystallized_habit_skill_hints(deliberation_input)
+    habitual_explanations = habitual_candidate_explanations(deliberation_input)
+    enriched_candidates = [
+        _enrich_candidate_with_habit_context(
+            candidate,
+            habit_skill_hint=habit_skill_hints.get(str(candidate.parameter_domain.get("candidate_profile") or "")),
+            habitual_explanation=habitual_explanations.get(str(candidate.parameter_domain.get("candidate_profile") or "")),
+        )
+        for candidate in candidates
     ]
-    narrowed = _narrow_candidates_from_habit_skill(candidates, habit_skill_hints=habit_skill_hints)
+    narrowed = _narrow_candidates_from_habit_skill(enriched_candidates, habit_skill_hints=habit_skill_hints)
     if narrowed is not None:
         return narrowed
     base_order = {
@@ -63,7 +43,7 @@ def build_candidates(deliberation_input: DeliberationInput) -> list[Candidate]:
         STABILIZE_FIRST_PROFILE: 1,
     }
     return sorted(
-        candidates,
+        enriched_candidates,
         key=lambda candidate: _candidate_priority_key(
             candidate,
             habit_skill_hints=habit_skill_hints,
@@ -72,61 +52,7 @@ def build_candidates(deliberation_input: DeliberationInput) -> list[Candidate]:
     )
 
 
-def _build_candidate(
-    *,
-    candidate_id: str,
-    candidate_profile: str,
-    common_domain: dict[str, Any],
-    common_justification: tuple[str, ...],
-    habit_skill_hint: dict[str, Any] | None,
-    habitual_explanation: dict[str, Any] | None,
-) -> Candidate:
-    """Build one candidate and optionally attach crystallized habit-skill hints."""
-
-    parameter_domain = {
-        **common_domain,
-        "candidate_profile": candidate_profile,
-    }
-    justification = [
-        f"candidate_profile={candidate_profile}",
-        *common_justification,
-    ]
-    parameter_domain["habitual_trace"] = "habitual_neutral"
-    parameter_domain["habitual_trace_reasons"] = []
-    parameter_domain["habit_eligible"] = False
-    parameter_domain["habit_eligibility_reasons"] = []
-    if habit_skill_hint:
-        parameter_domain["habit_skill_match"] = True
-        parameter_domain["habit_eligible"] = True
-        parameter_domain["habit_skill_confidence"] = float(habit_skill_hint.get("confidence", 0.0))
-        parameter_domain["habit_skill_evidence_count"] = int(habit_skill_hint.get("evidence_count", 0))
-        if habit_skill_hint.get("preferred_action") is not None:
-            parameter_domain["habit_preferred_action"] = str(habit_skill_hint.get("preferred_action"))
-            justification.append(f"habit_preferred_action={habit_skill_hint.get('preferred_action')}")
-        justification.append("habit_skill_match")
-    if habitual_explanation:
-        if "habitual_trace" in habitual_explanation:
-            parameter_domain["habitual_trace"] = str(habitual_explanation.get("habitual_trace") or "habitual_neutral")
-        if "habitual_trace_reasons" in habitual_explanation:
-            parameter_domain["habitual_trace_reasons"] = list(habitual_explanation.get("habitual_trace_reasons") or [])
-        if "habit_eligible" in habitual_explanation:
-            parameter_domain["habit_eligible"] = bool(habitual_explanation.get("habit_eligible", False))
-        if "habit_eligibility_reasons" in habitual_explanation:
-            parameter_domain["habit_eligibility_reasons"] = list(habitual_explanation.get("habit_eligibility_reasons") or [])
-        if parameter_domain["habitual_trace"] == "habitual_suppression":
-            justification.append("habitual_suppression_trace")
-        elif parameter_domain["habitual_trace"] == "habitual_support":
-            justification.append("habitual_support_trace")
-    return Candidate(
-        candidate_id=candidate_id,
-        capability="compatibility_response",
-        action="compatibility_release",
-        parameter_domain=parameter_domain,
-        justification=tuple(justification),
-    )
-
-
-def _crystallized_habit_skill_hints(deliberation_input: DeliberationInput) -> dict[str, dict[str, Any]]:
+def crystallized_habit_skill_hints(deliberation_input: DeliberationInput) -> dict[str, dict[str, Any]]:
     """Return crystallized habit-skill hints keyed by candidate profile."""
 
     working_memory_context = deliberation_input.working_memory_context or {}
@@ -152,7 +78,7 @@ def _crystallized_habit_skill_hints(deliberation_input: DeliberationInput) -> di
     return hints
 
 
-def _habitual_candidate_explanations(deliberation_input: DeliberationInput) -> dict[str, dict[str, Any]]:
+def habitual_candidate_explanations(deliberation_input: DeliberationInput) -> dict[str, dict[str, Any]]:
     """Return compact candidate-level habitual explanations keyed by profile."""
 
     working_memory_context = deliberation_input.working_memory_context or {}
@@ -190,6 +116,51 @@ def _habitual_candidate_explanations(deliberation_input: DeliberationInput) -> d
                 entry["habitual_trace_reasons"] = inferred_reasons
 
     return explanations
+
+
+def _enrich_candidate_with_habit_context(
+    candidate: Candidate,
+    *,
+    habit_skill_hint: dict[str, Any] | None,
+    habitual_explanation: dict[str, Any] | None,
+) -> Candidate:
+    """Return one candidate with habit-path fields populated."""
+
+    parameter_domain = dict(candidate.parameter_domain)
+    justification = list(candidate.justification)
+    parameter_domain["habitual_trace"] = "habitual_neutral"
+    parameter_domain["habitual_trace_reasons"] = []
+    parameter_domain["habit_eligible"] = False
+    parameter_domain["habit_eligibility_reasons"] = []
+    if habit_skill_hint:
+        parameter_domain["habit_skill_match"] = True
+        parameter_domain["habit_eligible"] = True
+        parameter_domain["habit_skill_confidence"] = float(habit_skill_hint.get("confidence", 0.0))
+        parameter_domain["habit_skill_evidence_count"] = int(habit_skill_hint.get("evidence_count", 0))
+        if habit_skill_hint.get("preferred_action") is not None:
+            parameter_domain["habit_preferred_action"] = str(habit_skill_hint.get("preferred_action"))
+            justification.append(f"habit_preferred_action={habit_skill_hint.get('preferred_action')}")
+        justification.append("habit_skill_match")
+    if habitual_explanation:
+        if "habitual_trace" in habitual_explanation:
+            parameter_domain["habitual_trace"] = str(habitual_explanation.get("habitual_trace") or "habitual_neutral")
+        if "habitual_trace_reasons" in habitual_explanation:
+            parameter_domain["habitual_trace_reasons"] = list(habitual_explanation.get("habitual_trace_reasons") or [])
+        if "habit_eligible" in habitual_explanation:
+            parameter_domain["habit_eligible"] = bool(habitual_explanation.get("habit_eligible", False))
+        if "habit_eligibility_reasons" in habitual_explanation:
+            parameter_domain["habit_eligibility_reasons"] = list(habitual_explanation.get("habit_eligibility_reasons") or [])
+        if parameter_domain["habitual_trace"] == "habitual_suppression":
+            justification.append("habitual_suppression_trace")
+        elif parameter_domain["habitual_trace"] == "habitual_support":
+            justification.append("habitual_support_trace")
+    return Candidate(
+        candidate_id=candidate.candidate_id,
+        capability=candidate.capability,
+        action=candidate.action,
+        parameter_domain=parameter_domain,
+        justification=tuple(justification),
+    )
 
 
 def _habitual_trace_from_outcome(outcome: dict[str, Any]) -> str | None:

@@ -1,0 +1,109 @@
+"""Canonical goal-directed release-shaping helpers for the full deliberation path."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ..contracts import CandidateAssessment
+
+__all__ = [
+    "build_learning_context",
+    "build_release_context",
+    "candidate_profile_from_id",
+    "expected_outcome_for_release",
+]
+
+
+def candidate_profile_from_id(candidate_id: str | None) -> str:
+    """Return the compact candidate profile name used by peer-circuit downstreams."""
+
+    if candidate_id is None:
+        return "unknown"
+    if candidate_id.endswith("observe-first"):
+        return "observe_first"
+    if candidate_id.endswith("stabilize-first"):
+        return "stabilize_first"
+    return "unknown"
+
+
+def build_learning_context(assessment: CandidateAssessment) -> dict[str, Any]:
+    """Build the shared learning-context payload from one selected assessment."""
+
+    return {
+        "candidate_profile": candidate_profile_from_id(assessment.candidate_id),
+        "learning_bias": assessment.learning_bias,
+        "bias_reasons": list(assessment.bias_reasons),
+        "habit_narrowed": "habit_candidate_narrowing" in assessment.reasons,
+    }
+
+
+def build_release_context(candidate_profile: str) -> dict[str, Any]:
+    """Build the compatibility release-context payload for one candidate profile."""
+
+    return {
+        "bridge_target": "pressure_led_compatibility",
+        "response_mode": "pressure_led_compatibility",
+        "candidate_profile": candidate_profile,
+        "bridge_policy": _bridge_policy_for_candidate_profile(candidate_profile),
+    }
+
+
+def expected_outcome_for_release(outcome: str, candidate_profile: str | None) -> str:
+    """Return the minimal expected-outcome label for one mediator outcome."""
+
+    if outcome == "compatibility_release":
+        if candidate_profile == "observe_first":
+            return "improve_information_under_pressure"
+        if candidate_profile == "stabilize_first":
+            return "stabilize_or_relieve_pressure"
+        return "bounded_pressure_response"
+    if outcome == "defer":
+        return "wait_for_safer_boundary"
+    return "no_external_change"
+
+
+def _bridge_policy_for_candidate_profile(candidate_profile: str) -> dict[str, object]:
+    """Return the explicit bridge policy derived from the selected internal profile."""
+
+    applicability = {
+        "pressure_reasons": ["recent_yield_detected"],
+        "life_states": ["STABLE"],
+    }
+    if candidate_profile == "observe_first":
+        return {
+            "policy_name": "observe_first_bias",
+            "selection": {
+                "preferred_action": "recheck_runtime_integrity",
+                "fallback_action": "escalate_integrity_risk",
+                "default_path": "pressure_default",
+            },
+            "applicability": applicability,
+            "execution": {
+                "allow_repair_side_effects": False,
+            },
+        }
+    if candidate_profile == "stabilize_first":
+        return {
+            "policy_name": "stabilize_first_bias",
+            "selection": {
+                "preferred_action": "shrink_to_conservative_mode",
+                "fallback_action": "recheck_runtime_integrity",
+                "default_path": "pressure_default",
+            },
+            "applicability": applicability,
+            "execution": {
+                "allow_repair_side_effects": True,
+            },
+        }
+    return {
+        "policy_name": "default_pressure_preference",
+        "selection": {
+            "preferred_action": "",
+            "fallback_action": "",
+            "default_path": "pressure_default",
+        },
+        "applicability": {},
+        "execution": {
+            "allow_repair_side_effects": True,
+        },
+    }

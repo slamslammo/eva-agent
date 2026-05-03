@@ -2,7 +2,36 @@
 
 from __future__ import annotations
 
-from ..contracts import DeliberationInput, MemoryWriteStub, ReleaseDecision
+from dataclasses import dataclass
+from typing import Any
+
+from ..contracts import DeliberationInput, ReleaseDecision
+
+
+@dataclass(frozen=True)
+class MemoryWriteStub:
+    """Minimal cognitive-memory write payload emitted by L3."""
+
+    recorded_at: str
+    source: str
+    salience: str
+    memory_type: str
+    write_reason: str
+    linked_audit_recorded_at: str
+    content: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the memory stub payload."""
+
+        return {
+            "recorded_at": self.recorded_at,
+            "source": self.source,
+            "salience": self.salience,
+            "memory_type": self.memory_type,
+            "write_reason": self.write_reason,
+            "linked_audit_recorded_at": self.linked_audit_recorded_at,
+            "content": dict(self.content),
+        }
 
 
 def build_memory_stub(

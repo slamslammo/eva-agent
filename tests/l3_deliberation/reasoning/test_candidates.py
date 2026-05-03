@@ -4,7 +4,7 @@ import unittest
 
 from eva.kernel import ActivePressure, ActivePressureTable, utc_now
 from eva.l3_deliberation import apply_structural_anchors, build_deliberation_input
-from eva.l3_deliberation.reasoning.candidates import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, build_candidates
+from eva.l3_deliberation.reasoning.candidate_generation import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, build_candidates
 from eva.l3_deliberation.contracts import Candidate, DeliberationInput
 
 
@@ -322,6 +322,54 @@ class CandidateGenerationTests(unittest.TestCase):
         self.assertIn("recent_negative_feedback", candidates[0].parameter_domain["habitual_trace_reasons"])
         self.assertFalse(candidates[0].parameter_domain["habit_eligible"])
         self.assertIn("habitual_suppression_trace", candidates[0].justification)
+
+    def test_candidate_building_surfaces_habitual_support_from_stub_trace(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "curiosity|STABLE|none",
+                "bias_summaries": [],
+                "habit_skills": [],
+                "recent_relevant_outcomes": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "memory_type": "release_trace",
+                        "habitual_trace": "habitual_support",
+                        "habitual_trace_reasons": ["release_trace"],
+                    }
+                ],
+                "confidence": 0.2,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        candidates = build_candidates(deliberation_input)
+
+        self.assertEqual(candidates[0].parameter_domain["candidate_profile"], OBSERVE_FIRST_PROFILE)
+        self.assertEqual(candidates[0].parameter_domain["habitual_trace"], "habitual_support")
+        self.assertIn("release_trace", candidates[0].parameter_domain["habitual_trace_reasons"])
+        self.assertIn("habitual_support_trace", candidates[0].justification)
 
     def test_multiple_crystallized_habit_skills_do_not_narrow_candidates(self) -> None:
         deliberation_input = build_deliberation_input(

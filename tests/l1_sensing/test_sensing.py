@@ -6,6 +6,8 @@ from datetime import timedelta
 
 from eva.kernel import ActiveInstanceRecord, DimensionSnapshot, EventRecord, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.l1_sensing import collect_external_life_inputs, default_sensor_registry
+from eva.l1_sensing.rate_sensors import elapsed_since_previous
+from eva.l1_sensing.state_sensors import build_state_sensor_specs
 
 
 class SensingTests(unittest.TestCase):
@@ -57,6 +59,7 @@ class SensingTests(unittest.TestCase):
             self.assertIn("rate_context", inputs["host_continuity"])
             self.assertFalse(inputs["host_continuity"]["rate_context"]["available"])
             self.assertEqual(inputs["runtime_integrity"]["rate_context"]["direction"], "unknown")
+            self.assertEqual(tuple(spec.name for spec in build_state_sensor_specs()), ("host_continuity", "runtime_integrity", "resource_state", "anomaly_accumulation"))
             self.assertEqual(
                 tuple(sensor.name for sensor in default_sensor_registry().sensors),
                 ("host_continuity", "runtime_integrity", "resource_state", "anomaly_accumulation"),
@@ -152,6 +155,7 @@ class SensingTests(unittest.TestCase):
             self.assertEqual(inputs["runtime_integrity"]["rate_context"]["heartbeat_age_direction"], "worsening")
             self.assertEqual(inputs["runtime_integrity"]["rate_context"]["consecutive_failures_direction"], "worsening")
             self.assertEqual(inputs["anomaly_accumulation"]["rate_context"]["direction"], "stable")
+            self.assertEqual(elapsed_since_previous(previous_snapshot, now), 10.0)
 
 
 if __name__ == "__main__":

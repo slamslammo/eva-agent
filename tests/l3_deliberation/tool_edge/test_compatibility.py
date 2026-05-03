@@ -16,7 +16,7 @@ from eva.l3_deliberation.tool_edge import (
     respond_to_integrity_pressure,
     select_response_action,
 )
-from eva.l2_drive.drive import build_drive_broadcast
+from eva.l2_drive.broadcast import build_drive_broadcast
 
 
 class StubRuntime:

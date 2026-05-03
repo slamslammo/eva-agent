@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..kernel import ActivePressureTable
+
 REQUIRED_SIGNAL_BATCH_KEYS = frozenset({"signals", "summary"})
 REQUIRED_RUNTIME_GATE_KEYS = frozenset({"instance_valid", "turn_allowed", "critical_blocked", "conservative_mode", "life_state"})
 REQUIRED_DRIVE_BROADCAST_KEYS = frozenset({"top_drive", "drive_levels", "drive_trends"})
@@ -18,6 +20,37 @@ def _validated_contract_dict(payload: dict[str, Any], required_keys: frozenset[s
     if missing:
         raise ValueError(f"{contract_name} missing required keys: {', '.join(missing)}")
     return normalized
+
+
+def _pressure_payload(
+    pressure_table: ActivePressureTable | dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize optional compatibility pressure context into a frozen payload."""
+
+    if isinstance(pressure_table, ActivePressureTable):
+        return pressure_table.to_dict()
+    if isinstance(pressure_table, dict):
+        return dict(pressure_table)
+    return None
+
+
+def build_deliberation_input(
+    signal_batch: dict[str, Any],
+    drive_broadcast: dict[str, Any],
+    runtime_gate_context: dict[str, Any],
+    pressure_table: ActivePressureTable | dict[str, Any] | None = None,
+    *,
+    working_memory_context: dict[str, Any] | None = None,
+) -> "DeliberationInput":
+    """Assemble the frozen L3 input from B0 contracts and optional pressure context."""
+
+    return DeliberationInput(
+        signal_batch=dict(signal_batch),
+        drive_broadcast=dict(drive_broadcast),
+        runtime_gate_context=dict(runtime_gate_context),
+        compatibility_pressure_table=_pressure_payload(pressure_table),
+        working_memory_context=None if working_memory_context is None else dict(working_memory_context),
+    )
 
 
 @dataclass(frozen=True)
@@ -177,190 +210,19 @@ class DeliberationAuditRecord:
         }
 
 
-@dataclass(frozen=True)
-class MemoryWriteStub:
-    """Minimal cognitive-memory write payload emitted by L3."""
+def build_deliberation_audit_record(
+    recorded_at: str,
+    deliberation_input: DeliberationInput,
+    candidates: list[Candidate],
+    assessments: list[CandidateAssessment],
+    release_decision: ReleaseDecision,
+) -> DeliberationAuditRecord:
+    """Build the append-only L3 deliberation audit artifact from current pass artifacts."""
 
-    recorded_at: str
-    source: str
-    salience: str
-    memory_type: str
-    write_reason: str
-    linked_audit_recorded_at: str
-    content: dict[str, Any]
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize the memory stub payload."""
-
-        return {
-            "recorded_at": self.recorded_at,
-            "source": self.source,
-            "salience": self.salience,
-            "memory_type": self.memory_type,
-            "write_reason": self.write_reason,
-            "linked_audit_recorded_at": self.linked_audit_recorded_at,
-            "content": dict(self.content),
-        }
-
-
-@dataclass(frozen=True)
-class LearningOutcomeRecord:
-    """Append-only Phase C learning record linking release intent to actual outcome."""
-
-    recorded_at: str
-    source: str
-    linked_audit_recorded_at: str
-    linked_response_id: str | None = None
-    selected_action: str | None = None
-    candidate_profile: str | None = None
-    response_mode: str | None = None
-    pressure_id: str | None = None
-    pressure_type: str | None = None
-    pressure_reason: str | None = None
-    expected_outcome: str = "unknown"
-    observed_outcome: str = "unknown"
-    outcome_delta: float = 0.0
-    rpe_like_score: float = 0.0
-    evaluation_label: str = "uncertain"
-    confidence: float = 0.0
-    content: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize the learning outcome payload."""
-
-        payload = {
-            "recorded_at": self.recorded_at,
-            "source": self.source,
-            "linked_audit_recorded_at": self.linked_audit_recorded_at,
-            "expected_outcome": self.expected_outcome,
-            "observed_outcome": self.observed_outcome,
-            "outcome_delta": self.outcome_delta,
-            "rpe_like_score": self.rpe_like_score,
-            "evaluation_label": self.evaluation_label,
-            "confidence": self.confidence,
-            "content": dict(self.content),
-        }
-        if self.linked_response_id is not None:
-            payload["linked_response_id"] = self.linked_response_id
-        if self.selected_action is not None:
-            payload["selected_action"] = self.selected_action
-        if self.candidate_profile is not None:
-            payload["candidate_profile"] = self.candidate_profile
-        if self.response_mode is not None:
-            payload["response_mode"] = self.response_mode
-        if self.pressure_id is not None:
-            payload["pressure_id"] = self.pressure_id
-        if self.pressure_type is not None:
-            payload["pressure_type"] = self.pressure_type
-        if self.pressure_reason is not None:
-            payload["pressure_reason"] = self.pressure_reason
-        return payload
-
-
-@dataclass(frozen=True)
-class HabitBiasSummary:
-    """Phase C habit-bias summary for one recurring situation."""
-
-    recorded_at: str
-    situation_key: str
-    candidate_profile: str
-    preferred_action: str | None = None
-    avoid_action: str | None = None
-    support_count: int = 0
-    failure_count: int = 0
-    evidence_count: int = 0
-    habit_skill_hit_count: int = 0
-    habit_narrowed_count: int = 0
-    recent_negative_count: int = 0
-    last_outcome_delta: float = 0.0
-    bias_strength: float = 0.0
-    stability_score: float = 0.0
-    confidence: float = 0.0
-    habit_eligible: bool = False
-    habit_eligibility_reasons: tuple[str, ...] = ()
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize one habit-bias summary."""
-
-        payload = {
-            "recorded_at": self.recorded_at,
-            "situation_key": self.situation_key,
-            "candidate_profile": self.candidate_profile,
-            "support_count": self.support_count,
-            "failure_count": self.failure_count,
-            "evidence_count": self.evidence_count,
-            "habit_skill_hit_count": self.habit_skill_hit_count,
-            "habit_narrowed_count": self.habit_narrowed_count,
-            "recent_negative_count": self.recent_negative_count,
-            "last_outcome_delta": self.last_outcome_delta,
-            "bias_strength": self.bias_strength,
-            "stability_score": self.stability_score,
-            "confidence": self.confidence,
-            "habit_eligible": self.habit_eligible,
-            "habit_eligibility_reasons": list(self.habit_eligibility_reasons),
-        }
-        if self.preferred_action is not None:
-            payload["preferred_action"] = self.preferred_action
-        if self.avoid_action is not None:
-            payload["avoid_action"] = self.avoid_action
-        return payload
-
-
-@dataclass(frozen=True)
-class HabitSkillSummary:
-    """Phase C-3 crystallized habit skill summary for one recurring situation."""
-
-    recorded_at: str
-    situation_key: str
-    candidate_profile: str
-    preferred_action: str | None = None
-    evidence_count: int = 0
-    stability_score: float = 0.0
-    confidence: float = 0.0
-    crystallized: bool = False
-    crystallization_reasons: tuple[str, ...] = ()
-    source: str = "habit_bias"
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize one habit-skill summary."""
-
-        payload = {
-            "recorded_at": self.recorded_at,
-            "situation_key": self.situation_key,
-            "candidate_profile": self.candidate_profile,
-            "evidence_count": self.evidence_count,
-            "stability_score": self.stability_score,
-            "confidence": self.confidence,
-            "crystallized": self.crystallized,
-            "crystallization_reasons": list(self.crystallization_reasons),
-            "source": self.source,
-        }
-        if self.preferred_action is not None:
-            payload["preferred_action"] = self.preferred_action
-        return payload
-
-
-@dataclass(frozen=True)
-class WorkingMemoryContext:
-    """Replaceable Phase C working-memory payload read by L3."""
-
-    situation_key: str
-    bias_summaries: list[dict[str, Any]] = field(default_factory=list)
-    habit_skills: list[dict[str, Any]] = field(default_factory=list)
-    recent_relevant_outcomes: list[dict[str, Any]] = field(default_factory=list)
-    confidence: float = 0.0
-    source_backend: str = "local_rule_based"
-    advisory_context: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize the working-memory context payload."""
-
-        return {
-            "situation_key": self.situation_key,
-            "bias_summaries": [dict(summary) for summary in self.bias_summaries],
-            "habit_skills": [dict(skill) for skill in self.habit_skills],
-            "recent_relevant_outcomes": [dict(outcome) for outcome in self.recent_relevant_outcomes],
-            "confidence": self.confidence,
-            "source_backend": self.source_backend,
-            "advisory_context": dict(self.advisory_context),
-        }
+    return DeliberationAuditRecord(
+        recorded_at=recorded_at,
+        deliberation_input=deliberation_input.to_dict(),
+        candidates=[candidate.to_dict() for candidate in candidates],
+        assessments=[assessment.to_dict() for assessment in assessments],
+        release_decision=release_decision.to_dict(),
+    )

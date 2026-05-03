@@ -4,8 +4,8 @@ import unittest
 from eva.kernel import StateStore, build_runtime_paths
 from eva.l3_deliberation import build_deliberation_input
 from eva.l3_deliberation import build_learning_outcome_record, evaluate_response_outcome
-from eva.l3_deliberation.memory import derive_habit_skills
-from eva.l3_deliberation.reasoning import build_working_memory_context, build_working_memory_context_from_store, summarize_habit_bias
+from eva.l3_deliberation.memory import derive_habit_skills, summarize_habit_bias
+from eva.l3_deliberation.reasoning import build_working_memory_context, build_working_memory_context_from_store
 from eva.l3_deliberation.memory import (
     ClientBackedWorkingMemoryAdapter,
     HeuristicWorkingMemoryAdapter,
@@ -731,7 +731,76 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
         self.assertTrue(context.bias_summaries[0]["habit_eligible"])
         self.assertEqual(context.bias_summaries[0]["habit_eligibility_reasons"], [])
 
-    def test_build_working_memory_context_surfaces_recent_negative_habitual_suppression_trace(self) -> None:
+    def test_build_working_memory_context_uses_memory_stub_fallback_traces(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        context = build_working_memory_context(
+            deliberation_input,
+            learning_outcomes=[],
+            habit_bias_entries=[],
+            response_history=[],
+            memory_stubs=[
+                {
+                    "recorded_at": "2026-05-03T10:00:00+00:00",
+                    "source": "l3_deliberation",
+                    "salience": "elevated",
+                    "memory_type": "threat_trace",
+                    "write_reason": "threat_signal_present",
+                    "linked_audit_recorded_at": "2026-05-03T10:00:00+00:00",
+                    "content": {
+                        "top_drive": "integrity",
+                        "selected_action": "compatibility_release",
+                        "candidate_profile": "stabilize_first",
+                    },
+                },
+                {
+                    "recorded_at": "2026-05-03T10:05:00+00:00",
+                    "source": "l3_deliberation",
+                    "salience": "focused",
+                    "memory_type": "release_trace",
+                    "write_reason": "release_outcome=compatibility_release",
+                    "linked_audit_recorded_at": "2026-05-03T10:05:00+00:00",
+                    "content": {
+                        "top_drive": "curiosity",
+                        "selected_action": "compatibility_release",
+                        "candidate_profile": "observe_first",
+                    },
+                },
+            ],
+        )
+
+        self.assertEqual(len(context.recent_relevant_outcomes), 1)
+        self.assertEqual(context.recent_relevant_outcomes[0]["candidate_profile"], "stabilize_first")
+        self.assertEqual(context.recent_relevant_outcomes[0]["selected_action"], "compatibility_release")
+        self.assertEqual(context.recent_relevant_outcomes[0]["memory_type"], "threat_trace")
+        self.assertEqual(context.recent_relevant_outcomes[0]["habitual_trace"], "habitual_suppression")
+        self.assertEqual(context.recent_relevant_outcomes[0]["habitual_trace_reasons"], ["threat_trace"])
+        self.assertNotIn("memory_stubs", context.to_dict())
+        self.assertEqual(context.confidence, 0.2)
+
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}, {"class": "threat"}],

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from .candidates import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
+from .candidate_generation import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
+from .conflict_detection import build_candidate_conflict_context
 from ..contracts import Candidate, CandidateAssessment, DeliberationInput
 
 
@@ -19,21 +20,16 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         if "habit_candidate_narrowing" in candidate.justification:
             reasons.append("habit_candidate_narrowing")
         score = 0.0
-        turn_allowed = bool(candidate.parameter_domain.get("turn_allowed", False))
-        instance_valid = bool(candidate.parameter_domain.get("instance_valid", False))
-        critical_blocked = bool(candidate.parameter_domain.get("critical_blocked", False))
-        life_state = str(candidate.parameter_domain.get("life_state") or "unknown")
-        conservative_mode = bool(candidate.parameter_domain.get("conservative_mode", False))
         learning_bias = 0.0
         bias_reasons: list[str] = []
+        conflict = build_candidate_conflict_context(
+            candidate,
+            top_drive=top_drive,
+            threat_count=threat_count,
+        )
         if candidate.action == "compatibility_release":
-            candidate_profile = str(candidate.parameter_domain.get("candidate_profile") or "unknown")
-            compatibility_pressure_count = int(candidate.parameter_domain.get("compatibility_pressure_count", 0))
-            reasons.append(f"candidate_profile={candidate_profile}")
-            if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
-                disposition = "withhold"
-                reasons.append("unknown_candidate_profile")
-            else:
+            candidate_profile = conflict.candidate_profile
+            if candidate_profile in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
                 habitual_trace = str(candidate.parameter_domain.get("habitual_trace") or "habitual_neutral")
                 if habitual_trace == "habitual_suppression":
                     reasons.append("habitual_suppression_trace")
@@ -47,43 +43,10 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                             for reason in habit_eligibility_reasons
                             if isinstance(reason, str) and reason
                         )
-
-            if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
-                disposition = "withhold"
-                reasons.append("unknown_candidate_profile")
-            elif not instance_valid:
-                disposition = "withhold"
-                reasons.append("instance_not_valid")
-            elif not turn_allowed:
-                disposition = "withhold"
-                reasons.append("turn_not_allowed")
-            elif critical_blocked:
-                disposition = "defer"
-                reasons.append("critical_runtime_boundary")
-            elif life_state == "CRITICAL":
-                disposition = "defer"
-                reasons.append("critical_life_state")
-            elif conservative_mode:
-                disposition = "defer"
-                reasons.append("conservative_mode_active")
-            elif top_drive == "integrity" or threat_count > 0:
-                disposition = "allow"
-                score = 1.0 + float(threat_count)
-                reasons.append("integrity_or_threat_pressure_present")
-                if candidate_profile == STABILIZE_FIRST_PROFILE:
-                    if top_drive == "integrity":
-                        score += 0.75
-                        reasons.append("integrity_bias_for_stabilize_first")
-                    if compatibility_pressure_count > 0:
-                        score += 0.5
-                        reasons.append("pressure_bias_for_stabilize_first")
-                elif candidate_profile == OBSERVE_FIRST_PROFILE:
-                    if top_drive != "integrity":
-                        score += 0.25
-                        reasons.append("non_integrity_bias_for_observe_first")
-                    if compatibility_pressure_count == 0:
-                        score += 0.25
-                        reasons.append("low_pressure_bias_for_observe_first")
+            disposition = conflict.disposition
+            reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
+            if disposition == "allow":
+                score = 1.0 + conflict.score_delta
                 learning_bias, bias_reasons = _learning_bias_for_candidate_profile(
                     deliberation_input,
                     candidate_profile=candidate_profile,
@@ -93,12 +56,9 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                 if habit_priority_bonus != 0.0:
                     score += habit_priority_bonus
                     reasons.append("crystallized_habit_skill_hint")
-            else:
-                disposition = "withhold"
-                reasons.append("no_release_pressure")
         else:
-            disposition = "withhold"
-            reasons.append("unknown_candidate_action")
+            disposition = conflict.disposition
+            reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
         assessments.append(
             CandidateAssessment(
                 candidate_id=candidate.candidate_id,

@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from eva.kernel import StateStore, build_runtime_paths
 from eva.l3_deliberation import build_deliberation_input, build_learning_outcome_record, evaluate_response_outcome
-from eva.l3_deliberation.memory import derive_habit_skills
-from eva.l3_deliberation.reasoning import build_working_memory_context, build_working_memory_context_from_store, summarize_habit_bias
+from eva.l3_deliberation.memory import derive_habit_skills, summarize_habit_bias
+from eva.l3_deliberation.reasoning import build_working_memory_context, build_working_memory_context_from_store
 from eva.l3_deliberation.memory import (
     ClientBackedWorkingMemoryAdapter,
     HeuristicWorkingMemoryAdapter,

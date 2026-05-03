@@ -73,6 +73,20 @@ def build_patrol_signals(snapshot: ExternalLifeSnapshot, pressure_table: ActiveP
     return signals
 
 
+def build_patrol_signal_artifacts(
+    snapshot: ExternalLifeSnapshot,
+    pressure_table: ActivePressureTable,
+) -> tuple[list[SignalRecord], SignalDispatchSummary, dict[str, Any]]:
+    """Build emitted signal records plus their frozen batch payload."""
+
+    signals = build_patrol_signals(snapshot, pressure_table)
+    signal_summary = summarize_signal_dispatch(signals)
+    return signals, signal_summary, {
+        "signals": [signal.to_dict() for signal in signals],
+        "summary": signal_summary.to_dict(),
+    }
+
+
 def build_status_signal(snapshot: ExternalLifeSnapshot) -> SignalRecord:
     """Build the one normalized status signal for a patrol snapshot."""
 

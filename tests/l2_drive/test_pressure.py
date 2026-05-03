@@ -4,7 +4,7 @@ import unittest
 from datetime import timedelta
 
 from eva.kernel import ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot, utc_now
-from eva.l2_drive import build_active_pressure_table
+from eva.l2_drive.pressure_to_drive import build_active_pressure_table
 
 
 class PressureTests(unittest.TestCase):

@@ -40,6 +40,27 @@
 - 后续开发中的 Python 代码质量、可读性、风格一致性与变更纪律，统一遵循维护者内部规范，不再作为公开文档主线暴露
 - 对外公开文档保持英文；本地维护文档可继续使用中文
 
+## 当前本地执行约束
+当前阶段先采用轻量前置约束，不引入 commit / push gate。
+
+开始任何代码实现、重构或 realignment 前，必须先完成一次本地 change intake，至少明确：
+1. 改动属于哪一层：`kernel / anchor / l1_sensing / l2_drive / l3_deliberation / l4_self_model / l5_social`
+2. 目标 canonical owner 是什么
+3. 当前触及的是 stable / transitional / reserved owner 中的哪一类
+4. 该改动属于 `codebase-realignment-plan.md` 的 R1 / R2 / R3，还是独立 feature slice
+5. 需要冻结哪些 tests
+6. 需要同步哪些文档
+
+当前 intake 与后续实现，统一优先参照：
+- `maintainer/development/development-standards.md`
+- `maintainer/development/module-organization-contract.md`
+- `maintainer/development/codebase-realignment-plan.md`
+- `maintainer/development/current-intake.md`
+- `maintainer/development/change-intake-template.md`
+
+若目标 owner 不清晰，先补文档判断，不直接写代码。
+若触及 transitional owner，只允许收窄、拆分、迁移或降级，不允许继续扩大其长期职责。
+
 ## 文档更新要求
 当前阶段至少维护：
 1. `README.md`、`docs/eva-agent-full-implementation.md` 与 `docs/current-status.md` 之间的一致性
