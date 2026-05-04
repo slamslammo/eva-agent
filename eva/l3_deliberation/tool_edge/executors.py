@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from ...kernel import ActivePressure, StateStore
-from .tool_registry import RECHECK_ACTION, REPAIR_ACTION, ResponseSelection, _pressure_reason
+from ..contracts import ReleaseToken
+from ..peer_circuit.mediator import validate_release_token
+from .tool_registry import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, ResponseSelection, _pressure_reason
 
 __all__ = [
     "ConservativeRuntime",
@@ -19,6 +21,7 @@ class ConservativeRuntime(Protocol):
     def activate_conservative_until_next_patrol(self) -> None: ...
 
 
+
 def execute_response_action(
     store: StateStore,
     pressure: ActivePressure,
@@ -27,9 +30,16 @@ def execute_response_action(
     runtime: ConservativeRuntime | None = None,
     *,
     allow_repair_side_effects: bool = True,
+    release_token: ReleaseToken | None = None,
+    selected_candidate_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute the selected v1 action and return a structured result."""
 
+    validate_release_token(
+        release_token,
+        selected_candidate_id=selected_candidate_id,
+        expected_outcome="compatibility_release",
+    )
     if selection.selected_action == RECHECK_ACTION:
         return _execute_recheck_action(store, pressure)
     if selection.selected_action == REPAIR_ACTION:
@@ -51,6 +61,7 @@ def execute_response_action(
         "followup_needed": True,
         "integration_hint": "needs_human_review",
     }
+
 
 
 def _execute_recheck_action(store: StateStore, pressure: ActivePressure) -> dict[str, Any]:
@@ -105,6 +116,7 @@ def _execute_recheck_action(store: StateStore, pressure: ActivePressure) -> dict
         "followup_needed": True,
         "integration_hint": "worth_review",
     }
+
 
 
 def _allow_repair_side_effects(*, bridge_policy: dict[str, Any] | None, default: bool) -> bool:

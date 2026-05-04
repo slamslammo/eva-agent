@@ -8,11 +8,14 @@ from ..contracts import Candidate, CandidateAssessment, DeliberationInput
 
 
 def assess_candidates(candidates: list[Candidate], deliberation_input: DeliberationInput) -> list[CandidateAssessment]:
-    """Assess candidates using drive/signal pressure plus anchored runtime boundaries."""
+    """Assess candidates using drive-weighted scoring plus anchored runtime boundaries."""
 
     signal_summary = deliberation_input.signal_batch.get("summary", {})
     threat_count = int(signal_summary.get("threat_signal_count", 0))
-    top_drive = str(deliberation_input.drive_broadcast.get("top_drive") or "unknown")
+    drive_broadcast = deliberation_input.drive_broadcast
+    top_drive = str(drive_broadcast.get("top_drive") or "unknown")
+    drive_levels = drive_broadcast.get("drive_levels")
+    normalized_drive_levels = dict(drive_levels) if isinstance(drive_levels, dict) else {}
 
     assessments: list[CandidateAssessment] = []
     for candidate in candidates:
@@ -26,6 +29,7 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             candidate,
             top_drive=top_drive,
             threat_count=threat_count,
+            drive_levels=normalized_drive_levels,
         )
         if candidate.action == "compatibility_release":
             candidate_profile = conflict.candidate_profile
@@ -46,7 +50,13 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
             if disposition == "allow":
-                score = 1.0 + conflict.score_delta
+                score = _drive_weighted_score(candidate.drive_impact_schema, normalized_drive_levels)
+                if threat_count > 0:
+                    score += min(0.2, threat_count * 0.05)
+                    reasons.append("signal_pressure_tiebreak")
+                if conflict.score_delta != 0.0:
+                    score += min(0.15, conflict.score_delta * 0.02)
+                    reasons.append("anchor_pressure_tiebreak")
                 learning_bias, bias_reasons = _learning_bias_for_candidate_profile(
                     deliberation_input,
                     candidate_profile=candidate_profile,
@@ -71,6 +81,20 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             )
         )
     return assessments
+
+
+def _drive_weighted_score(
+    drive_impact_schema: dict[str, float],
+    drive_levels: dict[str, object],
+) -> float:
+    """Return the main candidate score from continuous drive levels and predicted impact."""
+
+    if not drive_impact_schema:
+        return 0.0
+    score = 0.0
+    for drive_name in ("survival", "integrity", "continuity", "curiosity"):
+        score += float(drive_levels.get(drive_name, 0.0)) * float(drive_impact_schema.get(drive_name, 0.0))
+    return score
 
 
 def _learning_bias_for_candidate_profile(

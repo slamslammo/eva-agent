@@ -34,6 +34,7 @@ class ConflictDetectionTests(unittest.TestCase):
                     "critical_blocked": False,
                     "conservative_mode": False,
                     "life_state": "STABLE",
+                    "seconds_to_heartbeat": 10.0,
                 },
             ),
             top_drive="integrity",
@@ -57,17 +58,26 @@ class ConflictDetectionTests(unittest.TestCase):
                     "critical_blocked": False,
                     "conservative_mode": False,
                     "life_state": "STABLE",
+                    "seconds_to_heartbeat": 10.0,
                     "compatibility_pressure_count": 1,
+                },
+                drive_impact_schema={
+                    "integrity": 0.5,
+                    "curiosity": -0.2,
                 },
             ),
             top_drive="integrity",
             threat_count=1,
+            drive_levels={"integrity": 0.9, "curiosity": 0.7},
         )
 
         self.assertEqual(conflict.disposition, "allow")
         self.assertIn("integrity_or_threat_pressure_present", conflict.reasons)
         self.assertIn("integrity_bias_for_stabilize_first", conflict.reasons)
         self.assertIn("pressure_bias_for_stabilize_first", conflict.reasons)
+        self.assertIn("drive_tension_detected", conflict.reasons)
+        self.assertIn("supports_high_drive:integrity", conflict.reasons)
+        self.assertIn("harms_high_drive:curiosity", conflict.reasons)
         self.assertEqual(conflict.score_delta, 2.25)
 
 

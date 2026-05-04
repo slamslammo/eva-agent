@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from eva.l3_deliberation import CandidateAssessment, apply_structural_anchors, build_deliberation_input
-from eva.l3_deliberation.peer_circuit.mediator import decide_release
+from eva.l3_deliberation import CandidateAssessment, ReleaseToken, apply_structural_anchors, build_action_domain, build_deliberation_input
+from eva.l3_deliberation.peer_circuit.mediator import decide_release, validate_release_token
 from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
 
@@ -32,13 +32,15 @@ class MediatorTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
 
         self.assertEqual(decision.outcome, "withhold")
         self.assertIsNone(decision.selected_action)
+        self.assertIsNone(decision.release_token)
 
     def test_integrity_pressure_releases_to_compatibility_path(self) -> None:
         deliberation_input = build_deliberation_input(
@@ -63,14 +65,24 @@ class MediatorTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
 
         self.assertEqual(decision.outcome, "compatibility_release")
         self.assertEqual(decision.selected_action, "compatibility_release")
         self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-stabilize-first")
+        self.assertEqual(
+            decision.release_token,
+            ReleaseToken(
+                token_id="release-token::candidate-compatibility-stabilize-first",
+                outcome="compatibility_release",
+                candidate_id="candidate-compatibility-stabilize-first",
+                candidate_profile="stabilize_first",
+            ),
+        )
         self.assertEqual(
             decision.release_context,
             {
@@ -118,10 +130,11 @@ class MediatorTests(unittest.TestCase):
                 "critical_blocked": True,
                 "conservative_mode": False,
                 "life_state": "CRITICAL",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
 
         self.assertIn(decision.outcome, {"withhold", "defer"})
         self.assertNotEqual(decision.outcome, "compatibility_release")
@@ -151,10 +164,11 @@ class MediatorTests(unittest.TestCase):
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
 
         self.assertEqual(decision.outcome, "defer")
         self.assertEqual(decision.selected_action, "compatibility_release")
+        self.assertIsNone(decision.release_token)
 
     def test_learning_bias_breaks_tie_within_allowed_candidates_only(self) -> None:
         assessments = [
@@ -184,6 +198,7 @@ class MediatorTests(unittest.TestCase):
         self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-observe-first")
         self.assertEqual(decision.learning_context["learning_bias"], 0.25)
         self.assertEqual(decision.learning_context["bias_reasons"], ["positive_habit_bias"])
+        self.assertEqual(decision.release_token.candidate_profile, "observe_first")
 
     def test_learning_bias_cannot_override_higher_structural_score(self) -> None:
         assessments = [
@@ -295,6 +310,7 @@ class MediatorTests(unittest.TestCase):
         self.assertEqual(decision.outcome, "withhold")
         self.assertIsNone(decision.selected_candidate_id)
         self.assertEqual(decision.rationale, ("candidate_profile=observe_first", "no_release_pressure"))
+        self.assertIsNone(decision.release_token)
         self.assertEqual(
             decision.learning_context,
             {
@@ -303,6 +319,34 @@ class MediatorTests(unittest.TestCase):
                 "bias_reasons": ["negative_habit_bias"],
                 "habit_narrowed": False,
             },
+        )
+    def test_validate_release_token_rejects_candidate_mismatch(self) -> None:
+        token = ReleaseToken(
+            token_id="release-token::candidate-compatibility-stabilize-first",
+            outcome="compatibility_release",
+            candidate_id="candidate-compatibility-stabilize-first",
+            candidate_profile="stabilize_first",
+        )
+
+        with self.assertRaisesRegex(ValueError, "candidate does not match"):
+            validate_release_token(
+                token,
+                selected_candidate_id="candidate-compatibility-observe-first",
+                expected_outcome="compatibility_release",
+            )
+
+    def test_validate_release_token_accepts_matching_candidate(self) -> None:
+        token = ReleaseToken(
+            token_id="release-token::candidate-compatibility-observe-first",
+            outcome="compatibility_release",
+            candidate_id="candidate-compatibility-observe-first",
+            candidate_profile="observe_first",
+        )
+
+        validate_release_token(
+            token,
+            selected_candidate_id="candidate-compatibility-observe-first",
+            expected_outcome="compatibility_release",
         )
 
 

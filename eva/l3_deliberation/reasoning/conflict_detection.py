@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from .candidate_generation import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
 from ..contracts import Candidate
 
+DRIVE_CONFLICT_THRESHOLD = 0.5
+SIGNIFICANT_IMPACT_THRESHOLD = 0.15
+
 __all__ = [
     "CandidateConflictContext",
     "build_candidate_conflict_context",
@@ -28,6 +31,7 @@ def build_candidate_conflict_context(
     *,
     top_drive: str,
     threat_count: int,
+    drive_levels: dict[str, float] | None = None,
 ) -> CandidateConflictContext:
     """Return structural conflict and pressure-tension context for one candidate."""
 
@@ -109,9 +113,44 @@ def build_candidate_conflict_context(
             score_delta += 0.25
             pressure_reasons.append("low_pressure_bias_for_observe_first")
 
+    drive_tension_reasons = _drive_tension_reasons(
+        candidate.drive_impact_schema,
+        drive_levels=drive_levels or {},
+    )
+    for reason in drive_tension_reasons:
+        if reason not in pressure_reasons:
+            pressure_reasons.append(reason)
+
     return CandidateConflictContext(
         candidate_profile=candidate_profile,
         disposition="allow",
         reasons=tuple(pressure_reasons),
         score_delta=score_delta,
     )
+
+
+def _drive_tension_reasons(
+    drive_impact_schema: dict[str, float],
+    *,
+    drive_levels: dict[str, float],
+) -> list[str]:
+    """Return compact reasons when a candidate helps one high drive while harming another."""
+
+    if not drive_impact_schema or not drive_levels:
+        return []
+    supported = [
+        drive_name
+        for drive_name, impact in drive_impact_schema.items()
+        if impact >= SIGNIFICANT_IMPACT_THRESHOLD and float(drive_levels.get(drive_name, 0.0)) >= DRIVE_CONFLICT_THRESHOLD
+    ]
+    harmed = [
+        drive_name
+        for drive_name, impact in drive_impact_schema.items()
+        if impact <= -SIGNIFICANT_IMPACT_THRESHOLD and float(drive_levels.get(drive_name, 0.0)) >= DRIVE_CONFLICT_THRESHOLD
+    ]
+    if not supported or not harmed:
+        return []
+    reasons = ["drive_tension_detected"]
+    reasons.extend(f"supports_high_drive:{drive_name}" for drive_name in sorted(supported))
+    reasons.extend(f"harms_high_drive:{drive_name}" for drive_name in sorted(harmed))
+    return reasons

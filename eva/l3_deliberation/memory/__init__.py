@@ -1,8 +1,7 @@
-from .encoding import LearningOutcomeRecord, build_learning_outcome_record, evaluate_response_outcome
+from .encoding import LearningOutcomeRecord, MemoryWriteStub, build_learning_outcome_record, build_memory_stub, evaluate_response_outcome
 from .episodic import append_cognitive_memory_stub, append_habit_bias, append_learning_outcome, read_cognitive_memory_stub, read_habit_bias, read_learning_outcomes
 from .retrieval import latest_habit_bias_summaries, pressure_reason_from_input, recent_cognitive_memory_stub_traces, recent_learning_outcomes, recent_outcome_trace, recent_response_history
 from .skill_library import HabitBiasSummary, HabitSkillSummary, build_situation_key_from_values, derive_habit_skills, summarize_habit_bias
-from .stub import MemoryWriteStub, build_memory_stub
 from .working_memory_adapter import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,

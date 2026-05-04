@@ -160,6 +160,8 @@ def _enrich_candidate_with_habit_context(
         action=candidate.action,
         parameter_domain=parameter_domain,
         justification=tuple(justification),
+        drive_impact_schema=dict(candidate.drive_impact_schema),
+        side_effect_class=candidate.side_effect_class,
     )
 
 
@@ -266,6 +268,8 @@ def _narrow_candidates_from_habit_skill(
             action=candidate.action,
             parameter_domain=narrowed_domain,
             justification=(*candidate.justification, "habit_candidate_narrowing"),
+            drive_impact_schema=dict(candidate.drive_impact_schema),
+            side_effect_class=candidate.side_effect_class,
         )
     ]
 

@@ -32,6 +32,7 @@ class MemoryStubTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
@@ -64,6 +65,7 @@ class MemoryStubTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
@@ -72,7 +74,8 @@ class MemoryStubTests(unittest.TestCase):
         self.assertEqual(audit_record.release_decision["outcome"], "compatibility_release")
         assert memory_stub is not None
         self.assertEqual(memory_stub["source"], "l3_deliberation")
-        self.assertEqual(memory_stub["salience"], "focused")
+        self.assertIsInstance(memory_stub["salience"], float)
+        self.assertAlmostEqual(memory_stub["salience"], 0.75)
         self.assertEqual(memory_stub["memory_type"], "release_trace")
         self.assertEqual(memory_stub["write_reason"], "release_outcome=compatibility_release")
         self.assertEqual(memory_stub["linked_audit_recorded_at"], audit_record.recorded_at)
@@ -80,6 +83,14 @@ class MemoryStubTests(unittest.TestCase):
         self.assertEqual(memory_stub["content"]["release_outcome"], "compatibility_release")
         self.assertEqual(memory_stub["content"]["selected_action"], "compatibility_release")
         self.assertEqual(memory_stub["content"]["candidate_profile"], "stabilize_first")
+        self.assertEqual(
+            memory_stub["content"]["drive_state_at_encoding"],
+            {
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+        )
 
     def test_run_deliberation_keeps_full_audit_and_elevates_memory_on_threat(self) -> None:
         now = utc_now()
@@ -105,6 +116,7 @@ class MemoryStubTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             pressure_table={"pressures": [{"pressure_id": "p1"}]},
         )
@@ -140,7 +152,8 @@ class MemoryStubTests(unittest.TestCase):
         self.assertEqual(len(audit_record.assessments), 2)
         self.assertEqual(audit_record.deliberation_input["compatibility_pressure_table"]["pressures"][0]["pressure_id"], "p1")
         assert memory_stub is not None
-        self.assertEqual(memory_stub["salience"], "elevated")
+        self.assertIsInstance(memory_stub["salience"], float)
+        self.assertAlmostEqual(memory_stub["salience"], 0.95)
         self.assertEqual(memory_stub["memory_type"], "threat_trace")
         self.assertEqual(memory_stub["write_reason"], "threat_signal_present")
         self.assertEqual(memory_stub["linked_audit_recorded_at"], audit_record.recorded_at)
@@ -148,6 +161,14 @@ class MemoryStubTests(unittest.TestCase):
         self.assertEqual(memory_stub["content"]["release_outcome"], "compatibility_release")
         self.assertEqual(memory_stub["content"]["selected_action"], "compatibility_release")
         self.assertEqual(memory_stub["content"]["candidate_profile"], "stabilize_first")
+        self.assertEqual(
+            memory_stub["content"]["drive_state_at_encoding"],
+            {
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+        )
         self.assertNotIn("compatibility_pressure_table", memory_stub["content"])
 
     def test_memory_stub_persists_separately_from_audit(self) -> None:
@@ -157,11 +178,19 @@ class MemoryStubTests(unittest.TestCase):
             store.append_cognitive_memory_stub({
                 "recorded_at": utc_now().isoformat(),
                 "source": "l3_deliberation",
-                "salience": "focused",
+                "salience": 0.75,
                 "memory_type": "release_trace",
                 "write_reason": "release_outcome=compatibility_release",
                 "linked_audit_recorded_at": utc_now().isoformat(),
-                "content": {"top_drive": "curiosity", "release_outcome": "compatibility_release"},
+                "content": {
+                    "top_drive": "curiosity",
+                    "release_outcome": "compatibility_release",
+                    "drive_state_at_encoding": {
+                        "top_drive": "curiosity",
+                        "drive_levels": {"curiosity": 0.8},
+                        "drive_trends": {"curiosity": "improving"},
+                    },
+                },
             })
 
             self.assertEqual(len(store.read_deliberation_audit()), 1)

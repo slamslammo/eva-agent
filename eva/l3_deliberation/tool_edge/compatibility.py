@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from ...kernel import RuntimeState, StateStore
+from ..contracts import ReleaseToken
+from ..peer_circuit.mediator import validate_release_token
 from .executors import ConservativeRuntime, _allow_repair_side_effects, execute_response_action
 from .history import append_response_history
 from .tool_registry import (
@@ -45,6 +47,8 @@ def respond_to_integrity_pressure(
     allow_repair_side_effects: bool = True,
     drive_context: DriveBroadcast | dict[str, object] | None = None,
     release_context: dict[str, object] | None = None,
+    release_token: ReleaseToken | None = None,
+    selected_candidate_id: str | None = None,
 ) -> dict[str, object]:
     """Run the compatibility-only response closure for one integrity pressure."""
 
@@ -58,6 +62,11 @@ def respond_to_integrity_pressure(
         bridge_policy=((release_context or {}).get("bridge_policy") if isinstance((release_context or {}).get("bridge_policy"), dict) else None),
     )
     normalized_release_context = None if release_context is None else dict(release_context)
+    validate_release_token(
+        release_token,
+        selected_candidate_id=selected_candidate_id,
+        expected_outcome="compatibility_release",
+    )
     effective_allow_repair_side_effects = _allow_repair_side_effects(
         bridge_policy=((normalized_release_context or {}).get("bridge_policy") if isinstance((normalized_release_context or {}).get("bridge_policy"), dict) else None),
         default=allow_repair_side_effects,
@@ -69,6 +78,8 @@ def respond_to_integrity_pressure(
         selection,
         runtime=runtime,
         allow_repair_side_effects=effective_allow_repair_side_effects,
+        release_token=release_token,
+        selected_candidate_id=selected_candidate_id,
     )
     response_mode = str((normalized_release_context or {}).get("response_mode") or "pressure_led_compatibility")
     drive_context_payload = None if drive_context is None else (drive_context.to_dict() if hasattr(drive_context, "to_dict") else dict(drive_context))
@@ -105,6 +116,8 @@ def maybe_respond_after_patrol(
     allow_repair_side_effects: bool = True,
     drive_context: DriveBroadcast | dict[str, object] | None = None,
     release_context: dict[str, object] | None = None,
+    release_token: ReleaseToken | None = None,
+    selected_candidate_id: str | None = None,
 ) -> dict[str, object] | None:
     """Run the compatibility-only post-patrol response when an integrity pressure exists."""
 
@@ -120,5 +133,7 @@ def maybe_respond_after_patrol(
                 allow_repair_side_effects=allow_repair_side_effects,
                 drive_context=drive_context,
                 release_context=release_context,
+                release_token=release_token,
+                selected_candidate_id=selected_candidate_id,
             )
     return None

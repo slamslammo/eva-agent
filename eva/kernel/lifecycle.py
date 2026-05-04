@@ -45,6 +45,7 @@ def build_runtime_gate_context(
     instance_valid: bool,
     critical_blocked: bool,
     conservative_mode: bool,
+    seconds_to_heartbeat: float | None = None,
 ) -> dict[str, Any]:
     """Build the minimal kernel gate context exposed to downstream layers."""
 
@@ -54,6 +55,7 @@ def build_runtime_gate_context(
         "critical_blocked": critical_blocked,
         "conservative_mode": conservative_mode,
         "life_state": state.life_state,
+        "seconds_to_heartbeat": 0.0 if seconds_to_heartbeat is None else max(float(seconds_to_heartbeat), 0.0),
     }
 
 
@@ -360,6 +362,7 @@ class LifecycleRuntime:
                     instance_valid=state.instance_valid,
                     critical_blocked=state.life_state == LifeState.CRITICAL.value,
                     conservative_mode=self._conservative_until_next_patrol,
+                    seconds_to_heartbeat=remaining,
                 ),
             }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=True, details=details)
@@ -376,6 +379,7 @@ class LifecycleRuntime:
                     instance_valid=False,
                     critical_blocked=False,
                     conservative_mode=self._conservative_until_next_patrol,
+                    seconds_to_heartbeat=remaining,
                 ),
             }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
@@ -390,6 +394,7 @@ class LifecycleRuntime:
                     instance_valid=True,
                     critical_blocked=True,
                     conservative_mode=self._conservative_until_next_patrol,
+                    seconds_to_heartbeat=remaining,
                 ),
             }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
@@ -404,6 +409,7 @@ class LifecycleRuntime:
                     instance_valid=True,
                     critical_blocked=False,
                     conservative_mode=self._conservative_until_next_patrol,
+                    seconds_to_heartbeat=remaining,
                 ),
             }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
@@ -420,6 +426,7 @@ class LifecycleRuntime:
                     instance_valid=True,
                     critical_blocked=False,
                     conservative_mode=self._conservative_until_next_patrol,
+                    seconds_to_heartbeat=remaining,
                 ),
             }
             result = TurnResult(turn_id=turn_id, executed=False, yielded_to_heartbeat=False, details=details)
@@ -442,6 +449,7 @@ class LifecycleRuntime:
                 instance_valid=True,
                 critical_blocked=False,
                 conservative_mode=self._conservative_until_next_patrol,
+                seconds_to_heartbeat=remaining,
             ),
         }
         if work_slice.kind == "patrol":
@@ -497,6 +505,7 @@ class LifecycleRuntime:
             if memory_stub is not None:
                 append_cognitive_memory_stub(self.store, memory_stub)
             release_decision = deliberation_audit.release_decision
+            release_token = deliberation_audit.release_token
             learning_context = release_decision.get("learning_context") if isinstance(release_decision.get("learning_context"), dict) else {}
             selected_candidate_id = release_decision.get("selected_candidate_id")
             selected_candidate = next(
@@ -524,6 +533,7 @@ class LifecycleRuntime:
                 "selected_candidate_id": selected_candidate_id,
                 "habit_narrowed": habit_narrowed,
                 "habit_narrowed_from": habit_narrowed_from,
+                "release_authorized": release_token is not None,
             }
             conservative_before_patrol = self._conservative_until_next_patrol
             if conservative_before_patrol:
@@ -544,12 +554,15 @@ class LifecycleRuntime:
                     allow_repair_side_effects=not conservative_before_patrol,
                     drive_context=patrol_result.drive_broadcast,
                     release_context=release_context,
+                    release_token=release_token,
+                    selected_candidate_id=selected_candidate_id,
                 )
             details["runtime_gate_context"] = build_runtime_gate_context(
                 state,
                 instance_valid=True,
                 critical_blocked=False,
                 conservative_mode=self._conservative_until_next_patrol,
+                seconds_to_heartbeat=max((next_heartbeat_at - now).total_seconds(), 0.0),
             )
             if response_summary is not None:
                 response_history = self.store.read_response_history()

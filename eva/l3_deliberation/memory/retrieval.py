@@ -144,16 +144,23 @@ def recent_cognitive_memory_stub_traces(
 ) -> list[dict[str, Any]]:
     """Return compact recent cognitive-memory stub traces when richer evidence is absent."""
 
-    matching = []
+    matching: list[dict[str, Any]] = []
     for stub in memory_stubs:
         if str(stub.get("source") or "") != "l3_deliberation":
             continue
         content = stub.get("content") or {}
         if not isinstance(content, dict):
             continue
-        if str(content.get("top_drive") or "unknown") != str(top_drive):
+        drive_state_at_encoding = content.get("drive_state_at_encoding") or {}
+        encoded_top_drive = str(
+            drive_state_at_encoding.get("top_drive")
+            or content.get("top_drive")
+            or "unknown"
+        )
+        if encoded_top_drive != str(top_drive):
             continue
         memory_type = str(stub.get("memory_type") or "unknown")
+        salience = _coerced_salience(stub.get("salience"))
         habitual_trace = "habitual_neutral"
         habitual_trace_reasons: list[str] = []
         if memory_type == "threat_trace":
@@ -162,6 +169,8 @@ def recent_cognitive_memory_stub_traces(
         elif memory_type == "release_trace":
             habitual_trace = "habitual_support"
             habitual_trace_reasons.append("release_trace")
+        if salience >= 0.8:
+            habitual_trace_reasons.append("high_salience")
         matching.append(
             {
                 "recorded_at": stub.get("recorded_at"),
@@ -171,8 +180,26 @@ def recent_cognitive_memory_stub_traces(
                 "memory_type": memory_type,
                 "write_reason": stub.get("write_reason"),
                 "linked_audit_recorded_at": stub.get("linked_audit_recorded_at"),
+                "salience": salience,
+                "drive_state_at_encoding": dict(drive_state_at_encoding) if isinstance(drive_state_at_encoding, dict) else {},
                 "habitual_trace": habitual_trace,
                 "habitual_trace_reasons": habitual_trace_reasons,
             }
         )
-    return matching[-limit:]
+    ranked = sorted(
+        matching,
+        key=lambda trace: (
+            -float(trace.get("salience", 0.0)),
+            str(trace.get("recorded_at") or ""),
+        ),
+    )
+    return ranked[:limit]
+
+
+def _coerced_salience(value: Any) -> float:
+    """Normalize persisted salience for retrieval ranking."""
+
+    try:
+        return round(max(0.0, min(1.0, float(value))), 3)
+    except (TypeError, ValueError):
+        return 0.0

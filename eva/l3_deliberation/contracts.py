@@ -114,17 +114,24 @@ class Candidate:
     action: str
     parameter_domain: dict[str, Any] = field(default_factory=dict)
     justification: tuple[str, ...] = ()
+    drive_impact_schema: dict[str, float] = field(default_factory=dict)
+    side_effect_class: str = "compatibility_side_effect"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize one structured candidate."""
 
-        return {
+        payload = {
             "candidate_id": self.candidate_id,
             "capability": self.capability,
             "action": self.action,
             "parameter_domain": dict(self.parameter_domain),
             "justification": list(self.justification),
         }
+        if self.drive_impact_schema:
+            payload["drive_impact_schema"] = dict(self.drive_impact_schema)
+        if self.side_effect_class != "compatibility_side_effect":
+            payload["side_effect_class"] = self.side_effect_class
+        return payload
 
 
 @dataclass(frozen=True)
@@ -157,6 +164,16 @@ class CandidateAssessment:
 
 
 @dataclass(frozen=True)
+class ReleaseToken:
+    """Runtime-only release authority threaded from mediator to tool-edge."""
+
+    token_id: str
+    outcome: str
+    candidate_id: str
+    candidate_profile: str
+
+
+@dataclass(frozen=True)
 class ReleaseDecision:
     """Mediator release output with default inhibition semantics."""
 
@@ -167,6 +184,7 @@ class ReleaseDecision:
     release_context: dict[str, Any] = field(default_factory=dict)
     expected_outcome: str | None = None
     learning_context: dict[str, Any] = field(default_factory=dict)
+    release_token: ReleaseToken | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the mediator decision."""
@@ -197,6 +215,7 @@ class DeliberationAuditRecord:
     candidates: list[dict[str, Any]]
     assessments: list[dict[str, Any]]
     release_decision: dict[str, Any]
+    release_token: ReleaseToken | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the deliberation audit record."""
@@ -225,4 +244,5 @@ def build_deliberation_audit_record(
         candidates=[candidate.to_dict() for candidate in candidates],
         assessments=[assessment.to_dict() for assessment in assessments],
         release_decision=release_decision.to_dict(),
+        release_token=release_decision.release_token,
     )

@@ -95,7 +95,7 @@ class PatrolTurnFlowTests(unittest.TestCase):
         self.assertEqual(result.details["deliberation"]["outcome"], "withhold")
         self.assertEqual(
             set(result.details["deliberation"].keys()),
-            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from"},
+            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from", "release_authorized"},
         )
         self.assertIsNone(result.details["deliberation"]["selected_candidate_id"])
         self.assertFalse(result.details["deliberation"]["habit_narrowed"])
@@ -286,14 +286,14 @@ class PatrolTurnFlowTests(unittest.TestCase):
         self.assertEqual(result.details["deliberation"]["outcome"], "withhold")
         self.assertEqual(
             set(result.details["deliberation"].keys()),
-            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from"},
+            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from", "release_authorized"},
         )
         self.assertIsNone(result.details["deliberation"]["selected_candidate_id"])
         self.assertFalse(result.details["deliberation"]["habit_narrowed"])
         self.assertIsNone(result.details["deliberation"]["habit_narrowed_from"])
         self.assertEqual(
             set(result.details["runtime_gate_context"].keys()),
-            {"instance_valid", "turn_allowed", "critical_blocked", "conservative_mode", "life_state"},
+            {"instance_valid", "turn_allowed", "critical_blocked", "conservative_mode", "life_state", "seconds_to_heartbeat"},
         )
         self.assertEqual(result.details["runtime_gate_context"]["turn_allowed"], True)
 

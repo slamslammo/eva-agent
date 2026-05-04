@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from eva.kernel import ActivePressure, ActivePressureTable, RuntimeState, StateStore, build_runtime_paths, utc_now
+from eva.l3_deliberation import ReleaseToken
 from eva.l3_deliberation.tool_edge.executors import execute_response_action
 from eva.l3_deliberation.tool_edge.tool_registry import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, ResponseSelection
 
@@ -47,6 +48,26 @@ class ExecutorsTests(unittest.TestCase):
             state_mode="normal",
         )
 
+    def _token(self) -> ReleaseToken:
+        return ReleaseToken(
+            token_id="release-token::candidate-compatibility-stabilize-first",
+            outcome="compatibility_release",
+            candidate_id="candidate-compatibility-stabilize-first",
+            candidate_profile="stabilize_first",
+        )
+
+    def test_execute_response_action_requires_release_token(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+
+            with self.assertRaisesRegex(ValueError, "release_token is required"):
+                execute_response_action(
+                    store,
+                    self._pressure("instance_invalid"),
+                    self._state(),
+                    self._selection(RECHECK_ACTION),
+                )
+
     def test_execute_response_action_recheck_fails_when_artifacts_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -56,6 +77,8 @@ class ExecutorsTests(unittest.TestCase):
                 self._pressure("instance_invalid"),
                 self._state(),
                 self._selection(RECHECK_ACTION),
+                release_token=self._token(),
+                selected_candidate_id=self._token().candidate_id,
             )
 
             self.assertEqual(result["execution_status"], "failed")
@@ -75,6 +98,8 @@ class ExecutorsTests(unittest.TestCase):
                 self._pressure("instance_invalid"),
                 self._state(),
                 self._selection(RECHECK_ACTION),
+                release_token=self._token(),
+                selected_candidate_id=self._token().candidate_id,
             )
 
             self.assertEqual(result["execution_status"], "completed")
@@ -93,6 +118,8 @@ class ExecutorsTests(unittest.TestCase):
                 self._selection(REPAIR_ACTION),
                 runtime=runtime,
                 allow_repair_side_effects=True,
+                release_token=self._token(),
+                selected_candidate_id=self._token().candidate_id,
             )
 
             self.assertTrue(runtime.activated)
@@ -111,6 +138,8 @@ class ExecutorsTests(unittest.TestCase):
                 self._selection(REPAIR_ACTION),
                 runtime=runtime,
                 allow_repair_side_effects=False,
+                release_token=self._token(),
+                selected_candidate_id=self._token().candidate_id,
             )
 
             self.assertFalse(runtime.activated)
@@ -126,6 +155,8 @@ class ExecutorsTests(unittest.TestCase):
                 self._pressure("runtime_files_missing"),
                 self._state(),
                 self._selection(ESCALATE_ACTION),
+                release_token=self._token(),
+                selected_candidate_id=self._token().candidate_id,
             )
 
             self.assertEqual(result["execution_status"], "escalated")

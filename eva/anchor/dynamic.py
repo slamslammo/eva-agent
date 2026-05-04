@@ -18,6 +18,8 @@ def apply_dynamic_anchor(candidate: Candidate, deliberation_input: DeliberationI
         action=candidate.action,
         parameter_domain=restricted_domain,
         justification=candidate.justification,
+        drive_impact_schema=dict(candidate.drive_impact_schema),
+        side_effect_class=candidate.side_effect_class,
     )
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from eva.l3_deliberation import Candidate, apply_structural_anchors, build_deliberation_input
+from eva.l3_deliberation import Candidate, apply_structural_anchors, build_action_domain, build_deliberation_input
 from eva.l3_deliberation.reasoning.candidate_generation import OBSERVE_FIRST_PROFILE, build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
 
@@ -31,10 +31,11 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(len(assessments), 2)
         self.assertEqual(assessments[0].disposition, "allow")
@@ -65,15 +66,16 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "allow")
         self.assertEqual(assessments[1].disposition, "allow")
         self.assertIn("non_integrity_bias_for_observe_first", assessments[0].reasons)
-        self.assertGreater(assessments[0].score, assessments[1].score)
+        self.assertGreater(assessments[1].score, assessments[0].score)
 
     def test_conservative_mode_defers_release(self) -> None:
         deliberation_input = build_deliberation_input(
@@ -101,7 +103,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "defer")
         self.assertIn("conservative_mode_active", assessments[0].reasons)
@@ -132,7 +134,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "defer")
         self.assertIn("critical_life_state", assessments[0].reasons)
@@ -160,10 +162,11 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": True,
                 "conservative_mode": False,
                 "life_state": "CRITICAL",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "withhold")
         self.assertIn("turn_not_allowed", assessments[0].reasons)
@@ -237,6 +240,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "integrity|STABLE|recent_yield_detected",
@@ -255,7 +259,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertGreater(assessments[0].learning_bias, 0.0)
         self.assertEqual(assessments[0].disposition, "allow")
@@ -303,7 +307,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "withhold")
         self.assertIn("turn_not_allowed", assessments[0].reasons)
@@ -331,6 +335,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "integrity|STABLE|recent_yield_detected",
@@ -349,7 +354,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertLess(assessments[0].learning_bias, 0.0)
         self.assertIn("recent_negative_outcome_bias", assessments[0].bias_reasons)
@@ -380,6 +385,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "integrity|STABLE|recent_yield_detected",
@@ -398,7 +404,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertLess(assessments[0].learning_bias, 0.0)
         self.assertEqual(assessments[1].learning_bias, 0.0)
@@ -427,6 +433,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "integrity|STABLE|recent_yield_detected",
@@ -445,7 +452,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(assessments[0].learning_bias, 0.0)
         self.assertNotIn("recent_negative_outcome_bias", assessments[0].bias_reasons)
@@ -473,6 +480,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "integrity|STABLE|recent_yield_detected",
@@ -491,7 +499,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertEqual(assessments[0].learning_bias, 0.0)
         self.assertNotIn("positive_habit_bias", assessments[0].bias_reasons)
@@ -519,6 +527,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "integrity|STABLE|recent_yield_detected",
@@ -539,9 +548,47 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        baseline_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            working_memory_context={
+                "situation_key": "integrity|STABLE|recent_yield_detected",
+                "bias_summaries": [],
+                "habit_skills": [],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.0,
+                "source_backend": "local_rule_based",
+            },
+        )
 
-        self.assertGreater(assessments[0].score, 2.0)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        baseline_assessments = assess_candidates(
+            apply_structural_anchors(build_candidates(build_action_domain(baseline_input)), baseline_input),
+            baseline_input,
+        )
+
+        self.assertGreater(assessments[0].score, baseline_assessments[0].score)
         self.assertIn("crystallized_habit_skill_hint", assessments[0].reasons)
         self.assertEqual(assessments[0].disposition, "allow")
 
@@ -568,6 +615,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "integrity|STABLE|recent_yield_detected",
@@ -588,11 +636,170 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(deliberation_input), deliberation_input), deliberation_input)
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
 
         self.assertNotIn("crystallized_habit_skill_hint", assessments[0].reasons)
 
-    def test_unknown_candidate_action_is_withheld(self) -> None:
+    def test_same_candidate_scores_differ_under_different_survival_levels(self) -> None:
+        low_survival_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "survival",
+                "drive_levels": {"survival": 0.1, "integrity": 0.2},
+                "drive_trends": {"survival": "stable", "integrity": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+        )
+        high_survival_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "survival",
+                "drive_levels": {"survival": 0.9, "integrity": 0.2},
+                "drive_trends": {"survival": "worsening", "integrity": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+        )
+
+        low_assessment = assess_candidates(
+            apply_structural_anchors(build_candidates(build_action_domain(low_survival_input)), low_survival_input),
+            low_survival_input,
+        )[1]
+        high_assessment = assess_candidates(
+            apply_structural_anchors(build_candidates(build_action_domain(high_survival_input)), high_survival_input),
+            high_survival_input,
+        )[1]
+
+        self.assertEqual(low_assessment.disposition, "allow")
+        self.assertEqual(high_assessment.disposition, "allow")
+        self.assertGreater(high_assessment.score, low_assessment.score)
+
+    def test_high_curiosity_prefers_observe_first_under_multi_drive_weighting(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {
+                    "survival": 0.2,
+                    "integrity": 0.1,
+                    "continuity": 0.6,
+                    "curiosity": 0.95,
+                },
+                "drive_trends": {
+                    "survival": "stable",
+                    "integrity": "stable",
+                    "continuity": "stable",
+                    "curiosity": "worsening",
+                },
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+        )
+
+        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+
+        self.assertEqual(assessments[0].disposition, "allow")
+        self.assertEqual(assessments[1].disposition, "allow")
+        self.assertGreater(assessments[0].score, assessments[1].score)
+
+    def test_zero_impact_schema_degrades_to_tiebreak_only(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {
+                    "survival": 0.0,
+                    "integrity": 0.8,
+                    "continuity": 0.0,
+                    "curiosity": 0.0,
+                },
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+        )
+        candidates = apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
+        zeroed_candidates = [
+            Candidate(
+                candidate_id=candidate.candidate_id,
+                capability=candidate.capability,
+                action=candidate.action,
+                parameter_domain=dict(candidate.parameter_domain),
+                justification=tuple(candidate.justification),
+                drive_impact_schema={},
+                side_effect_class=candidate.side_effect_class,
+            )
+            for candidate in candidates
+        ]
+
+        assessments = assess_candidates(zeroed_candidates, deliberation_input)
+
+        self.assertEqual(assessments[0].disposition, "allow")
+        self.assertEqual(assessments[1].disposition, "allow")
+        self.assertGreater(assessments[1].score, assessments[0].score)
+        self.assertLess(assessments[1].score, 1.0)
+
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}],
@@ -615,6 +822,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
         candidates = [

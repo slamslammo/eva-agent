@@ -1,7 +1,7 @@
 """Minimal Phase B / early Phase C L3 deliberation skeleton."""
 
-from ..anchor import apply_structural_anchors
-from .contracts import Candidate, CandidateAssessment, DeliberationAuditRecord, DeliberationInput, ReleaseDecision
+from ..anchor import ActionDomain, AgentState, CandidateSchema, apply_structural_anchors, build_action_domain
+from .contracts import Candidate, CandidateAssessment, DeliberationAuditRecord, DeliberationInput, ReleaseDecision, ReleaseToken
 from .memory import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,
@@ -45,8 +45,11 @@ from .reasoning import (
 from .runtime import build_deliberation_input, build_deliberation_input_from_store, run_deliberation
 
 __all__ = [
+    "ActionDomain",
+    "AgentState",
     "Candidate",
     "CandidateAssessment",
+    "CandidateSchema",
     "DeliberationAuditRecord",
     "DeliberationInput",
     "HabitBiasSummary",
@@ -54,6 +57,7 @@ __all__ = [
     "LearningOutcomeRecord",
     "MemoryWriteStub",
     "ReleaseDecision",
+    "ReleaseToken",
     "WorkingMemoryContext",
     "ADAPTER_MODE_INERT",
     "ADAPTER_MODE_HEURISTIC",
@@ -74,6 +78,7 @@ __all__ = [
     "MODEL_CLIENT_MODE_HEURISTIC",
     "build_builtin_working_memory_model_client",
     "apply_structural_anchors",
+    "build_action_domain",
     "assess_candidates",
     "build_candidates",
     "build_deliberation_input",

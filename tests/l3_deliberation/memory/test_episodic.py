@@ -23,11 +23,19 @@ class EpisodicMemoryTests(unittest.TestCase):
                 {
                     "recorded_at": utc_now().isoformat(),
                     "source": "l3_deliberation",
-                    "salience": "focused",
+                    "salience": 0.75,
                     "memory_type": "release_trace",
                     "write_reason": "release_outcome=compatibility_release",
                     "linked_audit_recorded_at": utc_now().isoformat(),
-                    "content": {"top_drive": "curiosity", "release_outcome": "compatibility_release"},
+                    "content": {
+                        "top_drive": "curiosity",
+                        "release_outcome": "compatibility_release",
+                        "drive_state_at_encoding": {
+                            "top_drive": "curiosity",
+                            "drive_levels": {"curiosity": 0.8},
+                            "drive_trends": {"curiosity": "improving"},
+                        },
+                    },
                 },
             )
 
@@ -35,6 +43,7 @@ class EpisodicMemoryTests(unittest.TestCase):
             self.assertEqual(len(entries), 1)
             self.assertEqual(entries[0]["source"], "l3_deliberation")
             self.assertEqual(entries[0]["memory_type"], "release_trace")
+            self.assertEqual(entries[0]["content"]["drive_state_at_encoding"]["top_drive"], "curiosity")
 
     def test_append_and_read_learning_outcomes_through_episodic_owner(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

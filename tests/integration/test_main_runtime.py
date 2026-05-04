@@ -133,7 +133,7 @@ class MainLoopTests(unittest.TestCase):
             self.assertIn("deliberation", patrol_turns[0]["details"])
             self.assertEqual(
                 set(patrol_turns[0]["details"]["deliberation"].keys()),
-                {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from"},
+                {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from", "release_authorized"},
             )
             if patrol_turns[0]["details"]["signal_routing"]["dispatch_hint"] == "protective_lane":
                 self.assertIn("reflex", patrol_turns[0]["details"])
@@ -145,6 +145,8 @@ class MainLoopTests(unittest.TestCase):
                 self.assertIn("memory_type", memory_entries[0])
                 self.assertIn("write_reason", memory_entries[0])
                 self.assertIn("linked_audit_recorded_at", memory_entries[0])
+                self.assertIsInstance(memory_entries[0].get("salience"), float)
+                self.assertIn("drive_state_at_encoding", memory_entries[0].get("content", {}))
 
     def test_runtime_defaults_to_inert_null_adapter_for_llm_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2,11 +2,64 @@ from __future__ import annotations
 
 import unittest
 
-from eva.l3_deliberation.memory import build_learning_outcome_record, evaluate_response_outcome
+from eva.l3_deliberation.memory import build_learning_outcome_record, build_memory_stub, evaluate_response_outcome
 from eva.l3_deliberation import build_deliberation_input
 
 
 class MemoryEncodingTests(unittest.TestCase):
+    def test_build_memory_stub_encodes_continuous_salience_and_drive_snapshot(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8, "curiosity": 0.2},
+                "drive_trends": {"integrity": "worsening", "curiosity": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        memory_stub = build_memory_stub(
+            "2026-05-04T10:00:00+00:00",
+            deliberation_input,
+            {
+                "outcome": "compatibility_release",
+                "selected_action": "compatibility_release",
+                "release_context": {"candidate_profile": "stabilize_first"},
+            },
+        )
+
+        assert memory_stub is not None
+        payload = memory_stub.to_dict()
+        self.assertEqual(payload["memory_type"], "threat_trace")
+        self.assertEqual(payload["write_reason"], "threat_signal_present")
+        self.assertIsInstance(payload["salience"], float)
+        self.assertGreaterEqual(payload["salience"], 0.9)
+        self.assertLessEqual(payload["salience"], 1.0)
+        self.assertEqual(
+            payload["content"]["drive_state_at_encoding"],
+            {
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8, "curiosity": 0.2},
+                "drive_trends": {"integrity": "worsening", "curiosity": "stable"},
+            },
+        )
+        self.assertEqual(payload["content"]["top_drive"], "integrity")
+
     def test_evaluate_response_outcome_returns_positive_for_relieved_without_followup(self) -> None:
         observed_outcome, delta, label, confidence = evaluate_response_outcome(
             {

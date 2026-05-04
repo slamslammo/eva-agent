@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from eva.kernel import ActivePressure, ActivePressureTable, utc_now
-from eva.l3_deliberation import apply_structural_anchors, build_deliberation_input
+from eva.l3_deliberation import apply_structural_anchors, build_action_domain, build_deliberation_input
 from eva.l3_deliberation.reasoning.candidate_generation import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, build_candidates
 from eva.l3_deliberation.contracts import Candidate, DeliberationInput
 
@@ -32,10 +32,11 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
         )
 
-        candidates = build_candidates(deliberation_input)
+        candidates = build_candidates(build_action_domain(deliberation_input))
 
         self.assertEqual(len(candidates), 2)
         self.assertEqual(candidates[0].action, "compatibility_release")
@@ -43,6 +44,18 @@ class CandidateGenerationTests(unittest.TestCase):
         self.assertEqual(candidates[0].parameter_domain["threat_signal_count"], 0)
         self.assertEqual(candidates[0].parameter_domain["compatibility_pressure_count"], 0)
         self.assertEqual(candidates[0].parameter_domain["candidate_profile"], OBSERVE_FIRST_PROFILE)
+        self.assertEqual(candidates[0].drive_impact_schema, {
+            "survival": 0.2,
+            "integrity": 0.1,
+            "continuity": 0.3,
+            "curiosity": 0.4,
+        })
+        self.assertEqual(candidates[1].drive_impact_schema, {
+            "survival": 0.7,
+            "integrity": 0.5,
+            "continuity": 0.2,
+            "curiosity": -0.1,
+        })
         self.assertEqual(candidates[1].parameter_domain["candidate_profile"], STABILIZE_FIRST_PROFILE)
         self.assertNotIn("instance_valid", candidates[0].parameter_domain)
         self.assertNotIn("turn_allowed", candidates[0].parameter_domain)
@@ -118,14 +131,15 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             pressure_table={"pressures": [{"pressure_id": "p1"}]},
         )
 
         self.assertNotIn("compatibility_pressure_table", {"signal_batch", "drive_broadcast", "runtime_gate_context"})
         self.assertEqual(deliberation_input.compatibility_pressure_table["pressures"][0]["pressure_id"], "p1")
-        self.assertEqual(build_candidates(deliberation_input)[0].parameter_domain["compatibility_pressure_count"], 1)
-        self.assertEqual(build_candidates(deliberation_input)[1].parameter_domain["compatibility_pressure_count"], 1)
+        self.assertEqual(build_candidates(build_action_domain(deliberation_input))[0].parameter_domain["compatibility_pressure_count"], 1)
+        self.assertEqual(build_candidates(build_action_domain(deliberation_input))[1].parameter_domain["compatibility_pressure_count"], 1)
 
     def test_build_deliberation_input_accepts_active_pressure_table(self) -> None:
         now = utc_now()
@@ -167,6 +181,7 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             pressure_table=pressure_table,
         )
@@ -175,8 +190,8 @@ class CandidateGenerationTests(unittest.TestCase):
             deliberation_input.to_dict()["compatibility_pressure_table"]["pressures"][0]["pressure_id"],
             "pressure-integrity-instance_invalid",
         )
-        self.assertEqual(build_candidates(deliberation_input)[0].parameter_domain["compatibility_pressure_count"], 1)
-        self.assertEqual(build_candidates(deliberation_input)[1].parameter_domain["compatibility_pressure_count"], 1)
+        self.assertEqual(build_candidates(build_action_domain(deliberation_input))[0].parameter_domain["compatibility_pressure_count"], 1)
+        self.assertEqual(build_candidates(build_action_domain(deliberation_input))[1].parameter_domain["compatibility_pressure_count"], 1)
 
     def test_build_deliberation_input_accepts_working_memory_context(self) -> None:
         deliberation_input = build_deliberation_input(
@@ -201,6 +216,7 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "curiosity|STABLE|none",
@@ -239,6 +255,7 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "curiosity|STABLE|none",
@@ -259,7 +276,7 @@ class CandidateGenerationTests(unittest.TestCase):
             },
         )
 
-        candidates = build_candidates(deliberation_input)
+        candidates = build_candidates(build_action_domain(deliberation_input))
 
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].parameter_domain["candidate_profile"], STABILIZE_FIRST_PROFILE)
@@ -292,6 +309,7 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "curiosity|STABLE|none",
@@ -315,7 +333,7 @@ class CandidateGenerationTests(unittest.TestCase):
             },
         )
 
-        candidates = build_candidates(deliberation_input)
+        candidates = build_candidates(build_action_domain(deliberation_input))
 
         self.assertEqual(candidates[0].parameter_domain["candidate_profile"], OBSERVE_FIRST_PROFILE)
         self.assertEqual(candidates[0].parameter_domain["habitual_trace"], "habitual_suppression")
@@ -346,6 +364,7 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "curiosity|STABLE|none",
@@ -364,7 +383,7 @@ class CandidateGenerationTests(unittest.TestCase):
             },
         )
 
-        candidates = build_candidates(deliberation_input)
+        candidates = build_candidates(build_action_domain(deliberation_input))
 
         self.assertEqual(candidates[0].parameter_domain["candidate_profile"], OBSERVE_FIRST_PROFILE)
         self.assertEqual(candidates[0].parameter_domain["habitual_trace"], "habitual_support")
@@ -394,6 +413,7 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "curiosity|STABLE|none",
@@ -422,7 +442,7 @@ class CandidateGenerationTests(unittest.TestCase):
             },
         )
 
-        candidates = build_candidates(deliberation_input)
+        candidates = build_candidates(build_action_domain(deliberation_input))
 
         self.assertEqual(len(candidates), 2)
         self.assertFalse(candidates[0].parameter_domain.get("habit_narrowed", False))
@@ -450,6 +470,7 @@ class CandidateGenerationTests(unittest.TestCase):
                 "critical_blocked": False,
                 "conservative_mode": False,
                 "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
             },
             working_memory_context={
                 "situation_key": "curiosity|STABLE|none",
@@ -470,7 +491,7 @@ class CandidateGenerationTests(unittest.TestCase):
             },
         )
 
-        candidates = build_candidates(deliberation_input)
+        candidates = build_candidates(build_action_domain(deliberation_input))
 
         self.assertEqual(len(candidates), 2)
         self.assertEqual(candidates[0].parameter_domain["candidate_profile"], STABILIZE_FIRST_PROFILE)

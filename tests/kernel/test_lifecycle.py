@@ -152,7 +152,7 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(executed.details["deliberation"]["outcome"], "withhold")
         self.assertEqual(
             set(executed.details["deliberation"].keys()),
-            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from"},
+            {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from", "release_authorized"},
         )
         self.assertIsNone(executed.details["deliberation"]["selected_candidate_id"])
         self.assertFalse(executed.details["deliberation"]["habit_narrowed"])

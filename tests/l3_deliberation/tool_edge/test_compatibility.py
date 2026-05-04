@@ -5,6 +5,7 @@ import unittest
 from datetime import timedelta
 
 from eva.kernel import ActivePressure, ActivePressureTable, DriveState, DriveStateTable, RuntimeState, StateStore, build_runtime_paths, utc_now
+from eva.l3_deliberation import ReleaseToken
 from eva.l3_deliberation.tool_edge import (
     ESCALATE_ACTION,
     RECHECK_ACTION,
@@ -59,6 +60,15 @@ class ResponseTests(unittest.TestCase):
 
     def _state(self, life_state: str = "STABLE", *, instance_valid: bool = True) -> RuntimeState:
         return RuntimeState(life_state=life_state, instance_valid=instance_valid, heartbeat_ok=True, tick_ok=True)
+
+    def _token(self, candidate_profile: str = "stabilize_first") -> ReleaseToken:
+        candidate_id = f"candidate-compatibility-{candidate_profile.replace('_', '-')}"
+        return ReleaseToken(
+            token_id=f"release-token::{candidate_id}",
+            outcome="compatibility_release",
+            candidate_id=candidate_id,
+            candidate_profile=candidate_profile,
+        )
 
     def test_instance_invalid_defaults_to_recheck(self) -> None:
         pressure = self._pressure("instance_invalid")
@@ -300,7 +310,14 @@ class ResponseTests(unittest.TestCase):
             store.paths.active_instance_file.write_text("{}\n", encoding="utf-8")
             store.paths.events_file.write_text('{"event_type": "startup"}\n', encoding="utf-8")
 
-            summary = respond_to_integrity_pressure(store, pressure, state, now)
+            summary = respond_to_integrity_pressure(
+                store,
+                pressure,
+                state,
+                now,
+                release_token=self._token(),
+                selected_candidate_id="candidate-compatibility-stabilize-first",
+            )
             history = store.read_response_history()
 
             self.assertEqual(summary["selected_action"], RECHECK_ACTION)
@@ -354,6 +371,8 @@ class ResponseTests(unittest.TestCase):
                 now,
                 runtime=runtime,
                 release_context=release_context,
+                release_token=self._token("observe_first"),
+                selected_candidate_id="candidate-compatibility-observe-first",
             )
             history = store.read_response_history()
 
@@ -400,6 +419,8 @@ class ResponseTests(unittest.TestCase):
                 state,
                 now,
                 release_context=release_context,
+                release_token=self._token("observe_first"),
+                selected_candidate_id="candidate-compatibility-observe-first",
             )
             history = store.read_response_history()
 
@@ -451,6 +472,8 @@ class ResponseTests(unittest.TestCase):
                 now,
                 runtime=runtime,
                 release_context=release_context,
+                release_token=self._token("observe_first"),
+                selected_candidate_id="candidate-compatibility-observe-first",
             )
             history = store.read_response_history()
 
@@ -476,7 +499,15 @@ class ResponseTests(unittest.TestCase):
             )
             runtime = StubRuntime()
 
-            summary = respond_to_integrity_pressure(store, pressure, state, now, runtime=runtime)
+            summary = respond_to_integrity_pressure(
+                store,
+                pressure,
+                state,
+                now,
+                runtime=runtime,
+                release_token=self._token(),
+                selected_candidate_id="candidate-compatibility-stabilize-first",
+            )
             history = store.read_response_history()
 
             self.assertTrue(runtime.activated)
@@ -495,7 +526,14 @@ class ResponseTests(unittest.TestCase):
             state = self._state("STABLE", instance_valid=True)
             pressure = self._pressure("runtime_files_missing", runtime_state_present=False)
 
-            summary = respond_to_integrity_pressure(store, pressure, state, now)
+            summary = respond_to_integrity_pressure(
+                store,
+                pressure,
+                state,
+                now,
+                release_token=self._token(),
+                selected_candidate_id="candidate-compatibility-stabilize-first",
+            )
             history = store.read_response_history()
 
             self.assertEqual(summary["selected_action"], ESCALATE_ACTION)
@@ -539,6 +577,8 @@ class ResponseTests(unittest.TestCase):
                 now,
                 drive_context=drive_context,
                 release_context=release_context,
+                release_token=self._token("observe_first"),
+                selected_candidate_id="candidate-compatibility-observe-first",
             )
             history = store.read_response_history()
 
@@ -653,7 +693,14 @@ class ResponseTests(unittest.TestCase):
             )
             runtime = StubRuntime()
 
-            summary = maybe_respond_after_patrol(store, state, now, runtime=runtime)
+            summary = maybe_respond_after_patrol(
+                store,
+                state,
+                now,
+                runtime=runtime,
+                release_token=self._token(),
+                selected_candidate_id="candidate-compatibility-stabilize-first",
+            )
             history = store.read_response_history()
 
             self.assertIsNotNone(summary)
@@ -708,6 +755,8 @@ class ResponseTests(unittest.TestCase):
                 now,
                 runtime=runtime,
                 release_context=release_context,
+                release_token=self._token("observe_first"),
+                selected_candidate_id="candidate-compatibility-observe-first",
             )
             history = store.read_response_history()
 
@@ -748,7 +797,14 @@ class ResponseTests(unittest.TestCase):
                 ActivePressureTable(captured_at=now, pressures=[pressure], updated_at=now)
             )
 
-            summary = maybe_respond_after_patrol(store, state, now, drive_context=drive_context)
+            summary = maybe_respond_after_patrol(
+                store,
+                state,
+                now,
+                drive_context=drive_context,
+                release_token=self._token(),
+                selected_candidate_id="candidate-compatibility-stabilize-first",
+            )
             history = store.read_response_history()
 
             self.assertIsNotNone(summary)
@@ -787,7 +843,14 @@ class ResponseTests(unittest.TestCase):
                 )
             )
 
-            summary = maybe_respond_after_patrol(store, state, now, drive_context=self._drive_broadcast())
+            summary = maybe_respond_after_patrol(
+                store,
+                state,
+                now,
+                drive_context=self._drive_broadcast(),
+                release_token=self._token(),
+                selected_candidate_id="candidate-compatibility-stabilize-first",
+            )
             history = store.read_response_history()
 
             self.assertIsNotNone(summary)

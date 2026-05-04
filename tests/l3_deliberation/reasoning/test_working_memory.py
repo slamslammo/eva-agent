@@ -766,7 +766,7 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
                 {
                     "recorded_at": "2026-05-03T10:00:00+00:00",
                     "source": "l3_deliberation",
-                    "salience": "elevated",
+                    "salience": 1.0,
                     "memory_type": "threat_trace",
                     "write_reason": "threat_signal_present",
                     "linked_audit_recorded_at": "2026-05-03T10:00:00+00:00",
@@ -774,12 +774,17 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
                         "top_drive": "integrity",
                         "selected_action": "compatibility_release",
                         "candidate_profile": "stabilize_first",
+                        "drive_state_at_encoding": {
+                            "top_drive": "integrity",
+                            "drive_levels": {"integrity": 0.8},
+                            "drive_trends": {"integrity": "worsening"},
+                        },
                     },
                 },
                 {
                     "recorded_at": "2026-05-03T10:05:00+00:00",
                     "source": "l3_deliberation",
-                    "salience": "focused",
+                    "salience": 0.75,
                     "memory_type": "release_trace",
                     "write_reason": "release_outcome=compatibility_release",
                     "linked_audit_recorded_at": "2026-05-03T10:05:00+00:00",
@@ -787,6 +792,11 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
                         "top_drive": "curiosity",
                         "selected_action": "compatibility_release",
                         "candidate_profile": "observe_first",
+                        "drive_state_at_encoding": {
+                            "top_drive": "curiosity",
+                            "drive_levels": {"curiosity": 0.8},
+                            "drive_trends": {"curiosity": "improving"},
+                        },
                     },
                 },
             ],
@@ -797,7 +807,19 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
         self.assertEqual(context.recent_relevant_outcomes[0]["selected_action"], "compatibility_release")
         self.assertEqual(context.recent_relevant_outcomes[0]["memory_type"], "threat_trace")
         self.assertEqual(context.recent_relevant_outcomes[0]["habitual_trace"], "habitual_suppression")
-        self.assertEqual(context.recent_relevant_outcomes[0]["habitual_trace_reasons"], ["threat_trace"])
+        self.assertEqual(
+            context.recent_relevant_outcomes[0]["habitual_trace_reasons"],
+            ["threat_trace", "high_salience"],
+        )
+        self.assertEqual(
+            context.recent_relevant_outcomes[0]["drive_state_at_encoding"],
+            {
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+        )
+        self.assertAlmostEqual(context.recent_relevant_outcomes[0]["salience"], 1.0)
         self.assertNotIn("memory_stubs", context.to_dict())
         self.assertEqual(context.confidence, 0.2)
 
