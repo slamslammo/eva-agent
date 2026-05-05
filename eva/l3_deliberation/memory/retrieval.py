@@ -7,6 +7,8 @@ from typing import Any
 from ..contracts import DeliberationInput
 from .skill_library import _situation_key_from_learning_outcome, build_situation_key_from_values
 
+MIN_SIMILAR_DRIVE_MATCH = 0.5
+
 
 def pressure_reason_from_input(deliberation_input: DeliberationInput) -> str:
     """Return the most relevant pressure reason from the compatibility context."""
@@ -34,6 +36,7 @@ def recent_learning_outcomes(
     top_drive: str,
     life_state: str,
     pressure_reason: str,
+    drive_levels: dict[str, Any] | None = None,
     limit: int,
 ) -> list[dict[str, Any]]:
     """Return bounded recent learning outcomes ranked by situation relevance."""
@@ -46,6 +49,7 @@ def recent_learning_outcomes(
             top_drive=top_drive,
             life_state=life_state,
             pressure_reason=pressure_reason,
+            drive_levels=drive_levels,
         )
         if match_score <= 0.0:
             continue
@@ -131,37 +135,46 @@ def recent_response_history(
     top_drive: str,
     life_state: str,
     pressure_reason: str,
+    drive_levels: dict[str, Any] | None = None,
     limit: int,
 ) -> list[dict[str, Any]]:
     """Return compact recent response history entries when episodic traces do not yet exist."""
 
-    matching = []
+    ranked: list[tuple[float, str, dict[str, Any]]] = []
     for entry in response_history:
         drive_context = entry.get("drive_context") or {}
-        if str(drive_context.get("top_drive") or "unknown") != str(top_drive):
-            continue
-        if str(entry.get("life_state") or "unknown") != str(life_state):
-            continue
-        if str(entry.get("pressure_reason") or "none") != str(pressure_reason):
-            continue
-        matching.append(
-            {
-                "recorded_at": entry.get("recorded_at"),
-                "selected_action": entry.get("selected_action"),
-                "pressure_outcome": entry.get("pressure_outcome"),
-                "execution_status": entry.get("execution_status"),
-                "followup_needed": entry.get("followup_needed"),
-                "top_drive": top_drive,
-                "life_state": life_state,
-                "pressure_reason": pressure_reason,
-                "situation_key": build_situation_key_from_values(
-                    top_drive=top_drive,
-                    life_state=life_state,
-                    pressure_reason=pressure_reason,
-                ),
-            }
+        match_score = _response_history_match_score(
+            entry,
+            top_drive=top_drive,
+            life_state=life_state,
+            pressure_reason=pressure_reason,
+            drive_levels=drive_levels,
         )
-    return matching[-limit:]
+        if match_score <= 0.0:
+            continue
+        ranked.append(
+            (
+                match_score,
+                str(entry.get("recorded_at") or ""),
+                {
+                    "recorded_at": entry.get("recorded_at"),
+                    "selected_action": entry.get("selected_action"),
+                    "pressure_outcome": entry.get("pressure_outcome"),
+                    "execution_status": entry.get("execution_status"),
+                    "followup_needed": entry.get("followup_needed"),
+                    "top_drive": drive_context.get("top_drive") or top_drive,
+                    "life_state": entry.get("life_state") or "unknown",
+                    "pressure_reason": entry.get("pressure_reason") or "none",
+                    "situation_key": build_situation_key_from_values(
+                        top_drive=str(drive_context.get("top_drive") or top_drive),
+                        life_state=str(entry.get("life_state") or "unknown"),
+                        pressure_reason=str(entry.get("pressure_reason") or "none"),
+                    ),
+                },
+            )
+        )
+    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [trace for _, _, trace in ranked[:limit]]
 
 
 def recent_cognitive_memory_stub_traces(
@@ -252,22 +265,36 @@ def _learning_outcome_match_score(
     top_drive: str,
     life_state: str,
     pressure_reason: str,
+    drive_levels: dict[str, Any] | None = None,
 ) -> float:
     """Return a bounded relevance score for one prior learning outcome."""
 
     content = record.get("content") or {}
+    score = 0.0
+    has_bounded_match = False
     if _situation_key_from_learning_outcome(record) == situation_key:
-        return 4.0
+        score += 4.0
+        has_bounded_match = True
     record_pressure_reason = str(record.get("pressure_reason") or content.get("pressure_reason") or "none")
     record_top_drive = str(content.get("top_drive") or "unknown")
     record_life_state = str(content.get("life_state") or "unknown")
-    if pressure_reason != "none" and record_pressure_reason == pressure_reason and record_top_drive == top_drive:
-        return 3.0
     if pressure_reason != "none" and record_pressure_reason == pressure_reason:
-        return 2.0
-    if record_top_drive == top_drive and record_life_state == life_state:
-        return 1.0
-    return 0.0
+        score += 1.5
+        has_bounded_match = True
+    if record_life_state == life_state:
+        score += 0.5
+    drive_similarity = _drive_similarity_from_top_drive(
+        top_drive=top_drive,
+        drive_levels=drive_levels,
+        encoded_top_drive=record_top_drive,
+        encoded_drive_levels=content.get("drive_state_at_encoding"),
+    )
+    if drive_similarity >= MIN_SIMILAR_DRIVE_MATCH:
+        has_bounded_match = True
+    score += 1.5 * drive_similarity
+    if not has_bounded_match:
+        return 0.0
+    return round(score, 6)
 
 
 def _memory_stub_match_score(
@@ -294,36 +321,96 @@ def _memory_stub_match_score(
     if pressure_reason != "none" and stub_pressure_reason is not None and stub_pressure_reason == pressure_reason:
         score += 1.5
         has_bounded_match = True
-    if encoded_top_drive == top_drive:
-        score += 1.5
+    drive_similarity = _drive_similarity_from_top_drive(
+        top_drive=top_drive,
+        drive_levels=drive_levels,
+        encoded_top_drive=encoded_top_drive,
+        encoded_drive_levels=drive_state_at_encoding,
+    )
+    if drive_similarity >= MIN_SIMILAR_DRIVE_MATCH:
         has_bounded_match = True
+    score += 1.5 * drive_similarity
     if stub_life_state is not None and stub_life_state == life_state:
         score += 0.5
     if not has_bounded_match:
         return 0.0
-    score += 0.75 * _drive_state_alignment(
-        top_drive=top_drive,
-        drive_levels=drive_levels,
-        drive_state_at_encoding=drive_state_at_encoding,
-    )
     score += 0.5 * salience
     return round(score, 6)
+
+
+def _response_history_match_score(
+    entry: dict[str, Any],
+    *,
+    top_drive: str,
+    life_state: str,
+    pressure_reason: str,
+    drive_levels: dict[str, Any] | None = None,
+) -> float:
+    """Return a bounded retrieval score for one response-history entry."""
+
+    drive_context = entry.get("drive_context") or {}
+    record_top_drive = str(drive_context.get("top_drive") or "unknown")
+    record_life_state = str(entry.get("life_state") or "unknown")
+    record_pressure_reason = str(entry.get("pressure_reason") or "none")
+    score = 0.0
+    has_bounded_match = False
+    if pressure_reason != "none" and record_pressure_reason == pressure_reason:
+        score += 1.5
+        has_bounded_match = True
+    if record_life_state == life_state:
+        score += 0.5
+    drive_similarity = _drive_similarity_from_top_drive(
+        top_drive=top_drive,
+        drive_levels=drive_levels,
+        encoded_top_drive=record_top_drive,
+        encoded_drive_levels=drive_context.get("drive_levels"),
+    )
+    if drive_similarity >= MIN_SIMILAR_DRIVE_MATCH:
+        has_bounded_match = True
+    score += 1.5 * drive_similarity
+    if not has_bounded_match:
+        return 0.0
+    return round(score, 6)
+
+
+def _drive_similarity_from_top_drive(
+    *,
+    top_drive: str,
+    drive_levels: dict[str, Any] | None,
+    encoded_top_drive: str,
+    encoded_drive_levels: Any,
+) -> float:
+    """Return a bounded drive similarity without requiring exact top-drive equality."""
+
+    if top_drive == encoded_top_drive:
+        return 1.0
+    normalized_levels = drive_levels if isinstance(drive_levels, dict) else {}
+    top_level = _coerced_salience(normalized_levels.get(top_drive, 0.0))
+    encoded_level = _coerced_salience(normalized_levels.get(encoded_top_drive, 0.0))
+    if top_level > 0.0 and encoded_level > 0.0:
+        return round(min(top_level, encoded_level), 3)
+    return _drive_state_alignment(
+        top_drive=top_drive,
+        drive_levels=normalized_levels,
+        drive_state_at_encoding=encoded_drive_levels,
+    )
 
 
 def _drive_state_alignment(
     *,
     top_drive: str,
-    drive_levels: dict[str, Any],
+    drive_levels: dict[str, Any] | None,
     drive_state_at_encoding: Any,
 ) -> float:
     """Return how closely one encoded drive snapshot matches the current top-drive level."""
 
+    normalized_levels = drive_levels if isinstance(drive_levels, dict) else {}
     if not isinstance(drive_state_at_encoding, dict):
         return 0.0
     encoded_levels = drive_state_at_encoding.get("drive_levels") or {}
     if not isinstance(encoded_levels, dict):
         return 0.0
-    current_level = _coerced_salience(drive_levels.get(top_drive, 0.0))
+    current_level = _coerced_salience(normalized_levels.get(top_drive, 0.0))
     encoded_level = _coerced_salience(encoded_levels.get(top_drive, 0.0))
     if current_level == 0.0 and encoded_level == 0.0:
         return 0.0

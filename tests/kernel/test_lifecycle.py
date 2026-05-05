@@ -160,6 +160,10 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertIn("curiosity", executed.details["drive_broadcast"]["drive_levels"])
         self.assertIn("working_memory_context", self.store.read_deliberation_audit()[0]["deliberation_input"])
         self.assertEqual(self.store.read_deliberation_audit()[0]["deliberation_input"]["working_memory_context"]["habit_skills"], [])
+        self.assertEqual(
+            self.store.read_deliberation_audit()[0]["deliberation_input"]["working_memory_context"]["advisory_source"],
+            "local_rule_based",
+        )
         self.assertEqual(self.store.read_learning_outcomes(), [])
         response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
         self.assertEqual(response_events, [])

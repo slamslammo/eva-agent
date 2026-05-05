@@ -111,6 +111,7 @@ class LifecycleRuntime:
         external_life: ExternalLifeConfig | None = None,
         working_memory_backend: str = "local_rule_based",
         working_memory_adapter: WorkingMemoryAdapter | None = None,
+        working_memory_advisory_source: str | None = None,
     ) -> None:
         self.store = store
         self.instance_guard = instance_guard
@@ -118,6 +119,7 @@ class LifecycleRuntime:
         self.external_life = external_life or ExternalLifeConfig()
         self.working_memory_backend = working_memory_backend
         self.working_memory_adapter = working_memory_adapter
+        self.working_memory_advisory_source = working_memory_advisory_source
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -498,6 +500,7 @@ class LifecycleRuntime:
                 patrol_result.pressure_table,
                 working_memory_backend=self.working_memory_backend,
                 llm_adapter=self.working_memory_adapter,
+                working_memory_advisory_source=self.working_memory_advisory_source,
                 response_history=prior_response_history,
             )
             deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)

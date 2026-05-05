@@ -22,6 +22,8 @@ from ..memory.skill_library import (
     summarize_habit_bias,
 )
 from ..memory.working_memory_adapter import (
+    ClientBackedWorkingMemoryAdapter,
+    HeuristicWorkingMemoryAdapter,
     NullWorkingMemoryAdapter,
     WorkingMemoryAdapter,
     WorkingMemoryAdapterRequest,
@@ -42,6 +44,7 @@ class WorkingMemoryContext:
     recent_relevant_outcomes: list[dict[str, Any]] = field(default_factory=list)
     confidence: float = 0.0
     source_backend: str = "local_rule_based"
+    advisory_source: str = "local_rule_based"
     advisory_context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -54,6 +57,7 @@ class WorkingMemoryContext:
             "recent_relevant_outcomes": [dict(outcome) for outcome in self.recent_relevant_outcomes],
             "confidence": self.confidence,
             "source_backend": self.source_backend,
+            "advisory_source": self.advisory_source,
             "advisory_context": dict(self.advisory_context),
         }
 
@@ -124,6 +128,7 @@ def build_working_memory_context(
         top_drive=top_drive,
         life_state=life_state,
         pressure_reason=pressure_reason,
+        drive_levels=normalized_drive_levels,
         limit=max_recent_outcomes,
     )
     if not recent_outcomes:
@@ -132,6 +137,7 @@ def build_working_memory_context(
             top_drive=top_drive,
             life_state=life_state,
             pressure_reason=pressure_reason,
+            drive_levels=normalized_drive_levels,
             limit=max_recent_outcomes,
         )
     if not recent_outcomes:
@@ -153,6 +159,7 @@ def build_working_memory_context(
         recent_relevant_outcomes=recent_outcomes,
         confidence=round(confidence, 3),
         source_backend="local_rule_based",
+        advisory_source="local_rule_based",
         advisory_context={},
     )
 
@@ -165,6 +172,7 @@ def build_llm_working_memory_context(
     response_history: list[dict[str, Any]] | None = None,
     memory_stubs: list[dict[str, Any]] | None = None,
     llm_adapter: WorkingMemoryAdapter,
+    advisory_source: str = "llm_assisted",
     max_bias_summaries: int = 2,
     max_habit_skills: int = 2,
     max_recent_outcomes: int = 3,
@@ -202,6 +210,7 @@ def build_llm_working_memory_context(
         recent_relevant_outcomes=[dict(outcome) for outcome in local_context.recent_relevant_outcomes],
         confidence=round(max(local_context.confidence, llm_confidence), 3),
         source_backend="llm_assisted",
+        advisory_source=advisory_source,
         advisory_context=advisory_context,
     )
 
@@ -212,6 +221,7 @@ def build_working_memory_context_from_store(
     *,
     backend: str = "local_rule_based",
     llm_adapter: WorkingMemoryAdapter | None = None,
+    advisory_source: str | None = None,
     max_bias_summaries: int = 2,
     max_habit_skills: int = 2,
     max_recent_outcomes: int = 3,
@@ -236,6 +246,14 @@ def build_working_memory_context_from_store(
             max_habit_skills=max_habit_skills,
             max_recent_outcomes=max_recent_outcomes,
         )
+        if backend == "local_rule_based":
+            advisory_source = "auto_preferred_local" if llm_adapter is not None else "auto_no_adapter"
+        else:
+            advisory_source = advisory_source or _default_advisory_source_for_adapter(llm_adapter)
+    elif backend == "llm_assisted":
+        advisory_source = advisory_source or _default_advisory_source_for_adapter(llm_adapter)
+    else:
+        advisory_source = advisory_source or "local_rule_based"
     if backend == "llm_assisted":
         if llm_adapter is None:
             raise ValueError("llm_adapter is required for llm_assisted working-memory backend")
@@ -246,11 +264,12 @@ def build_working_memory_context_from_store(
             response_history=response_history,
             memory_stubs=memory_stubs,
             llm_adapter=llm_adapter,
+            advisory_source=advisory_source,
             max_bias_summaries=max_bias_summaries,
             max_habit_skills=max_habit_skills,
             max_recent_outcomes=max_recent_outcomes,
         )
-    return build_working_memory_context(
+    context = build_working_memory_context(
         deliberation_input,
         learning_outcomes=learning_outcomes,
         habit_bias_entries=habit_bias_entries,
@@ -259,6 +278,16 @@ def build_working_memory_context_from_store(
         max_bias_summaries=max_bias_summaries,
         max_habit_skills=max_habit_skills,
         max_recent_outcomes=max_recent_outcomes,
+    )
+    return WorkingMemoryContext(
+        situation_key=context.situation_key,
+        bias_summaries=[dict(summary) for summary in context.bias_summaries],
+        habit_skills=[dict(skill) for skill in context.habit_skills],
+        recent_relevant_outcomes=[dict(outcome) for outcome in context.recent_relevant_outcomes],
+        confidence=context.confidence,
+        source_backend=context.source_backend,
+        advisory_source=advisory_source,
+        advisory_context=dict(context.advisory_context),
     )
 
 
@@ -322,3 +351,17 @@ def _sanitize_llm_advisory_context(payload: WorkingMemoryAdapterResponse | dict[
     if "confidence" in payload:
         advisory_context["confidence"] = round(max(0.0, min(1.0, float(payload.get("confidence", 0.0)))), 3)
     return advisory_context
+
+
+def _default_advisory_source_for_adapter(llm_adapter: WorkingMemoryAdapter | None) -> str:
+    """Return a compact advisory-source label for the resolved adapter path."""
+
+    if llm_adapter is None:
+        return "llm_assisted"
+    if isinstance(llm_adapter, NullWorkingMemoryAdapter):
+        return "null_adapter"
+    if isinstance(llm_adapter, HeuristicWorkingMemoryAdapter):
+        return "builtin_heuristic_adapter"
+    if isinstance(llm_adapter, ClientBackedWorkingMemoryAdapter):
+        return "client_backed_model_shell"
+    return "explicit_adapter"

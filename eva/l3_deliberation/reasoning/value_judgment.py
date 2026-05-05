@@ -5,6 +5,7 @@ from __future__ import annotations
 from .candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
 from .conflict_detection import build_candidate_conflict_context
 from ..contracts import Candidate, CandidateAssessment, DeliberationInput
+from ..peer_circuit.rpe import build_learned_impact_overlay
 
 
 def assess_candidates(candidates: list[Candidate], deliberation_input: DeliberationInput) -> list[CandidateAssessment]:
@@ -50,7 +51,14 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
             if disposition == "allow":
-                drive_score = _drive_weighted_score(candidate.drive_impact_schema, normalized_drive_levels)
+                effective_drive_impact_schema, impact_reasons = _effective_drive_impact_schema(
+                    deliberation_input,
+                    candidate_profile=candidate_profile,
+                    top_drive=top_drive,
+                    drive_impact_schema=candidate.drive_impact_schema,
+                )
+                reasons.extend(reason for reason in impact_reasons if reason not in reasons)
+                drive_score = _drive_weighted_score(effective_drive_impact_schema, normalized_drive_levels)
                 score = drive_score
                 projection_score = _projection_fallback_score(
                     conflict.score_delta,
@@ -85,6 +93,31 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
     return assessments
 
 
+def _effective_drive_impact_schema(
+    deliberation_input: DeliberationInput,
+    *,
+    candidate_profile: str,
+    top_drive: str,
+    drive_impact_schema: dict[str, float],
+) -> tuple[dict[str, float], list[str]]:
+    """Return the effective impact schema after any bounded learned overlay."""
+
+    effective_schema = dict(drive_impact_schema)
+    learned_overlay, blend_factor = build_learned_impact_overlay(
+        deliberation_input.working_memory_context,
+        candidate_profile=candidate_profile,
+        top_drive=top_drive,
+    )
+    if not learned_overlay or blend_factor <= 0.0:
+        return effective_schema, []
+    for drive_name, learned_signal in learned_overlay.items():
+        baseline = float(effective_schema.get(drive_name, 0.0))
+        effective_schema[drive_name] = _bounded_drive_impact_value(
+            ((1.0 - blend_factor) * baseline) + (blend_factor * float(learned_signal))
+        )
+    return effective_schema, ["learned_impact_overlay"]
+
+
 def _drive_weighted_score(
     drive_impact_schema: dict[str, float],
     drive_levels: dict[str, object],
@@ -105,6 +138,12 @@ def _projection_fallback_score(score_delta: float, *, drive_score: float) -> flo
     if score_delta == 0.0 or drive_score != 0.0:
         return 0.0
     return min(0.15, score_delta * 0.02)
+
+
+def _bounded_drive_impact_value(raw_value: float) -> float:
+    """Clamp one effective drive-impact value so learned overlay stays bounded."""
+
+    return max(-1.0, min(1.0, raw_value))
 
 
 def _learning_bias_for_candidate_profile(

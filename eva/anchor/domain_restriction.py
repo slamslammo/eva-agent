@@ -18,6 +18,7 @@ HIGH_RISK_ESCALATION_REASONS = frozenset({
     "runtime_not_writable",
     "recent_distress_detected",
 })
+ESCALATE_FIRST_ADMISSION_SEVERITIES = frozenset({"critical"})
 COMPATIBILITY_RELEASE_IMPACT = {
     STABILIZE_FIRST_PROFILE: {
         "survival": 0.7,
@@ -50,6 +51,7 @@ class AgentState:
     runtime_gate_context: dict[str, Any]
     compatibility_pressure_count: int = 0
     primary_pressure_reason: str = "none"
+    primary_pressure_severity: str = "healthy"
     seconds_to_heartbeat: float | None = None
     working_memory_context: dict[str, Any] | None = None
 
@@ -63,6 +65,7 @@ class AgentState:
             "runtime_gate_context": dict(self.runtime_gate_context),
             "compatibility_pressure_count": self.compatibility_pressure_count,
             "primary_pressure_reason": self.primary_pressure_reason,
+            "primary_pressure_severity": self.primary_pressure_severity,
         }
         if self.seconds_to_heartbeat is not None:
             payload["seconds_to_heartbeat"] = self.seconds_to_heartbeat
@@ -140,6 +143,7 @@ def build_action_domain(deliberation_input: DeliberationInput) -> ActionDomain:
     normalized_drive_levels = dict(drive_levels) if isinstance(drive_levels, dict) else {}
     compatibility_pressure_count = 0
     primary_pressure_reason = "none"
+    primary_pressure_severity = "healthy"
     if deliberation_input.compatibility_pressure_table is not None:
         pressures = deliberation_input.compatibility_pressure_table.get("pressures", [])
         if isinstance(pressures, list):
@@ -153,6 +157,7 @@ def build_action_domain(deliberation_input: DeliberationInput) -> ActionDomain:
                 None,
             )
             if first_integrity_pressure is not None:
+                primary_pressure_severity = str(first_integrity_pressure.get("severity") or "healthy")
                 evidence = first_integrity_pressure.get("evidence")
                 if isinstance(evidence, dict):
                     primary_pressure_reason = str(evidence.get("reason") or "none")
@@ -164,6 +169,7 @@ def build_action_domain(deliberation_input: DeliberationInput) -> ActionDomain:
         runtime_gate_context=dict(runtime_gate),
         compatibility_pressure_count=compatibility_pressure_count,
         primary_pressure_reason=primary_pressure_reason,
+        primary_pressure_severity=primary_pressure_severity,
         seconds_to_heartbeat=_seconds_to_heartbeat(runtime_gate),
         working_memory_context=deliberation_input.working_memory_context,
     )
@@ -184,6 +190,12 @@ def restrict_candidate_domain(candidate: Candidate, deliberation_input: Delibera
 
     anchored = apply_structural_anchor(candidate, deliberation_input)
     return apply_dynamic_anchor(anchored, deliberation_input)
+
+
+def apply_structural_anchors(candidates: list[Candidate], deliberation_input: DeliberationInput) -> list[Candidate]:
+    """Project runtime-gate fields onto compatibility or manually built candidates."""
+
+    return [restrict_candidate_domain(candidate, deliberation_input) for candidate in candidates]
 
 
 def _admit_base_candidates(agent_state: AgentState) -> list[Candidate]:
@@ -215,6 +227,7 @@ def _build_base_candidates(agent_state: AgentState) -> list[Candidate]:
         f"threat_signal_count={int(agent_state.signal_summary.get('threat_signal_count', 0))}",
         f"primary_pressure_reason={agent_state.primary_pressure_reason}",
     )
+    escalate_first_admitted = _can_admit_escalate_first(agent_state)
     return [
         _build_candidate(
             candidate_id="candidate-compatibility-observe-first",
@@ -237,10 +250,19 @@ def _build_base_candidates(agent_state: AgentState) -> list[Candidate]:
                     common_justification=common_justification,
                 )
             ]
-            if agent_state.primary_pressure_reason in HIGH_RISK_ESCALATION_REASONS
+            if escalate_first_admitted
             else []
         ),
     ]
+
+
+def _can_admit_escalate_first(agent_state: AgentState) -> bool:
+    """Return whether high-risk escalation passes the secondary anchor gate."""
+
+    return (
+        agent_state.primary_pressure_reason in HIGH_RISK_ESCALATION_REASONS
+        and agent_state.primary_pressure_severity in ESCALATE_FIRST_ADMISSION_SEVERITIES
+    )
 
 
 def _build_candidate(
@@ -298,6 +320,11 @@ def _restriction_reasons_from_candidates(agent_state: AgentState, candidates: li
         reasons.append("habit_candidate_narrowing")
     if any(str(candidate.parameter_domain.get("candidate_profile") or "") == ESCALATE_FIRST_PROFILE for candidate in candidates):
         reasons.append("high_risk_escalation_schema_admitted")
+    elif (
+        agent_state.primary_pressure_reason in HIGH_RISK_ESCALATION_REASONS
+        and not _can_admit_escalate_first(agent_state)
+    ):
+        reasons.append("high_risk_escalation_schema_blocked_by_secondary_gate")
     return tuple(reasons)
 
 
@@ -336,5 +363,6 @@ __all__ = [
     "build_action_domain",
     "apply_dynamic_anchor",
     "apply_structural_anchor",
+    "apply_structural_anchors",
     "restrict_candidate_domain",
 ]

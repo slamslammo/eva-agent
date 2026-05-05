@@ -842,6 +842,216 @@ class ValueJudgmentTests(unittest.TestCase):
         self.assertIn("unknown_candidate_action", assessments[0].reasons)
         self.assertEqual(assessments[0].score, 0.0)
 
+    def test_low_evidence_impact_learning_keeps_static_drive_impact_schema(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {
+                    "survival": 0.2,
+                    "integrity": 0.1,
+                    "continuity": 0.6,
+                    "curiosity": 0.95,
+                },
+                "drive_trends": {
+                    "survival": "stable",
+                    "integrity": "stable",
+                    "continuity": "stable",
+                    "curiosity": "worsening",
+                },
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            working_memory_context={
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": -1.0,
+                        "evidence_count": 9,
+                        "stability_score": 0.95,
+                        "confidence": 0.95,
+                        "last_outcome_delta": -1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.95,
+                "source_backend": "local_rule_based",
+            },
+        )
+        baseline_input = build_deliberation_input(
+            signal_batch=deliberation_input.signal_batch,
+            drive_broadcast=deliberation_input.drive_broadcast,
+            runtime_gate_context=deliberation_input.runtime_gate_context,
+        )
+
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
+        baseline_assessments = assess_candidates(
+            build_candidates(build_action_domain(baseline_input)),
+            baseline_input,
+        )
+
+        self.assertAlmostEqual(assessments[0].score, 0.36)
+        self.assertNotIn("learned_impact_overlay", assessments[0].reasons)
+
+    def test_thresholded_impact_learning_adds_bounded_overlay_to_drive_score(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {
+                    "survival": 0.2,
+                    "integrity": 0.1,
+                    "continuity": 0.6,
+                    "curiosity": 0.95,
+                },
+                "drive_trends": {
+                    "survival": "stable",
+                    "integrity": "stable",
+                    "continuity": "stable",
+                    "curiosity": "worsening",
+                },
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            working_memory_context={
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": -1.0,
+                        "evidence_count": 10,
+                        "stability_score": 0.95,
+                        "confidence": 0.95,
+                        "last_outcome_delta": -1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.95,
+                "source_backend": "local_rule_based",
+            },
+        )
+        low_evidence_input = build_deliberation_input(
+            signal_batch=deliberation_input.signal_batch,
+            drive_broadcast=deliberation_input.drive_broadcast,
+            runtime_gate_context=deliberation_input.runtime_gate_context,
+            working_memory_context={
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": -1.0,
+                        "evidence_count": 9,
+                        "stability_score": 0.95,
+                        "confidence": 0.95,
+                        "last_outcome_delta": -1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.95,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
+        low_evidence_assessments = assess_candidates(
+            build_candidates(build_action_domain(low_evidence_input)),
+            low_evidence_input,
+        )
+
+        self.assertLess(assessments[0].score, low_evidence_assessments[0].score)
+        self.assertIn("learned_impact_overlay", assessments[0].reasons)
+        self.assertGreaterEqual(assessments[0].score, 0.0)
+
+    def test_thresholded_impact_learning_remains_bounded_even_with_extreme_bias_inputs(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {
+                    "survival": 0.0,
+                    "integrity": 1.0,
+                    "continuity": 0.0,
+                    "curiosity": 0.0,
+                },
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            working_memory_context={
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "stabilize_first",
+                        "bias_strength": 99.0,
+                        "evidence_count": 30,
+                        "stability_score": 1.0,
+                        "confidence": 1.0,
+                        "last_outcome_delta": 99.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 1.0,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        baseline_input = build_deliberation_input(
+            signal_batch=deliberation_input.signal_batch,
+            drive_broadcast=deliberation_input.drive_broadcast,
+            runtime_gate_context=deliberation_input.runtime_gate_context,
+        )
+
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
+        baseline_assessments = assess_candidates(
+            build_candidates(build_action_domain(baseline_input)),
+            baseline_input,
+        )
+
+        self.assertLessEqual(assessments[1].score - baseline_assessments[1].score, 0.525)
+        self.assertIn("learned_impact_overlay", assessments[1].reasons)
+
     def test_high_risk_integrity_reason_prefers_escalate_first(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={
@@ -892,4 +1102,54 @@ class ValueJudgmentTests(unittest.TestCase):
         self.assertIn("high_risk_projection_for_escalate_first", assessments[2].reasons)
         self.assertGreater(assessments[2].score, assessments[1].score)
         self.assertGreater(assessments[2].score, assessments[0].score)
+
+    def test_high_risk_reason_without_secondary_severity_gate_does_not_materialize_escalate_first(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {
+                    "survival": 0.7,
+                    "integrity": 0.95,
+                    "continuity": 0.4,
+                    "curiosity": 0.1,
+                },
+                "drive_trends": {"integrity": "worsening", "survival": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "pressure_id": "pressure-integrity-runtime_files_missing",
+                        "type": "integrity",
+                        "severity": "degraded",
+                        "evidence": {"reason": "runtime_files_missing"},
+                    }
+                ]
+            },
+        )
+
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
+
+        self.assertEqual(len(assessments), 2)
+        self.assertNotIn(
+            "candidate-compatibility-escalate-first",
+            [assessment.candidate_id for assessment in assessments],
+        )
 

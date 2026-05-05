@@ -16,6 +16,7 @@ from ..l3_deliberation import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,
     ClientBackedWorkingMemoryAdapter,
+    HeuristicWorkingMemoryAdapter,
     MODEL_CLIENT_MODE_HEURISTIC,
     MODEL_CLIENT_MODE_INERT,
     NullWorkingMemoryAdapter,
@@ -60,13 +61,20 @@ def run_runtime(
     store.append_event(EventRecord(event_type="startup", timestamp=now, instance_id=active_record.instance_id, generation=active_record.generation, details={"runtime_dir": str(config.paths.runtime_dir)}))
     emit_log_line("startup", instance=active_record.instance_id, generation=active_record.generation, runtime_dir=str(config.paths.runtime_dir))
 
+    resolved_adapter = _resolve_working_memory_adapter(config, explicit_adapter=working_memory_adapter)
+    working_memory_advisory_source = _working_memory_advisory_source(
+        config,
+        resolved_adapter=resolved_adapter,
+        explicit_adapter=working_memory_adapter,
+    )
     runtime = LifecycleRuntime(
         store,
         instance_guard,
         config.lifecycle,
         config.external_life,
         config.working_memory_backend,
-        _resolve_working_memory_adapter(config, explicit_adapter=working_memory_adapter),
+        resolved_adapter,
+        working_memory_advisory_source,
     )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()
@@ -139,6 +147,37 @@ def _resolve_working_memory_adapter(
             )
         return NullWorkingMemoryAdapter()
     return None
+
+
+def _working_memory_advisory_source(
+    config: RuntimeConfig,
+    *,
+    resolved_adapter: WorkingMemoryAdapter | None,
+    explicit_adapter: WorkingMemoryAdapter | None,
+) -> str | None:
+    """Return a compact advisory-source label for runtime observability only."""
+
+    if config.working_memory_backend == "local_rule_based":
+        return "local_rule_based"
+    if config.working_memory_backend == "auto":
+        if explicit_adapter is not None or config.working_memory_adapter is not None:
+            return "explicit_adapter"
+        if isinstance(resolved_adapter, HeuristicWorkingMemoryAdapter):
+            return "builtin_heuristic_adapter"
+        if isinstance(resolved_adapter, ClientBackedWorkingMemoryAdapter):
+            return "client_backed_model_shell"
+        if isinstance(resolved_adapter, NullWorkingMemoryAdapter):
+            return "auto_no_adapter"
+        return "auto"
+    if explicit_adapter is not None or config.working_memory_adapter is not None:
+        return "explicit_adapter"
+    if isinstance(resolved_adapter, HeuristicWorkingMemoryAdapter):
+        return "builtin_heuristic_adapter"
+    if isinstance(resolved_adapter, ClientBackedWorkingMemoryAdapter):
+        return "client_backed_model_shell"
+    if isinstance(resolved_adapter, NullWorkingMemoryAdapter):
+        return "null_adapter"
+    return "llm_assisted"
 
 
 def parse_args() -> argparse.Namespace:

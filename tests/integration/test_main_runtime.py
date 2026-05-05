@@ -172,6 +172,7 @@ class MainLoopTests(unittest.TestCase):
             self.assertGreaterEqual(len(audits), 1)
             working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
             self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertEqual(working_memory_context["advisory_source"], "client_backed_model_shell")
             self.assertEqual(working_memory_context["advisory_context"], {})
 
     def test_runtime_uses_explicit_working_memory_adapter_when_provided(self) -> None:
@@ -199,6 +200,7 @@ class MainLoopTests(unittest.TestCase):
             self.assertGreaterEqual(len(audits), 1)
             working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
             self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertEqual(working_memory_context["advisory_source"], "explicit_adapter")
             self.assertEqual(
                 working_memory_context["advisory_context"],
                 {
@@ -238,6 +240,7 @@ class MainLoopTests(unittest.TestCase):
             self.assertGreaterEqual(len(audits), 1)
             working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
             self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertEqual(working_memory_context["advisory_source"], "builtin_heuristic_adapter")
             self.assertIn("candidate_suggestions", working_memory_context["advisory_context"])
             self.assertIn("prediction_hints", working_memory_context["advisory_context"])
             self.assertIn("reasoning_trace", working_memory_context["advisory_context"])
@@ -268,6 +271,7 @@ class MainLoopTests(unittest.TestCase):
             working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
             advisory_context = working_memory_context["advisory_context"]
             self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
+            self.assertEqual(working_memory_context["advisory_source"], "client_backed_model_shell")
             self.assertEqual(advisory_context["candidate_suggestions"], ["observe_first"])
             self.assertIn("model_client_provider_heuristic", advisory_context["reasoning_trace"])
             self.assertIn("model_client_bounded-local-placeholder", advisory_context["reasoning_trace"])

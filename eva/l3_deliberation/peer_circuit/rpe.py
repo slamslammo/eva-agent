@@ -7,7 +7,18 @@ from typing import Any
 
 from ..contracts import DeliberationAuditRecord
 
-__all__ = ["LearningOutcomeRecord", "build_learning_outcome_record", "evaluate_response_outcome"]
+__all__ = [
+    "LearningOutcomeRecord",
+    "build_learning_outcome_record",
+    "evaluate_response_outcome",
+    "build_learned_impact_overlay",
+]
+
+MIN_LEARNED_IMPACT_EVIDENCE = 10
+MIN_LEARNED_IMPACT_CONFIDENCE = 0.6
+MIN_LEARNED_IMPACT_STABILITY = 0.6
+MAX_LEARNED_IMPACT_BLEND = 0.35
+LEARNED_IMPACT_BLEND_STEP = 0.05
 
 
 @dataclass(frozen=True)
@@ -167,6 +178,54 @@ def evaluate_response_outcome(
     return ("uncertain", 0.0, "uncertain", 0.3)
 
 
+def build_learned_impact_overlay(
+    working_memory_context: dict[str, Any] | None,
+    *,
+    candidate_profile: str,
+    top_drive: str,
+) -> tuple[dict[str, float], float]:
+    """Return a bounded learned impact overlay plus blend factor for one candidate profile."""
+
+    if not isinstance(working_memory_context, dict):
+        return {}, 0.0
+    bias_summaries = working_memory_context.get("bias_summaries")
+    if not isinstance(bias_summaries, list):
+        return {}, 0.0
+    summary = next(
+        (
+            item
+            for item in bias_summaries
+            if isinstance(item, dict) and str(item.get("candidate_profile") or "") == candidate_profile
+        ),
+        None,
+    )
+    if summary is None:
+        return {}, 0.0
+    evidence_count = int(summary.get("evidence_count", 0))
+    confidence = float(summary.get("confidence", 0.0))
+    stability_score = float(summary.get("stability_score", 0.0))
+    if evidence_count < MIN_LEARNED_IMPACT_EVIDENCE:
+        return {}, 0.0
+    if confidence < MIN_LEARNED_IMPACT_CONFIDENCE or stability_score < MIN_LEARNED_IMPACT_STABILITY:
+        return {}, 0.0
+    bias_strength = _clamp_signal(float(summary.get("bias_strength", 0.0)))
+    last_outcome_delta = _clamp_signal(float(summary.get("last_outcome_delta", 0.0)))
+    learned_signal = _clamp_signal((0.6 * bias_strength) + (0.4 * last_outcome_delta))
+    recent_signal = _recent_outcome_signal(
+        working_memory_context.get("recent_relevant_outcomes"),
+        candidate_profile=candidate_profile,
+    )
+    if recent_signal is not None:
+        learned_signal = _clamp_signal((0.75 * learned_signal) + (0.25 * recent_signal))
+    blend_factor = min(
+        MAX_LEARNED_IMPACT_BLEND,
+        max(0.0, (evidence_count - MIN_LEARNED_IMPACT_EVIDENCE + 1) * LEARNED_IMPACT_BLEND_STEP),
+    )
+    if blend_factor <= 0.0:
+        return {}, 0.0
+    return {top_drive: learned_signal}, round(blend_factor, 3)
+
+
 
 def _expected_outcome(release_decision: dict[str, Any], candidate_profile: str | None) -> str:
     """Return the compact expected-outcome label implied by one release decision."""
@@ -183,3 +242,29 @@ def _expected_outcome(release_decision: dict[str, Any], candidate_profile: str |
     if outcome == "defer":
         return "wait_for_safer_boundary"
     return "no_external_change"
+
+
+def _recent_outcome_signal(
+    recent_relevant_outcomes: Any,
+    *,
+    candidate_profile: str,
+) -> float | None:
+    """Return one bounded recent-outcome signal for matching candidate profile."""
+
+    if not isinstance(recent_relevant_outcomes, list):
+        return None
+    for outcome in reversed(recent_relevant_outcomes):
+        if not isinstance(outcome, dict):
+            continue
+        if str(outcome.get("candidate_profile") or "") != candidate_profile:
+            continue
+        if float(outcome.get("confidence", 0.0)) < 0.75:
+            continue
+        return _clamp_signal(float(outcome.get("outcome_delta", 0.0)))
+    return None
+
+
+def _clamp_signal(value: float) -> float:
+    """Clamp one learned signal so it stays bounded."""
+
+    return max(-1.0, min(1.0, value))

@@ -11,8 +11,66 @@
 
 ## Intake status
 
-- 当前无进行中的 intake
-- 最近完成：**B-5 candidate and release vocabulary widening**
-- 完成结果：已受限引入 `escalate_first` internal profile，并保持 mediator-owned release、bounded compatibility tool-edge 与既有 side-effect authority 不变
-- 验证状态：freeze tests 通过；全量回归 `203 tests` 通过
-- 下一步：创建下一项 mediated action-surface slice intake
+- 当前进行中：**C-8 full regression and docs sync**
+
+## Change intake
+
+- **Change title**: C-8 full regression and docs sync
+- **Goal**: 在 C-5 / C-6 / C-7 收口后完成 final verification，并把 Phase C 的 in-repo closeout 状态同步到 progress / public status / roadmap-facing口径
+- **Change type**: verification
+
+## Ownership
+
+- **Layer**: `cross-layer verification`
+- **Canonical owner**:
+  - `maintainer/development/phase-c-progress.md`
+  - `docs/current-status.md`
+  - `maintainer/development/current-intake.md`
+- **Touched current files**:
+  - final regression only unless docs wording needs final closeout note
+- **Owner class**: stable
+
+## Realignment stage
+
+- **Stage**: `other`
+- **If other, why**: 当前属于 Phase C closeout 的 final verification，不是新的迁移或 feature slice
+
+## Boundary check
+
+- **Affected contracts**:
+  - no code contract changes expected
+  - documentation of internal completion state only
+- **Hard boundaries to preserve**:
+  - do not declare external ChatGPT review complete
+  - distinguish in-repo completion from external exit gate
+- **Why this change does not widen a transitional owner**:
+  - 本轮只做回归与收口描述，不新增任何 owner 或 shim
+
+## Verification
+
+- **Freeze tests**:
+  - `python -m unittest discover -s tests -t . -p 'test_*.py'`
+- **Additional tests**:
+  - none
+- **Need full regression?** yes
+
+## Docs sync
+
+- **Docs to update**:
+  - `maintainer/development/phase-c-progress.md`
+  - `docs/current-status.md`
+  - `maintainer/development/current-intake.md`
+- **Docs actually needed for this change**:
+  - `maintainer/development/phase-c-progress.md`
+  - `docs/current-status.md`
+  - `maintainer/development/current-intake.md`
+
+## Go / no-go
+
+- **Can implementation start now?** yes
+- **If no, what must be clarified first?**:
+
+## Go / no-go
+
+- **Can implementation start now?** yes
+- **If no, what must be clarified first?**:

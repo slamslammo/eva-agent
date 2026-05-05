@@ -111,6 +111,7 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             context = build_working_memory_context_from_store(store, deliberation_input)
 
         self.assertEqual(context.source_backend, "local_rule_based")
+        self.assertEqual(context.advisory_source, "local_rule_based")
         self.assertEqual(context.advisory_context, {})
         self.assertEqual(context.situation_key, "curiosity|STABLE|none")
 
@@ -159,6 +160,7 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             )
 
         self.assertEqual(context.source_backend, "llm_assisted")
+        self.assertEqual(context.advisory_source, "explicit_adapter")
         self.assertEqual(context.situation_key, "integrity|STABLE|none")
         self.assertGreaterEqual(context.confidence, 0.61)
         self.assertEqual(
@@ -240,6 +242,7 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             )
 
         self.assertEqual(context.source_backend, "local_rule_based")
+        self.assertEqual(context.advisory_source, "auto_preferred_local")
         self.assertEqual(context.advisory_context, {})
         self.assertFalse(adapter.called)
 
@@ -288,6 +291,7 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             )
 
         self.assertEqual(context.source_backend, "llm_assisted")
+        self.assertEqual(context.advisory_source, "explicit_adapter")
         self.assertTrue(adapter.called)
         self.assertEqual(context.advisory_context["candidate_suggestions"], ["observe_first"])
         self.assertEqual(context.advisory_context["prediction_hints"], ["explore_low_pressure_state"])
@@ -324,6 +328,7 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             context = build_working_memory_context_from_store(store, deliberation_input, backend="auto")
 
         self.assertEqual(context.source_backend, "local_rule_based")
+        self.assertEqual(context.advisory_source, "auto_no_adapter")
         self.assertEqual(context.advisory_context, {})
 
     def test_build_working_memory_context_from_store_requires_adapter_for_llm_backend(self) -> None:
@@ -391,9 +396,54 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             )
 
         self.assertEqual(context.source_backend, "llm_assisted")
+        self.assertEqual(context.advisory_source, "null_adapter")
         self.assertEqual(context.advisory_context, {})
 
-    def test_summarize_habit_bias_prefers_positive_profile(self) -> None:
+    def test_build_working_memory_context_from_store_honors_explicit_advisory_source(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        adapter = CapturingWorkingMemoryAdapter(
+            WorkingMemoryAdapterResponse(
+                candidate_suggestions=("observe_first",),
+                confidence=0.66,
+            )
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            context = build_working_memory_context_from_store(
+                store,
+                deliberation_input,
+                backend="llm_assisted",
+                llm_adapter=adapter,
+                advisory_source="client_backed_model_shell",
+            )
+
+        self.assertEqual(context.advisory_source, "client_backed_model_shell")
+
         summaries = summarize_habit_bias(
             [
                 {
@@ -909,6 +959,135 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
         self.assertTrue(skills[0].crystallized)
         self.assertEqual(skills[0].candidate_profile, "observe_first")
         self.assertEqual(skills[0].preferred_action, "recheck_runtime_integrity")
+    def test_build_working_memory_context_ranks_similar_drive_learning_outcomes(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.9, "curiosity": 0.8, "survival": 0.1},
+                "drive_trends": {"integrity": "worsening", "curiosity": "improving", "survival": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        context = build_working_memory_context(
+            deliberation_input,
+            learning_outcomes=[
+                {
+                    "recorded_at": "2026-04-29T10:00:01+00:00",
+                    "candidate_profile": "observe_first",
+                    "selected_action": "curiosity_probe",
+                    "observed_outcome": "relieved",
+                    "evaluation_label": "positive",
+                    "outcome_delta": 0.5,
+                    "confidence": 0.7,
+                    "content": {
+                        "top_drive": "curiosity",
+                        "life_state": "STABLE",
+                        "pressure_reason": "none",
+                        "situation_key": "curiosity|STABLE|none",
+                    },
+                },
+                {
+                    "recorded_at": "2026-04-29T10:00:02+00:00",
+                    "candidate_profile": "stabilize_first",
+                    "selected_action": "survival_patch",
+                    "observed_outcome": "unchanged",
+                    "evaluation_label": "neutral",
+                    "outcome_delta": 0.0,
+                    "confidence": 0.7,
+                    "content": {
+                        "top_drive": "survival",
+                        "life_state": "STABLE",
+                        "pressure_reason": "none",
+                        "situation_key": "survival|STABLE|none",
+                    },
+                },
+            ],
+            habit_bias_entries=[],
+            response_history=[],
+            memory_stubs=[],
+            max_recent_outcomes=1,
+        )
+
+        self.assertEqual(len(context.recent_relevant_outcomes), 1)
+        self.assertEqual(context.recent_relevant_outcomes[0]["top_drive"], "curiosity")
+        self.assertEqual(context.recent_relevant_outcomes[0]["selected_action"], "curiosity_probe")
+
+    def test_build_working_memory_context_uses_similar_drive_response_history_fallback(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.9, "curiosity": 0.8, "survival": 0.1},
+                "drive_trends": {"integrity": "worsening", "curiosity": "improving", "survival": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        context = build_working_memory_context(
+            deliberation_input,
+            learning_outcomes=[],
+            habit_bias_entries=[],
+            response_history=[
+                {
+                    "recorded_at": "2026-04-29T10:00:01+00:00",
+                    "selected_action": "survival_patch",
+                    "pressure_outcome": "unchanged",
+                    "execution_status": "completed",
+                    "followup_needed": False,
+                    "drive_context": {"top_drive": "survival"},
+                    "life_state": "STABLE",
+                    "pressure_reason": "none",
+                },
+                {
+                    "recorded_at": "2026-04-29T10:00:02+00:00",
+                    "selected_action": "curiosity_probe",
+                    "pressure_outcome": "relieved",
+                    "execution_status": "completed",
+                    "followup_needed": False,
+                    "drive_context": {"top_drive": "curiosity"},
+                    "life_state": "STABLE",
+                    "pressure_reason": "none",
+                },
+            ],
+            memory_stubs=[],
+            max_recent_outcomes=1,
+        )
+
+        self.assertEqual(len(context.recent_relevant_outcomes), 1)
+        self.assertEqual(context.recent_relevant_outcomes[0]["top_drive"], "curiosity")
+        self.assertEqual(context.recent_relevant_outcomes[0]["selected_action"], "curiosity_probe")
 
 
 if __name__ == "__main__":

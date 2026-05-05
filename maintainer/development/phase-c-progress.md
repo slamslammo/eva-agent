@@ -4,9 +4,9 @@
 
 ## 1. 当前状态
 
-- 日期：2026-05-02
-- 阶段状态：**Phase C 的 C-1 / C-2 / C-3 已完成，C-4 working-memory adapter baseline 已形成；alignment / consolidation gate 已完成**
-- 判断：当前代码路径上已经形成 bounded learning、habit crystallization 与 working-memory adapter protocol baseline；本轮结构收口、测试重排与文档落账也已完成，后续应直接基于 stable owner tree 重新评估下一开发 slice
+- 日期：2026-05-05
+- 阶段状态：**Phase C 的 C-1 ~ C-8 已在仓库内完成；external ChatGPT review 仍待执行**
+- 判断：当前代码路径上已经形成 bounded learning、habit crystallization、working-memory advisory seam、secondary admission gate、transitional closeout 与四轨 append-only schema freeze；仓库内实现 closeout 已完成，当前剩余出口条件仅为外部 ChatGPT review
 
 ## 2. 当前落地进展表
 
@@ -269,9 +269,164 @@ Transitional / residual 评估：
 - `python -m unittest tests.l3_deliberation.tool_edge.test_tool_registry tests.l3_deliberation.tool_edge.test_compatibility tests.integration.test_patrol_turn_flow`
 - 全量回归：`203 tests`
 
+## 7.11 C-1 cross_layer residual seam closeout
+
+在 B-5 之后，仓库开始进入新一轮 Phase C 深化 / transitional 清理序列；其中首个 C-1 slice 已完成：
+- `eva/anchor/cross_layer.py` 已删除，不再保留独立 transitional anchor seam 文件
+- residual `apply_structural_anchors(...)` compatibility projection helper 已并回 canonical owner `eva/anchor/domain_restriction.py`
+- `eva/anchor/__init__.py` 继续对外暴露同名 helper，因此现有 anchor / L3 import surface 未被放大，也未恢复新的 root-level transitional path
+
+本轮边界仍保持：
+- 不恢复 post-hoc anchor 为主要 candidate legality 路径
+- 不扩大 compatibility bridge
+- 不放松 mediator / tool-edge authority 链
+- 不新增新的 transitional owner；仅把 residual helper 收回 canonical anchor owner
+
+本轮验证已完成：
+- `python -m unittest tests.anchor.test_domain_restriction`
+- `python -m unittest tests.anchor.test_structural`
+- `python -m unittest tests.l3_deliberation.reasoning.test_candidates`
+- `python -m unittest tests.integration.test_patrol_turn_flow`
+- 全量回归：`205 tests`
+
+## 7.12 C-2 retrieval similarity ranking
+
+在 C-1 之后，仓库继续完成了一轮面向 retrieval / working-memory 读侧排序语义收紧的 C-2 slice：
+- `memory/retrieval.py` 现在对 learning outcomes、response history fallback 与 episodic memory traces 统一引入连续 `drive_similarity`
+- `top_drive` 已从主要硬过滤条件降为排序贡献；working-memory retrieval 现在以 `situation relevance + pressure relevance + drive similarity + salience` 的组合排序为主
+- `reasoning/working_memory.py` 继续保持 `learning_outcomes -> response_history -> episodic traces` 的 fallback 次序不变，因此本轮只深化读侧排序，不改 advisory context 合同
+- 为避免低相关 similar-drive 痕迹误召回，当前 similar-drive path 采用最小 similarity threshold
+
+本轮边界仍保持：
+- working memory 仍是 advisory-only context，不成为 release authority
+- retrieval 只深化读侧语义，不回写 drive state
+- 不恢复 pressure-led primary path
+- append-only artifact schema 不变
+
+本轮验证已完成：
+- `python -m unittest tests.l3_deliberation.reasoning.test_working_memory`
+- `python -m unittest tests.l3_deliberation.memory.test_episodic`
+- `python -m unittest tests.integration.test_lifecycle_patrol_learning`
+- 全量回归：`207 tests`
+
+## 7.13 C-3 impact schema RPE learning
+
+在 C-2 之后，仓库继续完成了一轮面向 value expectation / impact estimation 的 C-3 slice：
+- `peer_circuit/rpe.py` 现在可从 `bias_summaries` 与 `recent_relevant_outcomes` 读出 gated learned impact overlay，并按 `candidate_profile` + `top_drive` 生成 bounded learned signal 与 blend factor
+- `reasoning/value_judgment.py` 现在会在 evidence / confidence / stability 达阈值后，把该 learned overlay 以有界 blend 的方式并入 candidate `drive_impact_schema`；若证据不足，则继续保留 static cold-start baseline
+- learned impact 仍只影响 drive-led score shaping，不新增 release authority，也不绕过 mediator / anchor / runtime gate；既有 habit bias 与 recent negative bias 仍保持 advisory-only
+
+本轮边界仍保持：
+- learned outcome 只回流到 value expectation，不成为独立决策 owner
+- evidence 未达阈值时继续使用 static impact schema，不放大学习噪声
+- learned overlay 必须 bounded，且只允许局部接管 `top_drive` 对应 impact 估计
+- 不恢复 pressure-led primary ranking，也不新增 compatibility shim
+
+本轮验证已完成：
+- `python -m unittest tests.l3_deliberation.peer_circuit.test_rpe`
+- `python -m unittest tests.l3_deliberation.reasoning.test_value`
+- `python -m unittest tests.integration.test_lifecycle_patrol_learning`
+- 全量回归：`213 tests`
+
+## 7.14 C-4 working-memory adapter baseline observability closeout
+
+在 C-3 之后，仓库继续完成了一轮面向 working-memory adapter seam 观测收口的 C-4 slice：
+- `reasoning/working_memory.py` 现在在 `WorkingMemoryContext` 与 store 组装路径里显式携带 `advisory_source`，用于区分 `local_rule_based`、`auto_preferred_local`、`auto_no_adapter`、`explicit_adapter`、`builtin_heuristic_adapter`、`client_backed_model_shell`、`null_adapter` 等 advisory 路径
+- `kernel/main.py` 与 `kernel/lifecycle.py` 现在会把 runtime 解析出的 advisory 源一路传到 deliberation 输入，但仍只作为只读 observability metadata，不改变 working-memory authority
+- `tests/` 现在覆盖 local / auto / explicit / heuristic / null 路径的 advisory-source 断言，确保 adapter seam 仍保持 advisory-only，不会被误用为 release authority
+
+本轮边界仍保持：
+- working memory 仍是 advisory-only context，不成为 release authority
+- 不扩写真实 llm-assisted adapter 行为
+- 不新增 release-side authority contract
+- append-only artifact schema 不变
+
+本轮验证已完成：
+- `python -m unittest tests.l3_deliberation.reasoning.test_working_memory`
+- `python -m unittest tests.kernel.test_lifecycle`
+- `python -m unittest tests.integration.test_main_runtime`
+- `python -m unittest discover -s tests -t . -p 'test_*.py'`
+- 全量回归：`213 tests`
+
+## 7.15 C-5 secondary admission gate for `escalate_first`
+
+在 C-4 之后，仓库继续完成了一轮面向 anchor admission hardening 的 C-5 slice：
+- `anchor/domain_restriction.py` 现在把 `primary_pressure_severity` 显式投影进 `ActionDomain.agent_state`，使 `escalate_first` admission 不再只由高风险 `reason` 单字段决定
+- `escalate_first` 现在要求同时满足：高风险 integrity `reason` 命中，且 primary integrity pressure severity 通过二级守卫；当前守卫收紧为 `critical` severity 才可 admitted
+- heartbeat-window narrowing 仍保持更强外层约束；即使是高风险 reason，也不会绕过 heartbeat-first schema narrowing
+
+本轮边界仍保持：
+- 不新增新的 release authority
+- 不把 severity guard 下沉到 mediator / tool-edge release 层
+- 不扩大 compatibility bridge 或 side-effect surface
+- drive / pressure 仍保持只读上游投影，anchor 只收紧 pre-generative admission
+
+本轮验证已完成：
+- `python -m unittest tests.anchor.test_domain_restriction tests.l3_deliberation.reasoning.test_candidates tests.l3_deliberation.reasoning.test_value tests.l3_deliberation.peer_circuit.test_mediator tests.integration.test_patrol_turn_flow`
+- 定向回归：`62 tests`
+
+## 7.16 C-6 transitional file closeout
+
+在 C-5 之后，仓库继续完成了一轮面向 transitional surface 收口的 C-6 slice：
+- `eva/l3_deliberation/memory/stub.py`、`eva/l3_deliberation/tool_edge/actions.py`、`eva/l3_deliberation/peer_circuit/learning.py`、`eva/l2_drive/drive.py`、`eva/l2_drive/pressure.py` 已退场
+- 需要继续保留的 surface 已收回 canonical package owner：
+  - `eva/l2_drive/__init__.py`
+  - `eva/l3_deliberation/memory/__init__.py`
+  - `eva/l3_deliberation/peer_circuit/__init__.py`
+  - `eva/l3_deliberation/tool_edge/__init__.py`
+- `peer_circuit/__init__.py` 已改为直接从 canonical `rpe.py` 暴露 learning outcome helpers，不再依赖单独 transitional `learning.py`
+
+本轮边界仍保持：
+- canonical package exports 仍然可用
+- 不保留独立 transitional shim module
+- 不引入新的 compatibility surface
+- 不改变运行时语义或 release authority
+
+本轮验证已完成：
+- `python -m unittest tests.l3_deliberation.peer_circuit.test_learning tests.l3_deliberation.memory.test_stub tests.l2_drive.test_drive tests.l2_drive.test_pressure`
+- targeted grep 验证无 stale shim import
+- 定向回归：`12 tests`
+
+## 7.17 C-7 append-only schema freeze
+
+在 C-6 之后，仓库继续完成了一轮面向 append-only contract surface 冻结的 C-7 slice：
+- 四条上游轨道已显式冻结为 canonical append-only contract surface：
+  - audit: `deliberation_audit.jsonl`
+  - episodic: `cognitive_memory_stub.jsonl`
+  - learning: `learning_outcomes.jsonl`
+  - habit: `habit_bias.jsonl`
+- 冻结后的 writer / reader / typed owner 已在维护规范中落账，并保持 additive-only 演进规则
+- `response_history.jsonl` 明确排除在四轨 freeze 之外，仍作为 bounded compatibility / projection track 存在
+
+本轮边界仍保持：
+- 四条轨道继续分离，不能并入 `runtime_state.json`
+- 已落地字段语义冻结，后续只允许 additive change
+- 不新增 parallel compatibility shim
+- 不把 response history 误升格为正式记忆轨
+
+本轮验证已完成：
+- `python -m unittest tests.kernel.test_state`
+- `python -m unittest tests.l3_deliberation.memory.test_episodic`
+- `python -m unittest tests.l3_deliberation.memory.test_stub`
+- `python -m unittest tests.l3_deliberation.peer_circuit.test_rpe`
+- `python -m unittest tests.integration.test_lifecycle_patrol_learning`
+- `python -m unittest tests.kernel.test_lifecycle`
+- `python -m unittest tests.l3_deliberation.reasoning.test_working_memory`
+- `python -m unittest discover -s tests -t . -p 'test_*.py'`
+
+## 7.18 C-8 full regression and docs sync
+
+在 C-7 之后，仓库继续完成了 Phase C 的仓库内 final verification：
+- C-5 / C-6 / C-7 的 closeout 状态已同步到 maintainer progress、development standards 与 public status
+- 已明确区分 **Phase C implementation complete in-repo** 与 **external ChatGPT review pending**，避免把外部出口误记为仓库内已完成
+- 当前 `current-intake.md` 已切换到 final verification closeout 口径
+
+本轮验证已完成：
+- `python -m unittest discover -s tests -t . -p 'test_*.py'`
+- 全量回归：`217 tests`
+
 ## 8. 下一步
 
-下一步继续聚焦：
-1. 基于已扩宽的 candidate / release baseline，评估下一个 mediated action-surface slice
-2. 保持 compatibility bridge bounded，不把 pressure 投影重新升格为主语义
-3. 继续保持 `README.md`、`docs/eva-agent-full-implementation.md`、`docs/current-status.md`、`maintainer/development/roadmap.md` 与本文件口径一致
+下一步只剩：
+1. 由架构师决定是否发起 external ChatGPT review
+2. 若 review 通过，再正式关闭 Phase C 并进入阶段 D

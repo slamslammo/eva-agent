@@ -21,6 +21,7 @@ def build_deliberation_input_from_store(
     *,
     working_memory_backend: str = "local_rule_based",
     llm_adapter: WorkingMemoryAdapter | None = None,
+    working_memory_advisory_source: str | None = None,
     response_history: list[dict[str, Any]] | None = None,
 ) -> DeliberationInput:
     """Assemble deliberation input and attach optional working-memory context from the store."""
@@ -36,6 +37,7 @@ def build_deliberation_input_from_store(
         base_input,
         backend=working_memory_backend,
         llm_adapter=llm_adapter,
+        advisory_source=working_memory_advisory_source,
         response_history=response_history,
     ).to_dict()
     return build_deliberation_input(

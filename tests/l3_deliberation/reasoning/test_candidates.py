@@ -605,3 +605,48 @@ class CandidateGenerationTests(unittest.TestCase):
             "curiosity": -0.3,
         })
 
+    def test_build_candidates_blocks_escalate_first_when_secondary_severity_gate_fails(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.95, "survival": 0.8, "continuity": 0.3},
+                "drive_trends": {"integrity": "worsening", "survival": "worsening", "continuity": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "pressure_id": "pressure-integrity-runtime_files_missing",
+                        "type": "integrity",
+                        "severity": "degraded",
+                        "evidence": {"reason": "runtime_files_missing"},
+                    }
+                ]
+            },
+        )
+
+        candidates = build_candidates(build_action_domain(deliberation_input))
+
+        self.assertEqual(len(candidates), 2)
+        self.assertEqual(
+            [candidate.parameter_domain["candidate_profile"] for candidate in candidates],
+            [OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE],
+        )
+

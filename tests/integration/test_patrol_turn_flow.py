@@ -370,3 +370,27 @@ class PatrolTurnFlowTests(unittest.TestCase):
         self.assertEqual(response_history[0]["release_context"]["candidate_profile"], "escalate_first")
         self.assertEqual(response_history[0]["selected_action"], "escalate_integrity_risk")
 
+    def test_degraded_integrity_pressure_keeps_stabilize_first_path(self) -> None:
+        now = utc_now()
+        self.runtime.pending_work.clear()
+        self.runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=now - timedelta(seconds=1)))
+        self.store.write_runtime_state(self.state)
+        self.store.append_event(
+            EventRecord(
+                event_type="yield",
+                timestamp=now - timedelta(seconds=0.1),
+                details={"reason": "manual_test_yield"},
+            )
+        )
+
+        result = self.runtime.run_turn(
+            self.state,
+            next_heartbeat_at=now + timedelta(seconds=1),
+            now=now,
+        )
+
+        self.assertTrue(result.executed)
+        self.assertEqual(result.details["deliberation"]["outcome"], "compatibility_release")
+        self.assertEqual(result.details["deliberation"]["selected_candidate_id"], "candidate-compatibility-stabilize-first")
+        self.assertEqual(result.details["response"]["selected_action"], REPAIR_ACTION)
+

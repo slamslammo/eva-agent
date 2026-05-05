@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from eva.l3_deliberation.peer_circuit.rpe import build_learning_outcome_record, evaluate_response_outcome
+from eva.l3_deliberation.peer_circuit.rpe import (
+    build_learned_impact_overlay,
+    build_learning_outcome_record,
+    evaluate_response_outcome,
+)
 from eva.l3_deliberation import build_deliberation_input
 
 
@@ -169,4 +173,77 @@ class RpeOwnerTests(unittest.TestCase):
         self.assertEqual(payload["candidate_profile"], "escalate_first")
         self.assertTrue(payload["content"]["habit_skill_match"])
         self.assertEqual(payload["observed_outcome"], "escalated")
+
+    def test_build_learned_impact_overlay_requires_thresholds(self) -> None:
+        overlay, blend_factor = build_learned_impact_overlay(
+            {
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": 1.0,
+                        "evidence_count": 9,
+                        "stability_score": 0.9,
+                        "confidence": 0.9,
+                        "last_outcome_delta": 1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+            },
+            candidate_profile="observe_first",
+            top_drive="curiosity",
+        )
+
+        self.assertEqual(overlay, {})
+        self.assertEqual(blend_factor, 0.0)
+
+    def test_build_learned_impact_overlay_returns_bounded_signal_after_threshold(self) -> None:
+        overlay, blend_factor = build_learned_impact_overlay(
+            {
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": 1.0,
+                        "evidence_count": 12,
+                        "stability_score": 0.9,
+                        "confidence": 0.9,
+                        "last_outcome_delta": 1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+            },
+            candidate_profile="observe_first",
+            top_drive="curiosity",
+        )
+
+        self.assertEqual(overlay, {"curiosity": 1.0})
+        self.assertGreater(blend_factor, 0.0)
+        self.assertLessEqual(blend_factor, 0.35)
+
+    def test_build_learned_impact_overlay_blends_recent_relevant_outcome(self) -> None:
+        overlay, blend_factor = build_learned_impact_overlay(
+            {
+                "bias_summaries": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "bias_strength": 1.0,
+                        "evidence_count": 10,
+                        "stability_score": 0.9,
+                        "confidence": 0.9,
+                        "last_outcome_delta": 1.0,
+                    }
+                ],
+                "recent_relevant_outcomes": [
+                    {
+                        "candidate_profile": "observe_first",
+                        "outcome_delta": -1.0,
+                        "confidence": 0.9,
+                    }
+                ],
+            },
+            candidate_profile="observe_first",
+            top_drive="curiosity",
+        )
+
+        self.assertEqual(overlay, {"curiosity": 0.5})
+        self.assertEqual(blend_factor, 0.05)
 

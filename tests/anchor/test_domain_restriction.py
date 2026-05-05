@@ -181,7 +181,56 @@ class ActionDomainTests(unittest.TestCase):
             [OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE],
         )
         self.assertEqual(action_domain.agent_state.primary_pressure_reason, "runtime_files_missing")
+        self.assertEqual(action_domain.agent_state.primary_pressure_severity, "critical")
         self.assertIn("high_risk_escalation_schema_admitted", action_domain.restriction_reasons)
+
+    def test_action_domain_blocks_escalate_first_without_secondary_severity_gate(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.95, "survival": 0.8},
+                "drive_trends": {"integrity": "worsening", "survival": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "pressure_id": "pressure-integrity-runtime_files_missing",
+                        "type": "integrity",
+                        "severity": "degraded",
+                        "evidence": {"reason": "runtime_files_missing"},
+                    }
+                ]
+            },
+        )
+
+        action_domain = build_action_domain(deliberation_input)
+
+        self.assertEqual(action_domain.agent_state.primary_pressure_reason, "runtime_files_missing")
+        self.assertEqual(action_domain.agent_state.primary_pressure_severity, "degraded")
+        self.assertEqual(
+            [schema.candidate_profile for schema in action_domain.admitted_candidate_schemas],
+            [OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE],
+        )
+        self.assertIn("high_risk_escalation_schema_blocked_by_secondary_gate", action_domain.restriction_reasons)
+        self.assertNotIn("high_risk_escalation_schema_admitted", action_domain.restriction_reasons)
 
     def test_action_domain_does_not_admit_escalate_first_for_non_high_risk_reason(self) -> None:
         deliberation_input = build_deliberation_input(
