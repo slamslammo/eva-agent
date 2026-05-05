@@ -6,7 +6,7 @@ from ..contracts import CandidateAssessment, ReleaseDecision, ReleaseToken
 from .goal_directed_track import build_learning_context, build_release_context, candidate_profile_from_id, expected_outcome_for_release
 from .selection import select_allowed_assessment, select_deferred_assessment, select_withhold_reference_assessment
 
-__all__ = ["decide_release", "validate_release_token"]
+__all__ = ["decide_release", "mint_reflex_release", "validate_release_token"]
 
 
 def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
@@ -50,6 +50,32 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
         rationale=() if selected is None else selected.reasons,
         expected_outcome=expected_outcome_for_release("withhold", None if selected is None else candidate_profile_from_id(selected.candidate_id)),
         learning_context={} if selected is None else build_learning_context(selected),
+    )
+
+
+def mint_reflex_release(*, candidate_profile: str, rationale: tuple[str, ...] = ()) -> ReleaseDecision:
+    """Mint a bounded mediator token for the threat reflex fast path."""
+
+    selected_candidate_id = f"candidate-compatibility-{candidate_profile.replace('_', '-')}"
+    return ReleaseDecision(
+        outcome="compatibility_release",
+        selected_action="compatibility_release",
+        selected_candidate_id=selected_candidate_id,
+        rationale=rationale,
+        release_context=build_release_context(candidate_profile, bridge_target="l2_reflex", response_mode="protective_reflex"),
+        expected_outcome=expected_outcome_for_release("compatibility_release", candidate_profile),
+        learning_context={
+            "candidate_profile": candidate_profile,
+            "learning_bias": 0.0,
+            "bias_reasons": [],
+            "habit_narrowed": False,
+        },
+        release_token=ReleaseToken(
+            token_id=_release_token_id(selected_candidate_id),
+            outcome="compatibility_release",
+            candidate_id=selected_candidate_id,
+            candidate_profile=candidate_profile,
+        ),
     )
 
 

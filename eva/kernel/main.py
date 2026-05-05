@@ -12,6 +12,7 @@ from .config import ExternalLifeConfig, LifecycleConfig, LoopControl, RuntimeCon
 from .instance import InstanceGuard
 from .lifecycle import LifecycleRuntime
 from .state import EventRecord, StateStore, emit_log_line, utc_now
+from ..l1_sensing.sensor_registry import SensorRegistry
 from ..l3_deliberation import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,
@@ -43,6 +44,7 @@ def run_runtime(
     config: RuntimeConfig,
     *,
     working_memory_adapter: WorkingMemoryAdapter | None = None,
+    sensor_registry: SensorRegistry | None = None,
 ) -> RunSummary:
     """Run the lifecycle loop until one of the configured bounds is reached."""
 
@@ -75,6 +77,7 @@ def run_runtime(
         config.working_memory_backend,
         resolved_adapter,
         working_memory_advisory_source,
+        sensor_registry,
     )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()

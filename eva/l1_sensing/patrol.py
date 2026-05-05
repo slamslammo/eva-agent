@@ -13,6 +13,7 @@ from .history import persist_patrol_artifacts
 from .judgment import build_external_life_snapshot
 from .routing import RoutingDecision, build_routing_decision
 from .sensing import collect_external_life_inputs
+from .sensor_registry import SensorRegistry
 from .signal_bus import SignalRecord, SignalDispatchSummary, build_patrol_signal_artifacts
 
 PATROL_ORDER = ("shallow", "deep", "full")
@@ -91,6 +92,7 @@ def execute_patrol(
     now: datetime,
     *,
     due_at: datetime | None = None,
+    sensor_registry: SensorRegistry | None = None,
 ) -> PatrolResult:
     """Run one patrol from sensing through persistence and history writing."""
 
@@ -102,6 +104,7 @@ def execute_patrol(
         now,
         due_at=due_at,
         previous_snapshot=previous_snapshot,
+        sensor_registry=sensor_registry,
     )
     snapshot = build_external_life_snapshot(
         cadence,

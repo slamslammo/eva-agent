@@ -6,6 +6,7 @@ from .patrol import PATROL_ORDER, PATROL_INTERVAL_SECONDS, PatrolPlan, PatrolRes
 from .routing import RoutingDecision, build_routing_decision
 from .sensing import collect_external_life_inputs, default_sensor_registry
 from .sensor_registry import SensingContext, SensorOutput, SensorRegistry, SensorSpec, build_sensor_registry
+from .state_sensors import built_in_sensor_providers
 from .signal_bus import SignalDispatchSummary, SignalRecord, build_patrol_signal_artifacts, build_patrol_signals, build_signal_batch_payload, summarize_signal_dispatch
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "build_signal_batch_payload",
     "build_patrol_signal_artifacts",
     "build_survival_snapshot_entry",
+    "built_in_sensor_providers",
     "collect_external_life_inputs",
     "default_sensor_registry",
     "determine_overall_status",

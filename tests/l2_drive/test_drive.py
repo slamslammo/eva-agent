@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from eva.kernel import ActivePressure, ActivePressureTable, DimensionSnapshot, DriveState, DriveStateTable, ExternalLifeSnapshot, utc_now
 from eva.l1_sensing.signal_bus import build_patrol_signals, summarize_signal_dispatch
-from eva.l2_drive import build_default_drive_state, build_drive_broadcast, update_drive_state
+from eva.l2_drive import DriveUpdatePolicy, build_default_drive_state, build_drive_broadcast, update_drive_state
 
 
 class DriveTests(unittest.TestCase):
@@ -87,6 +87,47 @@ class DriveTests(unittest.TestCase):
         self.assertGreater(by_type["curiosity"].level, 0.0)
         self.assertEqual(by_type["curiosity"].trend, "worsening")
         self.assertIn("curiosity", summary.changed_drives)
+
+    def test_update_drive_state_accepts_custom_policy_parameters(self) -> None:
+        now = utc_now()
+        snapshot = ExternalLifeSnapshot(
+            captured_at=now,
+            source_patrol="deep",
+            dimensions={
+                "resource_state": DimensionSnapshot(status="healthy", evidence={"reason": "resource_state_ok"}),
+                "runtime_integrity": DimensionSnapshot(status="healthy", evidence={"reason": "runtime_integrity_ok"}),
+                "host_continuity": DimensionSnapshot(status="healthy", evidence={"reason": "host_continuity_ok"}),
+                "anomaly_accumulation": DimensionSnapshot(status="healthy", evidence={"reason": "anomaly_window_quiet"}),
+            },
+            overall_status="healthy",
+            primary_gap={"type": "none", "reason": "none"},
+            trend="stable",
+            updated_at=now,
+        )
+        previous = DriveStateTable(
+            captured_at=now - timedelta(seconds=10),
+            drives=[
+                DriveState(drive_type="survival", level=0.3, updated_at=now - timedelta(seconds=10)),
+                DriveState(drive_type="integrity", level=0.2, updated_at=now - timedelta(seconds=10)),
+                DriveState(drive_type="continuity", level=0.1, updated_at=now - timedelta(seconds=10)),
+                DriveState(drive_type="curiosity", level=0.1, updated_at=now - timedelta(seconds=10)),
+            ],
+            updated_at=now - timedelta(seconds=10),
+        )
+
+        table, _ = update_drive_state(
+            previous,
+            snapshot,
+            [],
+            policy=DriveUpdatePolicy(base_decay=0.01, curiosity_recovery=0.15),
+        )
+        by_type = {drive.drive_type: drive for drive in table.drives}
+
+        self.assertAlmostEqual(by_type["survival"].delta, -0.01)
+        self.assertAlmostEqual(by_type["integrity"].delta, -0.01)
+        self.assertAlmostEqual(by_type["continuity"].delta, -0.01)
+        self.assertAlmostEqual(by_type["curiosity"].delta, 0.15)
+        self.assertEqual(by_type["curiosity"].contributors, ["healthy_recovery"])
 
     def test_signal_publication_contract_reserves_background_without_emitting_it(self) -> None:
         now = utc_now()

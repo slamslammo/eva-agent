@@ -37,10 +37,19 @@ def build_routing_decision(signals: Sequence[SignalRecord]) -> RoutingDecision:
 
     signal_list = list(signals)
     has_threat_signal = any(signal.signal_class == "threat" for signal in signal_list)
-    if has_threat_signal:
+    if _has_critical_integrity_threat(signal_list):
         return RoutingDecision(
             urgency="high",
             dispatch_hint="protective_lane",
+            has_threat_signal=True,
+            deliberation_allowed=False,
+            compatibility_bridge_candidate=True,
+            reasons=("threat_signal_present",),
+        )
+    if has_threat_signal:
+        return RoutingDecision(
+            urgency="high",
+            dispatch_hint="deliberation_only",
             has_threat_signal=True,
             deliberation_allowed=True,
             compatibility_bridge_candidate=True,
@@ -54,6 +63,20 @@ def build_routing_decision(signals: Sequence[SignalRecord]) -> RoutingDecision:
         compatibility_bridge_candidate=False,
         reasons=_non_threat_reasons(signal_list),
     )
+
+
+def _has_critical_integrity_threat(signals: Sequence[SignalRecord]) -> bool:
+    """Return whether the batch contains a critical integrity threat eligible for the fast lane."""
+
+    for signal in signals:
+        if signal.signal_class != "threat":
+            continue
+        if str(signal.payload.get("type") or "") != "integrity":
+            continue
+        if str(signal.payload.get("severity") or "") != "critical":
+            continue
+        return True
+    return False
 
 
 def _non_threat_reasons(signals: Sequence[SignalRecord]) -> tuple[str, ...]:

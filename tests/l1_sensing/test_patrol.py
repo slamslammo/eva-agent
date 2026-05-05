@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from datetime import timedelta
 from eva.kernel import DriveStateTable, EventRecord, ExternalLifeConfig, InstanceGuard, LifecycleConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
-from eva.l1_sensing import execute_patrol
+from eva.l1_sensing import SensorOutput, SensorSpec, build_sensor_registry, execute_patrol
 from eva.kernel.lifecycle import LifeState, LifecycleRuntime, WorkSlice
 from eva.l3_deliberation.tool_edge import RECHECK_ACTION, REPAIR_ACTION
 
@@ -100,6 +100,83 @@ class PatrolRuntimeTests(unittest.TestCase):
 
         self.runtime.queue_due_patrols(start + timedelta(seconds=0.06))
         self.assertEqual(len(self.runtime.pending_work), 3)
+
+
+    def test_execute_patrol_uses_injected_sensor_registry(self) -> None:
+        registry = build_sensor_registry(
+            (
+                SensorSpec(
+                    name="host_continuity",
+                    collect=lambda context: SensorOutput(
+                        dimension="host_continuity",
+                        payload={
+                            "process_running": True,
+                            "recent_restart_count": 0,
+                            "schedule_drift_sec": 0.0,
+                            "rate_context": {"available": False, "direction": "unknown"},
+                        },
+                    ),
+                ),
+                SensorSpec(
+                    name="runtime_integrity",
+                    collect=lambda context: SensorOutput(
+                        dimension="runtime_integrity",
+                        payload={
+                            "instance_valid": True,
+                            "runtime_writable": True,
+                            "active_instance_present": True,
+                            "runtime_state_present": True,
+                            "events_present": True,
+                            "lock_present": True,
+                            "recent_yield_count": 0,
+                            "recent_distress_count": 0,
+                            "heartbeat_age_sec": context.runtime_state.heartbeat_age_sec,
+                            "consecutive_failures": context.runtime_state.consecutive_failures,
+                            "rate_context": {"available": False, "direction": "unknown"},
+                        },
+                    ),
+                ),
+                SensorSpec(
+                    name="resource_state",
+                    collect=lambda context: SensorOutput(
+                        dimension="resource_state",
+                        payload={
+                            "runtime_path_exists": True,
+                            "runtime_writable": True,
+                            "disk_free_bytes": 10**10,
+                            "rate_context": {"available": False, "direction": "unknown"},
+                        },
+                    ),
+                ),
+                SensorSpec(
+                    name="anomaly_accumulation",
+                    collect=lambda context: SensorOutput(
+                        dimension="anomaly_accumulation",
+                        payload={
+                            "recent_error_count": 0,
+                            "recent_yield_count": 0,
+                            "recent_distress_count": 0,
+                            "recent_restart_count": 0,
+                            "anomaly_count": 0,
+                            "rate_context": {"available": False, "direction": "unknown"},
+                        },
+                    ),
+                ),
+            )
+        )
+        now = utc_now()
+
+        result = execute_patrol(
+            "deep",
+            self.store,
+            self.state,
+            self.external_life,
+            now,
+            sensor_registry=registry,
+        )
+
+        self.assertEqual(result.signal_summary.status_signal_count, 1)
+        self.assertEqual(result.snapshot.overall_status, "healthy")
 
 
 if __name__ == "__main__":

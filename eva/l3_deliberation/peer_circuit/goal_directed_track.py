@@ -39,12 +39,17 @@ def build_learning_context(assessment: CandidateAssessment) -> dict[str, Any]:
     }
 
 
-def build_release_context(candidate_profile: str) -> dict[str, Any]:
+def build_release_context(
+    candidate_profile: str,
+    *,
+    bridge_target: str = "pressure_led_compatibility",
+    response_mode: str = "pressure_led_compatibility",
+) -> dict[str, Any]:
     """Build the compatibility release-context payload for one candidate profile."""
 
     return {
-        "bridge_target": "pressure_led_compatibility",
-        "response_mode": "pressure_led_compatibility",
+        "bridge_target": bridge_target,
+        "response_mode": response_mode,
         "candidate_profile": candidate_profile,
         "bridge_policy": _bridge_policy_for_candidate_profile(candidate_profile),
     }

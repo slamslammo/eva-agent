@@ -5,7 +5,7 @@ import unittest
 from datetime import timedelta
 
 from eva.kernel import ActiveInstanceRecord, DimensionSnapshot, EventRecord, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, build_runtime_paths, utc_now
-from eva.l1_sensing import collect_external_life_inputs, default_sensor_registry
+from eva.l1_sensing import SensorOutput, SensorSpec, build_sensor_registry, collect_external_life_inputs, default_sensor_registry
 from eva.l1_sensing.rate_sensors import elapsed_since_previous
 from eva.l1_sensing.state_sensors import build_state_sensor_specs
 
@@ -86,6 +86,46 @@ class SensingTests(unittest.TestCase):
             )
             registry = default_sensor_registry()
             self.assertEqual(tuple(sensor.name for sensor in registry.sensors), tuple(inputs.keys()))
+
+    def test_collect_external_life_inputs_uses_injected_sensor_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.ensure_runtime_dir()
+            now = utc_now()
+            runtime_state = RuntimeState(instance_valid=True, heartbeat_ok=True, tick_ok=True, updated_at=now)
+            store.write_runtime_state(runtime_state)
+
+            registry = build_sensor_registry(
+                (
+                    SensorSpec(
+                        name="custom_dimension",
+                        collect=lambda context: SensorOutput(
+                            dimension="custom_dimension",
+                            payload={
+                                "captured_at": context.now.isoformat(),
+                                "instance_valid": context.runtime_state.instance_valid,
+                            },
+                        ),
+                    ),
+                )
+            )
+            inputs = collect_external_life_inputs(
+                store,
+                runtime_state,
+                ExternalLifeConfig(recent_event_window_sec=60.0),
+                now,
+                sensor_registry=registry,
+            )
+
+            self.assertEqual(
+                inputs,
+                {
+                    "custom_dimension": {
+                        "captured_at": now.isoformat(),
+                        "instance_valid": True,
+                    }
+                },
+            )
 
     def test_collect_external_life_inputs_adds_rate_context_from_previous_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

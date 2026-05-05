@@ -5,12 +5,14 @@ from __future__ import annotations
 import os
 import shutil
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable, Sequence
 
 from ..kernel import ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, from_iso8601
 from .rate_sensors import elapsed_since_previous
-from .sensor_registry import SensingContext, build_sensor_registry
-from .state_sensors import build_state_sensor_specs
+from .sensor_registry import SensingContext, SensorRegistry, SensorSpec, build_sensor_registry
+from .state_sensors import built_in_sensor_providers
+
+SensorProvider = Callable[[], Sequence[SensorSpec]]
 
 
 def _recent_events(store: StateStore, now: datetime, window_sec: float) -> list[dict[str, Any]]:
@@ -27,12 +29,10 @@ def _recent_events(store: StateStore, now: datetime, window_sec: float) -> list[
     return recent
 
 
-
 def _count_events(events: list[dict[str, Any]], event_type: str) -> int:
     """Count how many recent events match the requested type."""
 
     return sum(1 for event in events if event.get("event_type") == event_type)
-
 
 
 def _build_shared_facts(
@@ -78,12 +78,20 @@ def _build_shared_facts(
     }
 
 
+def _sensor_specs_from_providers(sensor_providers: Sequence[SensorProvider]) -> tuple[SensorSpec, ...]:
+    """Flatten ordered built-in sensor providers into one registry spec list."""
 
-def default_sensor_registry():
-    """Build the baseline ordered registry for current L1 dimensions."""
+    specs: list[SensorSpec] = []
+    for provider in sensor_providers:
+        specs.extend(provider())
+    return tuple(specs)
 
-    return build_sensor_registry(build_state_sensor_specs())
 
+def default_sensor_registry(*, sensor_providers: Sequence[SensorProvider] | None = None) -> SensorRegistry:
+    """Build the baseline ordered registry from the current built-in sensor providers."""
+
+    providers = built_in_sensor_providers() if sensor_providers is None else tuple(sensor_providers)
+    return build_sensor_registry(_sensor_specs_from_providers(providers))
 
 
 def collect_external_life_inputs(
@@ -94,6 +102,7 @@ def collect_external_life_inputs(
     *,
     due_at: datetime | None = None,
     previous_snapshot: ExternalLifeSnapshot | None = None,
+    sensor_registry: SensorRegistry | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Collect the raw signals used by Step 1 judgment and pressure generation."""
 
@@ -113,5 +122,5 @@ def collect_external_life_inputs(
             previous_snapshot=previous_snapshot,
         ),
     )
-    outputs = default_sensor_registry().collect_all(context)
+    outputs = (sensor_registry or default_sensor_registry()).collect_all(context)
     return {output.dimension: dict(output.payload) for output in outputs}

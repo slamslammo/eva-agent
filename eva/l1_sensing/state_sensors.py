@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 from .rate_sensors import (
     anomaly_accumulation_rate_context,
     host_continuity_rate_context,
@@ -10,6 +12,7 @@ from .rate_sensors import (
 )
 from .sensor_registry import SensingContext, SensorOutput, SensorSpec
 
+BuiltInSensorProvider = Callable[[], tuple[SensorSpec, ...]]
 
 
 def _host_continuity_sensor(context: SensingContext) -> SensorOutput:
@@ -29,7 +32,6 @@ def _host_continuity_sensor(context: SensingContext) -> SensorOutput:
             ),
         },
     )
-
 
 
 def _runtime_integrity_sensor(context: SensingContext) -> SensorOutput:
@@ -59,7 +61,6 @@ def _runtime_integrity_sensor(context: SensingContext) -> SensorOutput:
     )
 
 
-
 def _resource_state_sensor(context: SensingContext) -> SensorOutput:
     """Collect runtime-path and disk-state evidence."""
 
@@ -76,7 +77,6 @@ def _resource_state_sensor(context: SensingContext) -> SensorOutput:
             ),
         },
     )
-
 
 
 def _anomaly_accumulation_sensor(context: SensingContext) -> SensorOutput:
@@ -100,13 +100,45 @@ def _anomaly_accumulation_sensor(context: SensingContext) -> SensorOutput:
     )
 
 
+def build_host_continuity_sensor_specs() -> tuple[SensorSpec, ...]:
+    """Return the built-in host-continuity sensor specs."""
+
+    return (SensorSpec(name="host_continuity", collect=_host_continuity_sensor),)
+
+
+def build_runtime_integrity_sensor_specs() -> tuple[SensorSpec, ...]:
+    """Return the built-in runtime-integrity sensor specs."""
+
+    return (SensorSpec(name="runtime_integrity", collect=_runtime_integrity_sensor),)
+
+
+def build_resource_state_sensor_specs() -> tuple[SensorSpec, ...]:
+    """Return the built-in resource-state sensor specs."""
+
+    return (SensorSpec(name="resource_state", collect=_resource_state_sensor),)
+
+
+def build_anomaly_accumulation_sensor_specs() -> tuple[SensorSpec, ...]:
+    """Return the built-in anomaly-accumulation sensor specs."""
+
+    return (SensorSpec(name="anomaly_accumulation", collect=_anomaly_accumulation_sensor),)
+
+
+def built_in_sensor_providers() -> tuple[BuiltInSensorProvider, ...]:
+    """Return the ordered built-in sensor providers for baseline L1 sensing."""
+
+    return (
+        build_host_continuity_sensor_specs,
+        build_runtime_integrity_sensor_specs,
+        build_resource_state_sensor_specs,
+        build_anomaly_accumulation_sensor_specs,
+    )
+
 
 def build_state_sensor_specs() -> tuple[SensorSpec, ...]:
     """Return the ordered baseline state-sensor specs for current L1 dimensions."""
 
-    return (
-        SensorSpec(name="host_continuity", collect=_host_continuity_sensor),
-        SensorSpec(name="runtime_integrity", collect=_runtime_integrity_sensor),
-        SensorSpec(name="resource_state", collect=_resource_state_sensor),
-        SensorSpec(name="anomaly_accumulation", collect=_anomaly_accumulation_sensor),
-    )
+    specs: list[SensorSpec] = []
+    for provider in built_in_sensor_providers():
+        specs.extend(provider())
+    return tuple(specs)

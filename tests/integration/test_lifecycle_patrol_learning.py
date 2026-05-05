@@ -43,9 +43,11 @@ class LifecyclePatrolLearningTests(unittest.TestCase):
         executed = self.runtime.run_turn(state, next_heartbeat_at=later + timedelta(seconds=1), now=later)
 
         self.assertIn("response", executed.details)
-        deliberation_audit = self.store.read_deliberation_audit()[0]
-        self.assertIn("learning_context", deliberation_audit["release_decision"])
-        self.assertFalse(deliberation_audit["release_decision"]["learning_context"]["habit_narrowed"])
+        self.assertEqual(executed.details["execution_lane"], "fast")
+        self.assertNotIn("deliberation", executed.details)
+        self.assertIn("reflex", executed.details)
+        self.assertEqual(executed.details["reflex"]["selected_candidate_id"], "candidate-compatibility-observe-first")
+        self.assertEqual(self.store.read_deliberation_audit(), [])
         learning_outcomes = self.store.read_learning_outcomes()
         self.assertEqual(len(learning_outcomes), 1)
         self.assertIn(learning_outcomes[0]["evaluation_label"], {"positive", "negative", "neutral", "uncertain"})

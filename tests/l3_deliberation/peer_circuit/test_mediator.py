@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation import CandidateAssessment, ReleaseToken, build_action_domain, build_deliberation_input
-from eva.l3_deliberation.peer_circuit.mediator import decide_release, validate_release_token
+from eva.l3_deliberation.peer_circuit.mediator import decide_release, mint_reflex_release, validate_release_token
 from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
 
@@ -387,6 +387,20 @@ class MediatorTests(unittest.TestCase):
             selected_candidate_id="candidate-compatibility-observe-first",
             expected_outcome="compatibility_release",
         )
+
+    def test_mint_reflex_release_uses_protective_reflex_context(self) -> None:
+        decision = mint_reflex_release(
+            candidate_profile="observe_first",
+            rationale=("threat_signal_fast_path", "pressure_reason=instance_invalid"),
+        )
+
+        self.assertEqual(decision.outcome, "compatibility_release")
+        self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-observe-first")
+        self.assertEqual(decision.release_context["bridge_target"], "l2_reflex")
+        self.assertEqual(decision.release_context["response_mode"], "protective_reflex")
+        self.assertEqual(decision.release_context["candidate_profile"], "observe_first")
+        self.assertEqual(decision.rationale, ("threat_signal_fast_path", "pressure_reason=instance_invalid"))
+        self.assertEqual(decision.release_token.candidate_profile, "observe_first")
 
 
 if __name__ == "__main__":

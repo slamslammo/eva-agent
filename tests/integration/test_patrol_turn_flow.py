@@ -161,17 +161,18 @@ class PatrolTurnFlowTests(unittest.TestCase):
                 "urgency": "high",
                 "dispatch_hint": "protective_lane",
                 "has_threat_signal": True,
-                "deliberation_allowed": True,
+                "deliberation_allowed": False,
                 "compatibility_bridge_candidate": True,
                 "reasons": ["threat_signal_present"],
             },
         )
+        self.assertEqual(first.details["execution_lane"], "fast")
         self.assertEqual(first.details["drive_summary"]["top_drive"], "integrity")
-        self.assertIn("deliberation", first.details)
-        self.assertEqual(first.details["deliberation"]["outcome"], "compatibility_release")
-        self.assertEqual(first.details["deliberation"]["selected_candidate_id"], "candidate-compatibility-stabilize-first")
-        self.assertFalse(first.details["deliberation"]["habit_narrowed"])
-        self.assertIsNone(first.details["deliberation"]["habit_narrowed_from"])
+        self.assertNotIn("deliberation", first.details)
+        self.assertIn("reflex", first.details)
+        self.assertEqual(first.details["reflex"]["response_mode"], "protective_reflex")
+        self.assertTrue(first.details["reflex"]["release_authorized"])
+        self.assertEqual(first.details["reflex"]["selected_candidate_id"], "candidate-compatibility-observe-first")
 
         pressure_table = self.store.read_active_pressures()
         self.assertEqual(len(pressure_table.pressures), 1)
@@ -191,18 +192,18 @@ class PatrolTurnFlowTests(unittest.TestCase):
         response_history = self.store.read_response_history()
         self.assertEqual(len(response_history), 1)
         self.assertEqual(response_history[0]["selected_action"], RECHECK_ACTION)
-        self.assertEqual(response_history[0]["response_mode"], "pressure_led_compatibility")
+        self.assertEqual(response_history[0]["response_mode"], "protective_reflex")
         self.assertEqual(
             response_history[0]["release_context"],
             {
-                "bridge_target": "pressure_led_compatibility",
-                "response_mode": "pressure_led_compatibility",
-                "candidate_profile": "stabilize_first",
+                "bridge_target": "l2_reflex",
+                "response_mode": "protective_reflex",
+                "candidate_profile": "observe_first",
                 "bridge_policy": {
-                    "policy_name": "stabilize_first_bias",
+                    "policy_name": "observe_first_bias",
                     "selection": {
-                        "preferred_action": "shrink_to_conservative_mode",
-                        "fallback_action": "recheck_runtime_integrity",
+                        "preferred_action": "recheck_runtime_integrity",
+                        "fallback_action": "escalate_integrity_risk",
                         "default_path": "pressure_default",
                     },
                     "applicability": {
@@ -210,7 +211,7 @@ class PatrolTurnFlowTests(unittest.TestCase):
                         "life_states": ["STABLE"],
                     },
                     "execution": {
-                        "allow_repair_side_effects": True,
+                        "allow_repair_side_effects": False,
                     },
                 },
             },
@@ -226,7 +227,7 @@ class PatrolTurnFlowTests(unittest.TestCase):
                 "pressure_id": pressure_table.pressures[0].pressure_id,
                 "pressure_type": "integrity",
                 "selected_action": RECHECK_ACTION,
-                "selected_candidate_id": "candidate-compatibility-stabilize-first",
+                "selected_candidate_id": "candidate-compatibility-observe-first",
             },
         )
 
@@ -280,6 +281,7 @@ class PatrolTurnFlowTests(unittest.TestCase):
             set(result.details["signal_routing"].keys()),
             {"urgency", "dispatch_hint", "has_threat_signal", "deliberation_allowed", "compatibility_bridge_candidate", "reasons"},
         )
+        self.assertIn("execution_lane", result.details)
         self.assertIn("drive_broadcast", result.details)
         self.assertIn("drive_trends", result.details["drive_broadcast"])
         self.assertIn("deliberation", result.details)
@@ -363,8 +365,9 @@ class PatrolTurnFlowTests(unittest.TestCase):
         )
 
         self.assertTrue(result.executed)
-        self.assertEqual(result.details["deliberation"]["outcome"], "compatibility_release")
-        self.assertEqual(result.details["deliberation"]["selected_candidate_id"], "candidate-compatibility-escalate-first")
+        self.assertEqual(result.details["execution_lane"], "fast")
+        self.assertNotIn("deliberation", result.details)
+        self.assertEqual(result.details["reflex"]["selected_candidate_id"], "candidate-compatibility-escalate-first")
         self.assertEqual(result.details["response"]["selected_action"], "escalate_integrity_risk")
         response_history = self.store.read_response_history()
         self.assertEqual(response_history[0]["release_context"]["candidate_profile"], "escalate_first")
@@ -390,6 +393,7 @@ class PatrolTurnFlowTests(unittest.TestCase):
         )
 
         self.assertTrue(result.executed)
+        self.assertEqual(result.details["execution_lane"], "slow")
         self.assertEqual(result.details["deliberation"]["outcome"], "compatibility_release")
         self.assertEqual(result.details["deliberation"]["selected_candidate_id"], "candidate-compatibility-stabilize-first")
         self.assertEqual(result.details["response"]["selected_action"], REPAIR_ACTION)

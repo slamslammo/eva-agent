@@ -148,6 +148,7 @@ class LifecycleRuntimeTests(unittest.TestCase):
         self.assertEqual(executed.details["drive_summary"]["top_drive"], "curiosity")
         self.assertEqual(executed.details["runtime_gate_context"]["instance_valid"], True)
         self.assertEqual(executed.details["runtime_gate_context"]["turn_allowed"], True)
+        self.assertEqual(executed.details["execution_lane"], "slow")
         self.assertIn("deliberation", executed.details)
         self.assertEqual(executed.details["deliberation"]["outcome"], "withhold")
         self.assertEqual(

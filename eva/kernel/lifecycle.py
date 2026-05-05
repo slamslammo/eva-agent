@@ -13,7 +13,8 @@ from .config import ExternalLifeConfig, LifecycleConfig
 from .instance import InstanceGuard, InstanceSnapshot
 from .state import EventRecord, RuntimeState, StateStore, emit_log_line, utc_now
 from ..l1_sensing.patrol import PatrolScheduler, execute_patrol
-from ..l2_drive.reflex import maybe_run_protective_reflex
+from ..l1_sensing.sensor_registry import SensorRegistry
+from ..l2_drive.reflex import build_protective_reflex
 from ..l3_deliberation import (
     WorkingMemoryAdapter,
     build_deliberation_input_from_store,
@@ -21,6 +22,7 @@ from ..l3_deliberation import (
     run_deliberation,
     summarize_habit_bias,
 )
+from ..l3_deliberation.contracts import DeliberationAuditRecord, ReleaseDecision, ReleaseToken
 from ..l3_deliberation.memory import (
     append_cognitive_memory_stub,
     append_habit_bias,
@@ -112,6 +114,7 @@ class LifecycleRuntime:
         working_memory_backend: str = "local_rule_based",
         working_memory_adapter: WorkingMemoryAdapter | None = None,
         working_memory_advisory_source: str | None = None,
+        sensor_registry: SensorRegistry | None = None,
     ) -> None:
         self.store = store
         self.instance_guard = instance_guard
@@ -120,6 +123,7 @@ class LifecycleRuntime:
         self.working_memory_backend = working_memory_backend
         self.working_memory_adapter = working_memory_adapter
         self.working_memory_advisory_source = working_memory_advisory_source
+        self.sensor_registry = sensor_registry
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -462,6 +466,7 @@ class LifecycleRuntime:
                 self.external_life,
                 now,
                 due_at=work_slice.due_at,
+                sensor_registry=self.sensor_registry,
             )
             details.update(
                 {
@@ -479,76 +484,37 @@ class LifecycleRuntime:
                 }
             )
             prior_response_history = self.store.read_response_history()
-            reflex_response_summary = maybe_run_protective_reflex(
+            reflex_plan = build_protective_reflex(
                 patrol_result.pressure_table,
                 state,
                 routing_decision=patrol_result.routing_decision,
             )
-            if reflex_response_summary is not None:
+            if reflex_plan is not None:
                 details["reflex"] = {
-                    "response_mode": reflex_response_summary["response_mode"],
-                    "pressure_id": reflex_response_summary["pressure_id"],
-                    "pressure_type": reflex_response_summary["pressure_type"],
-                    "pressure_reason": reflex_response_summary["pressure_reason"],
-                    "life_state": reflex_response_summary["life_state"],
+                    "response_mode": reflex_plan["response_mode"],
+                    "pressure_id": reflex_plan["pressure_id"],
+                    "pressure_type": reflex_plan["pressure_type"],
+                    "pressure_reason": reflex_plan["pressure_reason"],
+                    "life_state": reflex_plan["life_state"],
                 }
-            deliberation_input = build_deliberation_input_from_store(
-                self.store,
-                patrol_result.signal_batch,
-                patrol_result.drive_broadcast.to_dict(),
-                details["runtime_gate_context"],
-                patrol_result.pressure_table,
-                working_memory_backend=self.working_memory_backend,
-                llm_adapter=self.working_memory_adapter,
-                working_memory_advisory_source=self.working_memory_advisory_source,
-                response_history=prior_response_history,
-            )
-            deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)
-            self.store.append_deliberation_audit(deliberation_audit.to_dict())
-            if memory_stub is not None:
-                append_cognitive_memory_stub(self.store, memory_stub)
-            release_decision = deliberation_audit.release_decision
-            release_token = deliberation_audit.release_token
-            learning_context = release_decision.get("learning_context") if isinstance(release_decision.get("learning_context"), dict) else {}
-            selected_candidate_id = release_decision.get("selected_candidate_id")
-            selected_candidate = next(
-                (
-                    candidate
-                    for candidate in deliberation_audit.candidates
-                    if candidate.get("candidate_id") == selected_candidate_id
-                ),
-                None,
-            )
-            selected_parameter_domain = (
-                selected_candidate.get("parameter_domain")
-                if isinstance(selected_candidate, dict) and isinstance(selected_candidate.get("parameter_domain"), dict)
-                else {}
-            )
-            habit_narrowed = bool(learning_context.get("habit_narrowed", False))
-            habit_narrowed_from = (
-                int(selected_parameter_domain.get("habit_narrowed_from", 0)) or None
-                if habit_narrowed
-                else None
-            )
-            details["deliberation"] = {
-                "outcome": release_decision.get("outcome"),
-                "selected_action": release_decision.get("selected_action"),
-                "selected_candidate_id": selected_candidate_id,
-                "habit_narrowed": habit_narrowed,
-                "habit_narrowed_from": habit_narrowed_from,
-                "release_authorized": release_token is not None,
-            }
             conservative_before_patrol = self._conservative_until_next_patrol
             if conservative_before_patrol:
                 self._conservative_until_next_patrol = False
             response_summary = None
-            release_context = deliberation_audit.release_decision.get("release_context")
-            if (
-                response_summary is None
-                and deliberation_audit.release_decision.get("outcome") == "compatibility_release"
-                and isinstance(release_context, dict)
-                and release_context.get("bridge_target") == "pressure_led_compatibility"
-            ):
+            deliberation_audit = None
+            release_decision = None
+            release_token = None
+            selected_candidate_id = None
+            habit_narrowed = False
+            habit_narrowed_from = None
+            if reflex_plan is not None:
+                release_decision = reflex_plan["release_decision"]
+                assert isinstance(release_decision, ReleaseDecision)
+                release_token = release_decision.release_token
+                selected_candidate_id = release_decision.selected_candidate_id
+                details["execution_lane"] = "fast"
+                details["reflex"]["release_authorized"] = release_token is not None
+                details["reflex"]["selected_candidate_id"] = selected_candidate_id
                 response_summary = maybe_respond_after_patrol(
                     self.store,
                     state,
@@ -556,10 +522,76 @@ class LifecycleRuntime:
                     runtime=self,
                     allow_repair_side_effects=not conservative_before_patrol,
                     drive_context=patrol_result.drive_broadcast,
-                    release_context=release_context,
+                    release_context=release_decision.release_context,
                     release_token=release_token,
                     selected_candidate_id=selected_candidate_id,
                 )
+            else:
+                deliberation_input = build_deliberation_input_from_store(
+                    self.store,
+                    patrol_result.signal_batch,
+                    patrol_result.drive_broadcast.to_dict(),
+                    details["runtime_gate_context"],
+                    patrol_result.pressure_table,
+                    working_memory_backend=self.working_memory_backend,
+                    llm_adapter=self.working_memory_adapter,
+                    working_memory_advisory_source=self.working_memory_advisory_source,
+                    response_history=prior_response_history,
+                )
+                deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)
+                self.store.append_deliberation_audit(deliberation_audit.to_dict())
+                if memory_stub is not None:
+                    append_cognitive_memory_stub(self.store, memory_stub)
+                release_decision = deliberation_audit.release_decision
+                release_token = deliberation_audit.release_token
+                learning_context = release_decision.get("learning_context") if isinstance(release_decision.get("learning_context"), dict) else {}
+                selected_candidate_id = release_decision.get("selected_candidate_id")
+                selected_candidate = next(
+                    (
+                        candidate
+                        for candidate in deliberation_audit.candidates
+                        if candidate.get("candidate_id") == selected_candidate_id
+                    ),
+                    None,
+                )
+                selected_parameter_domain = (
+                    selected_candidate.get("parameter_domain")
+                    if isinstance(selected_candidate, dict) and isinstance(selected_candidate.get("parameter_domain"), dict)
+                    else {}
+                )
+                habit_narrowed = bool(learning_context.get("habit_narrowed", False))
+                habit_narrowed_from = (
+                    int(selected_parameter_domain.get("habit_narrowed_from", 0)) or None
+                    if habit_narrowed
+                    else None
+                )
+                details["execution_lane"] = "slow"
+                details["deliberation"] = {
+                    "outcome": release_decision.get("outcome"),
+                    "selected_action": release_decision.get("selected_action"),
+                    "selected_candidate_id": selected_candidate_id,
+                    "habit_narrowed": habit_narrowed,
+                    "habit_narrowed_from": habit_narrowed_from,
+                    "release_authorized": release_token is not None,
+                }
+                release_context = deliberation_audit.release_decision.get("release_context")
+                if (
+                    response_summary is None
+                    and deliberation_audit.release_decision.get("outcome") == "compatibility_release"
+                    and isinstance(release_context, dict)
+                    and release_context.get("bridge_target") == "pressure_led_compatibility"
+                ):
+                    response_summary = maybe_respond_after_patrol(
+                        self.store,
+                        state,
+                        now,
+                        runtime=self,
+                        allow_repair_side_effects=not conservative_before_patrol,
+                        drive_context=patrol_result.drive_broadcast,
+                        release_context=release_context,
+                        release_token=release_token,
+                        selected_candidate_id=selected_candidate_id,
+                    )
             details["runtime_gate_context"] = build_runtime_gate_context(
                 state,
                 instance_valid=True,
@@ -570,9 +602,15 @@ class LifecycleRuntime:
             if response_summary is not None:
                 response_history = self.store.read_response_history()
                 latest_response_history = response_history[-1] if response_history else None
+                release_record = deliberation_audit or {
+                    "recorded_at": now.isoformat(),
+                    "release_decision": release_decision.to_dict()
+                    if isinstance(release_decision, ReleaseDecision)
+                    else dict(release_decision or {}),
+                }
                 learning_outcome = build_learning_outcome_record(
-                    deliberation_audit.recorded_at,
-                    deliberation_audit,
+                    now.isoformat(),
+                    release_record,
                     response_summary,
                     latest_response_history,
                 )

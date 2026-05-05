@@ -307,7 +307,7 @@ This classification must be cheap and early.
 
 Classification becomes structural through two parallel routes:
 
-- **Fast path**: threat → L2 reflex arc → execution, without L3
+- **Fast path**: threat → L2 reflex arc → mediated release → execution, without L3 deliberation
 - **Slow path**: status/background → L2 drive update → L3 deliberation → mediator → execution
 
 ![L1 fast/slow split](./assets/architecture/l1_fast_slow_path_split.svg)
@@ -375,7 +375,7 @@ L2 also contains a formal fast path for minimal urgent responses:
 - conservative shrink
 - heartbeat protection
 
-This path bypasses L3 but remains narrowly bounded. It exists only for pre-defined, low-complexity, life-boundary responses, and must not expand into a second general execution channel.
+This path bypasses L3 deliberation but remains narrowly bounded. It does not bypass mediator-owned release authority, exists only for pre-defined, low-complexity, life-boundary responses, and must not expand into a second general execution channel.
 
 ![L2 reflex arc](./assets/architecture/l2_reflex_arc_parallel_to_broadcast.svg)
 
@@ -507,7 +507,7 @@ Tool access is organized through a registry with explicit side-effect classes.
 There are only two paths:
 
 - **mediated path** for ordinary/habitual/deliberative side effects
-- **reflex-exempt path** for narrow life-boundary responses already defined by L1/L2
+- **mediated reflex fast path** for narrow life-boundary responses already defined by L1/L2
 
 ### 7.6 Outcome, RPE, and habit
 

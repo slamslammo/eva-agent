@@ -7,7 +7,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Iterable
 
 from ..kernel import DimensionSnapshot, DriveState, DriveStateTable, ExternalLifeSnapshot
-from .drive_registry import BASE_DECAY, CURIOSITY_RECOVERY, DRIVE_TYPES, DRIVE_TYPE_BY_DIMENSION, SEVERITY_DELTA, THREAT_SUPPRESSION
+from .drive_registry import (
+    DEFAULT_DRIVE_UPDATE_POLICY,
+    DRIVE_TYPES,
+    DRIVE_TYPE_BY_DIMENSION,
+    DriveUpdatePolicy,
+    severity_delta_for_status,
+)
 
 if TYPE_CHECKING:
     from ..l1_sensing.signal_bus import SignalRecord
@@ -47,6 +53,8 @@ def update_drive_state(
     previous: DriveStateTable | None,
     snapshot: ExternalLifeSnapshot,
     signals: Iterable[SignalRecord],
+    *,
+    policy: DriveUpdatePolicy = DEFAULT_DRIVE_UPDATE_POLICY,
 ) -> tuple[DriveStateTable, DriveSummary]:
     """Update the continuous drive table from the latest patrol snapshot and signal batch."""
 
@@ -59,7 +67,7 @@ def update_drive_state(
 
     for drive_type in DRIVE_TYPES:
         previous_drive = previous_by_type.get(drive_type, DriveState(drive_type=drive_type, updated_at=snapshot.captured_at))
-        drive = _update_one_drive(previous_drive, drive_type, snapshot, threat_present)
+        drive = _update_one_drive(previous_drive, drive_type, snapshot, threat_present, policy)
         updated_drives.append(drive)
         if abs(drive.delta) > 1e-9:
             changed_drives.append(drive_type)
@@ -91,27 +99,16 @@ def _update_one_drive(
     drive_type: str,
     snapshot: ExternalLifeSnapshot,
     threat_present: bool,
+    policy: DriveUpdatePolicy,
 ) -> DriveState:
     """Apply one deterministic update step for a single drive."""
 
     contributors: list[str] = []
     level = previous_drive.level
     if drive_type == "curiosity":
-        delta = _curiosity_delta(snapshot, threat_present, contributors)
+        delta = _curiosity_delta(snapshot, threat_present, contributors, policy)
     else:
-        delta = -BASE_DECAY
-        contributors.append("decay")
-        for dimension_name, dimension in snapshot.dimensions.items():
-            if DRIVE_TYPE_BY_DIMENSION.get(dimension_name) != drive_type:
-                continue
-            severity_delta = SEVERITY_DELTA.get(dimension.status, 0.0)
-            if severity_delta <= 0:
-                continue
-            delta += severity_delta
-            contributors.append(f"{dimension_name}.{_reason(dimension)}")
-        if threat_present:
-            delta += 0.04
-            contributors.append("threat_signal_present")
+        delta = _risk_drive_delta(drive_type, snapshot, threat_present, contributors, policy)
     new_level = _clamp(level + delta)
     actual_delta = new_level - level
     return DriveState(
@@ -124,14 +121,94 @@ def _update_one_drive(
     )
 
 
-def _curiosity_delta(snapshot: ExternalLifeSnapshot, threat_present: bool, contributors: list[str]) -> float:
-    """Update curiosity as a recovery-oriented drive suppressed by threat."""
+def _risk_drive_delta(
+    drive_type: str,
+    snapshot: ExternalLifeSnapshot,
+    threat_present: bool,
+    contributors: list[str],
+    policy: DriveUpdatePolicy,
+) -> float:
+    """Apply named update policies for one non-curiosity drive."""
 
-    if threat_present or snapshot.overall_status in {"degraded", "critical"}:
-        contributors.extend(["threat_suppression"] if threat_present else [f"overall_status.{snapshot.overall_status}"])
-        return -THREAT_SUPPRESSION
+    delta = 0.0
+    delta += _apply_base_decay(contributors, policy)
+    delta += _apply_dimension_severity_accumulation(drive_type, snapshot, contributors, policy)
+    delta += _apply_threat_bonus(threat_present, contributors, policy)
+    return delta
+
+
+def _apply_base_decay(contributors: list[str], policy: DriveUpdatePolicy) -> float:
+    """Apply the baseline decay that gently relaxes non-curiosity drives."""
+
+    contributors.append("decay")
+    return -policy.base_decay
+
+
+def _apply_dimension_severity_accumulation(
+    drive_type: str,
+    snapshot: ExternalLifeSnapshot,
+    contributors: list[str],
+    policy: DriveUpdatePolicy,
+) -> float:
+    """Accumulate judged dimension severity onto the mapped drive."""
+
+    delta = 0.0
+    for dimension_name, dimension in snapshot.dimensions.items():
+        if DRIVE_TYPE_BY_DIMENSION.get(dimension_name) != drive_type:
+            continue
+        severity_delta = severity_delta_for_status(dimension.status, policy)
+        if severity_delta <= 0:
+            continue
+        delta += severity_delta
+        contributors.append(f"{dimension_name}.{_reason(dimension)}")
+    return delta
+
+
+def _apply_threat_bonus(threat_present: bool, contributors: list[str], policy: DriveUpdatePolicy) -> float:
+    """Apply the additional threat bonus when the patrol emitted threat signals."""
+
+    if not threat_present:
+        return 0.0
+    contributors.append("threat_signal_present")
+    return policy.threat_bonus
+
+
+def _curiosity_delta(
+    snapshot: ExternalLifeSnapshot,
+    threat_present: bool,
+    contributors: list[str],
+    policy: DriveUpdatePolicy,
+) -> float:
+    """Update curiosity through explicit recovery or suppression semantics."""
+
+    suppression = _curiosity_suppression_delta(snapshot, threat_present, contributors, policy)
+    if suppression != 0.0:
+        return suppression
+    return _curiosity_recovery_delta(contributors, policy)
+
+
+def _curiosity_suppression_delta(
+    snapshot: ExternalLifeSnapshot,
+    threat_present: bool,
+    contributors: list[str],
+    policy: DriveUpdatePolicy,
+) -> float:
+    """Suppress curiosity under threat or degraded overall conditions."""
+
+    if threat_present:
+        contributors.append("threat_suppression")
+        return -policy.curiosity_suppression
+    if snapshot.overall_status in {"degraded", "critical"}:
+        contributors.append(f"overall_status.{snapshot.overall_status}")
+        return -policy.curiosity_suppression
+    return 0.0
+
+
+def _curiosity_recovery_delta(contributors: list[str], policy: DriveUpdatePolicy) -> float:
+    """Recover curiosity when the patrol result is healthy and threat-free."""
+
     contributors.append("healthy_recovery")
-    return CURIOSITY_RECOVERY
+    return policy.curiosity_recovery
 
 
 def _reason(dimension: DimensionSnapshot) -> str:

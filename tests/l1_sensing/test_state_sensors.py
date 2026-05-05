@@ -7,7 +7,7 @@ from datetime import timedelta
 from eva.kernel import ActiveInstanceRecord, DimensionSnapshot, EventRecord, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.l1_sensing.rate_sensors import host_continuity_rate_context
 from eva.l1_sensing.sensor_registry import SensingContext
-from eva.l1_sensing.state_sensors import build_state_sensor_specs
+from eva.l1_sensing.state_sensors import build_state_sensor_specs, built_in_sensor_providers
 
 
 class StateSensorsTests(unittest.TestCase):
@@ -17,6 +17,10 @@ class StateSensorsTests(unittest.TestCase):
         self.assertEqual(
             tuple(spec.name for spec in specs),
             ("host_continuity", "runtime_integrity", "resource_state", "anomaly_accumulation"),
+        )
+        self.assertEqual(
+            tuple(spec.name for provider in built_in_sensor_providers() for spec in provider()),
+            tuple(spec.name for spec in specs),
         )
 
     def test_state_sensor_specs_collect_expected_dimensions(self) -> None:

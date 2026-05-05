@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from eva.kernel import ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
+from eva.l1_sensing import SensorOutput, SensorSpec, build_sensor_registry
 from eva.l3_deliberation.memory import WorkingMemoryAdapterRequest, WorkingMemoryAdapterResponse
 from eva.kernel.main import run_runtime
 
@@ -130,15 +131,20 @@ class MainLoopTests(unittest.TestCase):
             self.assertIn("top_drive", patrol_turns[0]["details"]["drive_broadcast"])
             self.assertIn("runtime_gate_context", patrol_turns[0]["details"])
             self.assertIn("turn_allowed", patrol_turns[0]["details"]["runtime_gate_context"])
-            self.assertIn("deliberation", patrol_turns[0]["details"])
-            self.assertEqual(
-                set(patrol_turns[0]["details"]["deliberation"].keys()),
-                {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from", "release_authorized"},
-            )
+            self.assertIn("execution_lane", patrol_turns[0]["details"])
             if patrol_turns[0]["details"]["signal_routing"]["dispatch_hint"] == "protective_lane":
                 self.assertIn("reflex", patrol_turns[0]["details"])
-            self.assertIn("outcome", patrol_turns[0]["details"]["deliberation"])
-            self.assertTrue(config.paths.deliberation_audit_file.exists())
+                self.assertEqual(patrol_turns[0]["details"]["execution_lane"], "fast")
+                self.assertFalse(patrol_turns[0]["details"]["signal_routing"]["deliberation_allowed"])
+                self.assertNotIn("deliberation", patrol_turns[0]["details"])
+            else:
+                self.assertIn("deliberation", patrol_turns[0]["details"])
+                self.assertEqual(
+                    set(patrol_turns[0]["details"]["deliberation"].keys()),
+                    {"outcome", "selected_action", "selected_candidate_id", "habit_narrowed", "habit_narrowed_from", "release_authorized"},
+                )
+                self.assertIn("outcome", patrol_turns[0]["details"]["deliberation"])
+            self.assertTrue(config.paths.deliberation_audit_file.exists() or patrol_turns[0]["details"]["execution_lane"] == "fast")
             self.assertTrue(config.paths.cognitive_memory_stub_file.exists())
             memory_entries = store.read_cognitive_memory_stub()
             if memory_entries:
@@ -147,6 +153,94 @@ class MainLoopTests(unittest.TestCase):
                 self.assertIn("linked_audit_recorded_at", memory_entries[0])
                 self.assertIsInstance(memory_entries[0].get("salience"), float)
                 self.assertIn("drive_state_at_encoding", memory_entries[0].get("content", {}))
+
+    def test_runtime_accepts_injected_sensor_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+            )
+            registry = build_sensor_registry(
+                (
+                    SensorSpec(
+                        name="host_continuity",
+                        collect=lambda context: SensorOutput(
+                            dimension="host_continuity",
+                            payload={
+                                "process_running": True,
+                                "recent_restart_count": 0,
+                                "schedule_drift_sec": 0.0,
+                                "rate_context": {"available": False, "direction": "unknown"},
+                            },
+                        ),
+                    ),
+                    SensorSpec(
+                        name="runtime_integrity",
+                        collect=lambda context: SensorOutput(
+                            dimension="runtime_integrity",
+                            payload={
+                                "instance_valid": True,
+                                "runtime_writable": True,
+                                "active_instance_present": True,
+                                "runtime_state_present": True,
+                                "events_present": True,
+                                "lock_present": True,
+                                "recent_yield_count": 0,
+                                "recent_distress_count": 0,
+                                "heartbeat_age_sec": context.runtime_state.heartbeat_age_sec,
+                                "consecutive_failures": context.runtime_state.consecutive_failures,
+                                "rate_context": {"available": False, "direction": "unknown"},
+                            },
+                        ),
+                    ),
+                    SensorSpec(
+                        name="resource_state",
+                        collect=lambda context: SensorOutput(
+                            dimension="resource_state",
+                            payload={
+                                "runtime_path_exists": True,
+                                "runtime_writable": True,
+                                "disk_free_bytes": 10**10,
+                                "rate_context": {"available": False, "direction": "unknown"},
+                            },
+                        ),
+                    ),
+                    SensorSpec(
+                        name="anomaly_accumulation",
+                        collect=lambda context: SensorOutput(
+                            dimension="anomaly_accumulation",
+                            payload={
+                                "recent_error_count": 0,
+                                "recent_yield_count": 0,
+                                "recent_distress_count": 0,
+                                "recent_restart_count": 0,
+                                "anomaly_count": 0,
+                                "rate_context": {"available": False, "direction": "unknown"},
+                            },
+                        ),
+                    ),
+                )
+            )
+            summary = run_runtime(config, sensor_registry=registry)
+            self.assertGreaterEqual(summary.turns, 1)
+            patrol_turns = [
+                event for event in StateStore(config.paths).read_events()
+                if event["event_type"] == "turn_completed" and event["details"].get("work_kind") == "patrol"
+            ]
+            self.assertGreaterEqual(len(patrol_turns), 1)
+            self.assertEqual(patrol_turns[0]["details"]["signal_summary"]["status_signal_count"], 1)
 
     def test_runtime_defaults_to_inert_null_adapter_for_llm_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

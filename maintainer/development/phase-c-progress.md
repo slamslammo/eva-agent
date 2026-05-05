@@ -4,9 +4,9 @@
 
 ## 1. 当前状态
 
-- 日期：2026-05-05
-- 阶段状态：**Phase C 的 C-1 ~ C-8 已在仓库内完成；external ChatGPT review 仍待执行**
-- 判断：当前代码路径上已经形成 bounded learning、habit crystallization、working-memory advisory seam、secondary admission gate、transitional closeout 与四轨 append-only schema freeze；仓库内实现 closeout 已完成，当前剩余出口条件仅为外部 ChatGPT review
+- 日期：2026-05-06
+- 阶段状态：**Phase C 已完成并通过架构师核验；Stage D 已启动；external ChatGPT review 继续作为阶段外部 gate**
+- 判断：当前代码路径上已经形成 bounded learning、habit crystallization、working-memory advisory seam、secondary admission gate、transitional closeout 与四轨 append-only schema freeze；Phase C 仓库内 closeout 已完成并获准进入后续阶段，外部 ChatGPT review 不再阻塞 Stage D 启动，而是作为阶段外部 review gate 继续保留
 
 ## 2. 当前落地进展表
 
@@ -427,6 +427,8 @@ Transitional / residual 评估：
 
 ## 8. 下一步
 
-下一步只剩：
-1. 由架构师决定是否发起 external ChatGPT review
-2. 若 review 通过，再正式关闭 Phase C 并进入阶段 D
+下一步主线已切换为：
+1. D-1：落地 threat-triggered reflex fast path，并保持 mediated token gate
+2. D-2：把 L1 sensing 收口到 plugin-style sensor registry composition
+3. D-3：把 drive update mechanics 收口为显式命名语义与参数面
+4. external ChatGPT review 继续作为 Stage D 阶段外部 review gate 保留
