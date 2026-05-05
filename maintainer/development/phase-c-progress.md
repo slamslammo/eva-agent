@@ -261,6 +261,7 @@ Transitional / residual 评估：
 - 不绕过 mediator / release token
 - 不扩大 compatibility bridge 为通用 execution layer
 - 不新增 side-effect action；仅复用 bounded `escalate_integrity_risk`
+- 当前 `escalate_first` admission 仍由高风险 `reason` 集合单字段控制；若后续 slice 要扩该集合，需先补 secondary admission gate（如 drive intensity / severity guard），避免 admission 无差别扩张
 
 本轮验证已完成：
 - `python -m unittest tests.anchor.test_domain_restriction tests.l3_deliberation.reasoning.test_candidates tests.l3_deliberation.reasoning.test_conflict_detection tests.l3_deliberation.reasoning.test_value`
