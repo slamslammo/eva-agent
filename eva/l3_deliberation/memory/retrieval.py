@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..contracts import DeliberationInput
-from .skill_library import _situation_key_from_learning_outcome
+from .skill_library import _situation_key_from_learning_outcome, build_situation_key_from_values
 
 
 def pressure_reason_from_input(deliberation_input: DeliberationInput) -> str:
@@ -27,19 +27,38 @@ def pressure_reason_from_input(deliberation_input: DeliberationInput) -> str:
     return "none"
 
 
-
 def recent_learning_outcomes(
     learning_outcomes: list[dict[str, Any]],
     *,
     situation_key: str,
+    top_drive: str,
+    life_state: str,
+    pressure_reason: str,
     limit: int,
 ) -> list[dict[str, Any]]:
-    """Return compact recent learning outcomes for one matching situation."""
+    """Return bounded recent learning outcomes ranked by situation relevance."""
 
-    matching = [record for record in learning_outcomes if _situation_key_from_learning_outcome(record) == situation_key]
-    recent = matching[-limit:]
-    return [recent_outcome_trace(record) for record in recent]
-
+    ranked: list[tuple[float, float, str, dict[str, Any]]] = []
+    for record in learning_outcomes:
+        match_score = _learning_outcome_match_score(
+            record,
+            situation_key=situation_key,
+            top_drive=top_drive,
+            life_state=life_state,
+            pressure_reason=pressure_reason,
+        )
+        if match_score <= 0.0:
+            continue
+        ranked.append(
+            (
+                match_score,
+                float(record.get("confidence", 0.0)),
+                str(record.get("recorded_at") or ""),
+                record,
+            )
+        )
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+    return [recent_outcome_trace(record) for _, _, _, record in ranked[:limit]]
 
 
 def recent_outcome_trace(record: dict[str, Any]) -> dict[str, Any]:
@@ -72,12 +91,15 @@ def recent_outcome_trace(record: dict[str, Any]) -> dict[str, Any]:
         "evaluation_label": evaluation_label,
         "outcome_delta": record.get("outcome_delta"),
         "confidence": record.get("confidence", 0.0),
+        "top_drive": content.get("top_drive"),
+        "life_state": content.get("life_state"),
+        "pressure_reason": record.get("pressure_reason") or content.get("pressure_reason"),
+        "situation_key": _situation_key_from_learning_outcome(record),
         "habit_skill_match": habit_skill_match,
         "habit_narrowed": habit_narrowed,
         "habitual_trace": habitual_trace,
         "habitual_trace_reasons": trace_reasons,
     }
-
 
 
 def latest_habit_bias_summaries(
@@ -103,7 +125,6 @@ def latest_habit_bias_summaries(
     return latest[:max_bias_summaries]
 
 
-
 def recent_response_history(
     response_history: list[dict[str, Any]],
     *,
@@ -112,7 +133,7 @@ def recent_response_history(
     pressure_reason: str,
     limit: int,
 ) -> list[dict[str, Any]]:
-    """Return compact recent response history entries when learning outcomes do not yet exist."""
+    """Return compact recent response history entries when episodic traces do not yet exist."""
 
     matching = []
     for entry in response_history:
@@ -130,21 +151,32 @@ def recent_response_history(
                 "pressure_outcome": entry.get("pressure_outcome"),
                 "execution_status": entry.get("execution_status"),
                 "followup_needed": entry.get("followup_needed"),
+                "top_drive": top_drive,
+                "life_state": life_state,
+                "pressure_reason": pressure_reason,
+                "situation_key": build_situation_key_from_values(
+                    top_drive=top_drive,
+                    life_state=life_state,
+                    pressure_reason=pressure_reason,
+                ),
             }
         )
     return matching[-limit:]
 
 
-
 def recent_cognitive_memory_stub_traces(
     memory_stubs: list[dict[str, Any]],
     *,
+    situation_key: str,
     top_drive: str,
+    life_state: str,
+    pressure_reason: str,
+    drive_levels: dict[str, Any],
     limit: int,
 ) -> list[dict[str, Any]]:
-    """Return compact recent cognitive-memory stub traces when richer evidence is absent."""
+    """Return bounded episodic traces ranked by situation, drive alignment, and salience."""
 
-    matching: list[dict[str, Any]] = []
+    ranked: list[tuple[float, float, str, dict[str, Any]]] = []
     for stub in memory_stubs:
         if str(stub.get("source") or "") != "l3_deliberation":
             continue
@@ -157,12 +189,28 @@ def recent_cognitive_memory_stub_traces(
             or content.get("top_drive")
             or "unknown"
         )
-        if encoded_top_drive != str(top_drive):
-            continue
-        memory_type = str(stub.get("memory_type") or "unknown")
         salience = _coerced_salience(stub.get("salience"))
+        stub_pressure_reason = _memory_stub_pressure_reason(content)
+        stub_life_state = _memory_stub_life_state(content)
+        stub_situation_key = _memory_stub_situation_key(content)
+        match_score = _memory_stub_match_score(
+            situation_key=situation_key,
+            top_drive=top_drive,
+            life_state=life_state,
+            pressure_reason=pressure_reason,
+            drive_levels=drive_levels,
+            drive_state_at_encoding=drive_state_at_encoding,
+            encoded_top_drive=encoded_top_drive,
+            stub_pressure_reason=stub_pressure_reason,
+            stub_life_state=stub_life_state,
+            stub_situation_key=stub_situation_key,
+            salience=salience,
+        )
+        if match_score <= 0.0:
+            continue
         habitual_trace = "habitual_neutral"
         habitual_trace_reasons: list[str] = []
+        memory_type = str(stub.get("memory_type") or "unknown")
         if memory_type == "threat_trace":
             habitual_trace = "habitual_suppression"
             habitual_trace_reasons.append("threat_trace")
@@ -171,29 +219,151 @@ def recent_cognitive_memory_stub_traces(
             habitual_trace_reasons.append("release_trace")
         if salience >= 0.8:
             habitual_trace_reasons.append("high_salience")
-        matching.append(
-            {
-                "recorded_at": stub.get("recorded_at"),
-                "candidate_profile": content.get("candidate_profile"),
-                "selected_action": content.get("selected_action"),
-                "source": stub.get("source"),
-                "memory_type": memory_type,
-                "write_reason": stub.get("write_reason"),
-                "linked_audit_recorded_at": stub.get("linked_audit_recorded_at"),
-                "salience": salience,
-                "drive_state_at_encoding": dict(drive_state_at_encoding) if isinstance(drive_state_at_encoding, dict) else {},
-                "habitual_trace": habitual_trace,
-                "habitual_trace_reasons": habitual_trace_reasons,
-            }
-        )
-    ranked = sorted(
-        matching,
-        key=lambda trace: (
-            -float(trace.get("salience", 0.0)),
-            str(trace.get("recorded_at") or ""),
-        ),
+        trace = {
+            "recorded_at": stub.get("recorded_at"),
+            "candidate_profile": content.get("candidate_profile"),
+            "selected_action": content.get("selected_action"),
+            "source": stub.get("source"),
+            "memory_type": memory_type,
+            "write_reason": stub.get("write_reason"),
+            "linked_audit_recorded_at": stub.get("linked_audit_recorded_at"),
+            "salience": salience,
+            "drive_state_at_encoding": dict(drive_state_at_encoding) if isinstance(drive_state_at_encoding, dict) else {},
+            "habitual_trace": habitual_trace,
+            "habitual_trace_reasons": habitual_trace_reasons,
+        }
+        if stub_pressure_reason is not None:
+            trace["pressure_reason"] = stub_pressure_reason
+        if stub_situation_key is not None:
+            trace["situation_key"] = stub_situation_key
+        if stub_life_state is not None:
+            trace["life_state"] = stub_life_state
+        if encoded_top_drive:
+            trace["top_drive"] = encoded_top_drive
+        ranked.append((match_score, salience, str(stub.get("recorded_at") or ""), trace))
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+    return [trace for _, _, _, trace in ranked[:limit]]
+
+
+def _learning_outcome_match_score(
+    record: dict[str, Any],
+    *,
+    situation_key: str,
+    top_drive: str,
+    life_state: str,
+    pressure_reason: str,
+) -> float:
+    """Return a bounded relevance score for one prior learning outcome."""
+
+    content = record.get("content") or {}
+    if _situation_key_from_learning_outcome(record) == situation_key:
+        return 4.0
+    record_pressure_reason = str(record.get("pressure_reason") or content.get("pressure_reason") or "none")
+    record_top_drive = str(content.get("top_drive") or "unknown")
+    record_life_state = str(content.get("life_state") or "unknown")
+    if pressure_reason != "none" and record_pressure_reason == pressure_reason and record_top_drive == top_drive:
+        return 3.0
+    if pressure_reason != "none" and record_pressure_reason == pressure_reason:
+        return 2.0
+    if record_top_drive == top_drive and record_life_state == life_state:
+        return 1.0
+    return 0.0
+
+
+def _memory_stub_match_score(
+    *,
+    situation_key: str,
+    top_drive: str,
+    life_state: str,
+    pressure_reason: str,
+    drive_levels: dict[str, Any],
+    drive_state_at_encoding: Any,
+    encoded_top_drive: str,
+    stub_pressure_reason: str | None,
+    stub_life_state: str | None,
+    stub_situation_key: str | None,
+    salience: float,
+) -> float:
+    """Return a bounded retrieval score for one episodic memory stub."""
+
+    score = 0.0
+    has_bounded_match = False
+    if stub_situation_key is not None and stub_situation_key == situation_key:
+        score += 4.0
+        has_bounded_match = True
+    if pressure_reason != "none" and stub_pressure_reason is not None and stub_pressure_reason == pressure_reason:
+        score += 1.5
+        has_bounded_match = True
+    if encoded_top_drive == top_drive:
+        score += 1.5
+        has_bounded_match = True
+    if stub_life_state is not None and stub_life_state == life_state:
+        score += 0.5
+    if not has_bounded_match:
+        return 0.0
+    score += 0.75 * _drive_state_alignment(
+        top_drive=top_drive,
+        drive_levels=drive_levels,
+        drive_state_at_encoding=drive_state_at_encoding,
     )
-    return ranked[:limit]
+    score += 0.5 * salience
+    return round(score, 6)
+
+
+def _drive_state_alignment(
+    *,
+    top_drive: str,
+    drive_levels: dict[str, Any],
+    drive_state_at_encoding: Any,
+) -> float:
+    """Return how closely one encoded drive snapshot matches the current top-drive level."""
+
+    if not isinstance(drive_state_at_encoding, dict):
+        return 0.0
+    encoded_levels = drive_state_at_encoding.get("drive_levels") or {}
+    if not isinstance(encoded_levels, dict):
+        return 0.0
+    current_level = _coerced_salience(drive_levels.get(top_drive, 0.0))
+    encoded_level = _coerced_salience(encoded_levels.get(top_drive, 0.0))
+    if current_level == 0.0 and encoded_level == 0.0:
+        return 0.0
+    return round(max(0.0, 1.0 - abs(current_level - encoded_level)), 3)
+
+
+def _memory_stub_pressure_reason(content: dict[str, Any]) -> str | None:
+    """Return the stored pressure reason for one memory stub when present."""
+
+    if "pressure_reason" not in content:
+        return None
+    return str(content.get("pressure_reason") or "none")
+
+
+def _memory_stub_life_state(content: dict[str, Any]) -> str | None:
+    """Return the stored life-state context for one memory stub when present."""
+
+    runtime_gate_context = content.get("runtime_gate_context") or {}
+    if not isinstance(runtime_gate_context, dict) or "life_state" not in runtime_gate_context:
+        return None
+    return str(runtime_gate_context.get("life_state") or "unknown")
+
+
+def _memory_stub_situation_key(content: dict[str, Any]) -> str | None:
+    """Return the stored or derivable situation key for one memory stub when available."""
+
+    stored = content.get("situation_key")
+    if stored:
+        return str(stored)
+    pressure_reason = _memory_stub_pressure_reason(content)
+    life_state = _memory_stub_life_state(content)
+    drive_state_at_encoding = content.get("drive_state_at_encoding") or {}
+    encoded_top_drive = str(drive_state_at_encoding.get("top_drive") or content.get("top_drive") or "")
+    if pressure_reason is None or life_state is None or not encoded_top_drive:
+        return None
+    return build_situation_key_from_values(
+        top_drive=encoded_top_drive,
+        life_state=life_state,
+        pressure_reason=pressure_reason,
+    )
 
 
 def _coerced_salience(value: Any) -> float:

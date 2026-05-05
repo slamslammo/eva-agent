@@ -7,7 +7,7 @@ from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
 
 
 class StructuralAnchorMirrorTests(unittest.TestCase):
-    def test_structural_anchor_remains_parameter_domain_mirror_after_pre_generation(self) -> None:
+    def test_structural_anchor_projects_runtime_fields_for_manual_candidates(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}],
@@ -53,7 +53,7 @@ class StructuralAnchorMirrorTests(unittest.TestCase):
         self.assertEqual(anchored[0].parameter_domain["life_state"], "CRITICAL")
         self.assertEqual(candidate.parameter_domain, {"candidate_profile": "observe_first", "top_drive": "curiosity"})
 
-    def test_generated_candidates_from_action_domain_still_require_anchor_mirror_for_runtime_fields(self) -> None:
+    def test_generated_candidates_from_action_domain_already_carry_runtime_gate_projection(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}],
@@ -84,10 +84,10 @@ class StructuralAnchorMirrorTests(unittest.TestCase):
         anchored = apply_structural_anchors(candidates, deliberation_input)
 
         self.assertEqual(len(candidates), 2)
-        self.assertNotIn("instance_valid", candidates[0].parameter_domain)
-        self.assertEqual(anchored[0].parameter_domain["instance_valid"], True)
-        self.assertEqual(anchored[0].parameter_domain["turn_allowed"], True)
-        self.assertEqual(anchored[0].parameter_domain["life_state"], "STABLE")
+        self.assertEqual(candidates[0].parameter_domain["instance_valid"], True)
+        self.assertEqual(candidates[0].parameter_domain["turn_allowed"], True)
+        self.assertEqual(candidates[0].parameter_domain["life_state"], "STABLE")
+        self.assertEqual(anchored[0].parameter_domain, candidates[0].parameter_domain)
 
 
 if __name__ == "__main__":

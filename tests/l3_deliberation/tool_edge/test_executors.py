@@ -5,7 +5,7 @@ import unittest
 
 from eva.kernel import ActivePressure, ActivePressureTable, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.l3_deliberation import ReleaseToken
-from eva.l3_deliberation.tool_edge.executors import execute_response_action
+from eva.l3_deliberation.tool_edge.executors import execute_integrity_selection, execute_response_action
 from eva.l3_deliberation.tool_edge.tool_registry import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, ResponseSelection
 
 
@@ -56,17 +56,32 @@ class ExecutorsTests(unittest.TestCase):
             candidate_profile="stabilize_first",
         )
 
-    def test_execute_response_action_requires_release_token(self) -> None:
+    def test_execute_integrity_selection_applies_release_context_bridge_policy(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
+            runtime = StubRuntime()
 
-            with self.assertRaisesRegex(ValueError, "release_token is required"):
-                execute_response_action(
-                    store,
-                    self._pressure("instance_invalid"),
-                    self._state(),
-                    self._selection(RECHECK_ACTION),
-                )
+            result = execute_integrity_selection(
+                store,
+                self._pressure("recent_yield_detected"),
+                self._state(),
+                self._selection(REPAIR_ACTION),
+                runtime=runtime,
+                allow_repair_side_effects=True,
+                release_context={
+                    "bridge_policy": {
+                        "execution": {
+                            "allow_repair_side_effects": False,
+                        }
+                    }
+                },
+                release_token=self._token(),
+                selected_candidate_id=self._token().candidate_id,
+            )
+
+            self.assertFalse(runtime.activated)
+            self.assertEqual(result["side_effects"], [])
+            self.assertTrue(result["followup_needed"])
 
     def test_execute_response_action_recheck_fails_when_artifacts_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

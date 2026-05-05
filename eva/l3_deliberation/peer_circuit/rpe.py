@@ -113,7 +113,7 @@ def build_learning_outcome_record(
         "life_state": life_state,
         "pressure_reason": pressure_reason,
         "situation_key": situation_key,
-        "habit_skill_match": candidate_profile in {"observe_first", "stabilize_first"},
+        "habit_skill_match": candidate_profile in {"observe_first", "stabilize_first", "escalate_first"},
         "habit_narrowed": bool(learning_context.get("habit_narrowed", False)),
     }
     return LearningOutcomeRecord(
@@ -177,6 +177,8 @@ def _expected_outcome(release_decision: dict[str, Any], candidate_profile: str |
             return "improve_information_under_pressure"
         if candidate_profile == "stabilize_first":
             return "stabilize_or_relieve_pressure"
+        if candidate_profile == "escalate_first":
+            return "escalate_for_safety_under_pressure"
         return "bounded_pressure_response"
     if outcome == "defer":
         return "wait_for_safer_boundary"

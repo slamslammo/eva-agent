@@ -10,8 +10,11 @@ from eva.l3_deliberation.tool_edge.tool_registry import (
     ESCALATE_ACTION,
     RECHECK_ACTION,
     REPAIR_ACTION,
+    bridge_policy_from_release_context,
     build_integrity_response_candidates,
     filter_response_candidates,
+    response_mode_from_release_context,
+    select_integrity_response,
     select_response_action,
 )
 
@@ -35,25 +38,93 @@ class ToolRegistryTests(unittest.TestCase):
     def _state(self, life_state: str = "STABLE") -> RuntimeState:
         return RuntimeState(life_state=life_state, instance_valid=True, heartbeat_ok=True, tick_ok=True)
 
+    def test_tool_registry_extracts_bridge_policy_and_response_mode(self) -> None:
+        release_context = {
+            "bridge_target": "pressure_led_compatibility",
+            "response_mode": "protective_reflex",
+            "bridge_policy": {
+                "selection": {
+                    "preferred_action": RECHECK_ACTION,
+                    "default_path": "pressure_default",
+                }
+            },
+        }
+
+        self.assertEqual(
+            bridge_policy_from_release_context(release_context),
+            {
+                "selection": {
+                    "preferred_action": RECHECK_ACTION,
+                    "default_path": "pressure_default",
+                }
+            },
+        )
+        self.assertEqual(response_mode_from_release_context(release_context), "protective_reflex")
+        self.assertEqual(response_mode_from_release_context(None), "pressure_led_compatibility")
+
     def test_tool_registry_exposes_static_action_metadata(self) -> None:
         self.assertEqual(ACTION_TO_POSTURE[RECHECK_ACTION], "recheck_or_observe")
         self.assertEqual(ACTION_TO_STATE_MODE[REPAIR_ACTION], "conservative")
         self.assertEqual(ACTION_TO_ALLOWED_STATES[ESCALATE_ACTION], ("RECOVERING", "STABLE", "DEGRADED", "CRITICAL"))
 
-    def test_tool_registry_builds_candidates_for_integrity_reasons(self) -> None:
-        stable_recent_yield = build_integrity_response_candidates(
-            self._pressure("recent_yield_detected"),
-            self._state("STABLE"),
+    def test_tool_registry_select_integrity_response_consumes_release_context(self) -> None:
+        pressure = self._pressure(
+            "recent_yield_detected",
+            runtime_writable=True,
+            active_instance_present=True,
+            runtime_state_present=True,
+            events_present=True,
+            lock_present=True,
+            recent_distress_count=0,
         )
-        non_integrity = build_integrity_response_candidates(
-            self._pressure("restart_loop", pressure_type="continuity"),
-            self._state("STABLE"),
+        state = self._state("STABLE")
+
+        selection = select_integrity_response(
+            pressure,
+            state,
+            release_context={
+                "bridge_policy": {
+                    "selection": {
+                        "preferred_action": RECHECK_ACTION,
+                        "fallback_action": ESCALATE_ACTION,
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["recent_yield_detected"],
+                        "life_states": ["STABLE"],
+                    },
+                }
+            },
         )
 
-        self.assertEqual([candidate.action for candidate in stable_recent_yield], [RECHECK_ACTION, REPAIR_ACTION, ESCALATE_ACTION])
-        self.assertEqual(non_integrity, [])
+        self.assertEqual(selection.selected_action, RECHECK_ACTION)
+        self.assertEqual(selection.selected_action_reason, "bridge_policy_bias")
 
-    def test_tool_registry_filters_repair_with_frozen_denial_reasons(self) -> None:
+    def test_tool_registry_select_integrity_response_prefers_escalation_for_escalate_first_policy(self) -> None:
+        pressure = self._pressure("runtime_files_missing", runtime_state_present=False)
+        state = self._state("STABLE")
+
+        selection = select_integrity_response(
+            pressure,
+            state,
+            release_context={
+                "bridge_policy": {
+                    "selection": {
+                        "preferred_action": ESCALATE_ACTION,
+                        "fallback_action": RECHECK_ACTION,
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["runtime_files_missing", "runtime_not_writable", "recent_distress_detected"],
+                        "life_states": ["RECOVERING", "STABLE", "DEGRADED", "CRITICAL"],
+                    },
+                }
+            },
+        )
+
+        self.assertEqual(selection.selected_action, ESCALATE_ACTION)
+        self.assertEqual(selection.selected_action_reason, "escalation_required_by_boundary")
+
         pressure = self._pressure(
             "recent_yield_detected",
             runtime_writable=False,

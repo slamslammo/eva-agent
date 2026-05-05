@@ -113,19 +113,35 @@ def build_working_memory_context(
             continue
         summary["habit_eligible"] = bool(skill.crystallized)
         summary["habit_eligibility_reasons"] = list(skill.crystallization_reasons)
-    recent_outcomes = recent_learning_outcomes(learning_outcomes, situation_key=situation_key, limit=max_recent_outcomes)
+    top_drive = str(deliberation_input.drive_broadcast.get("top_drive") or "unknown")
+    life_state = str(deliberation_input.runtime_gate_context.get("life_state") or "unknown")
+    pressure_reason = pressure_reason_from_input(deliberation_input)
+    drive_levels = deliberation_input.drive_broadcast.get("drive_levels")
+    normalized_drive_levels = dict(drive_levels) if isinstance(drive_levels, dict) else {}
+    recent_outcomes = recent_learning_outcomes(
+        learning_outcomes,
+        situation_key=situation_key,
+        top_drive=top_drive,
+        life_state=life_state,
+        pressure_reason=pressure_reason,
+        limit=max_recent_outcomes,
+    )
     if not recent_outcomes:
         recent_outcomes = recent_response_history(
             response_history or [],
-            top_drive=str(deliberation_input.drive_broadcast.get("top_drive") or "unknown"),
-            life_state=str(deliberation_input.runtime_gate_context.get("life_state") or "unknown"),
-            pressure_reason=pressure_reason_from_input(deliberation_input),
+            top_drive=top_drive,
+            life_state=life_state,
+            pressure_reason=pressure_reason,
             limit=max_recent_outcomes,
         )
     if not recent_outcomes:
         recent_outcomes = recent_cognitive_memory_stub_traces(
             memory_stubs or [],
-            top_drive=str(deliberation_input.drive_broadcast.get("top_drive") or "unknown"),
+            situation_key=situation_key,
+            top_drive=top_drive,
+            life_state=life_state,
+            pressure_reason=pressure_reason,
+            drive_levels=normalized_drive_levels,
             limit=max_recent_outcomes,
         )
     top_bias_confidence = max((float(summary.get("confidence", 0.0)) for summary in bias_summaries), default=0.0)

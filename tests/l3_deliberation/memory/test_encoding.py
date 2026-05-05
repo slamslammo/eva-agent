@@ -59,6 +59,8 @@ class MemoryEncodingTests(unittest.TestCase):
             },
         )
         self.assertEqual(payload["content"]["top_drive"], "integrity")
+        self.assertEqual(payload["content"]["pressure_reason"], "none")
+        self.assertEqual(payload["content"]["situation_key"], "integrity|STABLE|none")
 
     def test_evaluate_response_outcome_returns_positive_for_relieved_without_followup(self) -> None:
         observed_outcome, delta, label, confidence = evaluate_response_outcome(
@@ -114,7 +116,7 @@ class MemoryEncodingTests(unittest.TestCase):
                 "outcome": "compatibility_release",
                 "selected_action": "compatibility_release",
                 "selected_candidate_id": "candidate-compatibility-stabilize-first",
-                "rationale": ["integrity_or_threat_pressure_present"],
+                "rationale": ["compatibility_projection_present"],
                 "release_context": {
                     "bridge_target": "pressure_led_compatibility",
                     "response_mode": "pressure_led_compatibility",

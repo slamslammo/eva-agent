@@ -1,4 +1,4 @@
-"""Cross-layer anchor composition entry for the current minimal L3 path."""
+"""Residual cross-layer anchor helpers for compatibility projection."""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ __all__ = ["apply_structural_anchors", "build_action_domain", "restrict_candidat
 
 
 def apply_structural_anchors(candidates: list[Candidate], deliberation_input: DeliberationInput) -> list[Candidate]:
-    """Apply the current anchor restriction stack to all candidates."""
+    """Project runtime-gate fields onto compatibility or manually built candidates."""
 
     return [restrict_candidate_domain(candidate, deliberation_input) for candidate in candidates]

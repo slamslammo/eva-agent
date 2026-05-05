@@ -42,7 +42,7 @@ def _allowed_selection_key(assessment: CandidateAssessment) -> tuple[float, floa
     """Return the stable ranking key for allowed candidate selection."""
 
     return (
-        round(assessment.score - assessment.learning_bias, 6),
+        round(assessment.score, 6),
         round(assessment.learning_bias, 6),
         assessment.score,
         assessment.candidate_id,

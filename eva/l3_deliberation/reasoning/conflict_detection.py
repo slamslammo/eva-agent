@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .candidate_generation import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
+from .candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
 from ..contracts import Candidate
 
 DRIVE_CONFLICT_THRESHOLD = 0.5
@@ -43,7 +43,7 @@ def build_candidate_conflict_context(
         )
 
     candidate_profile = str(candidate.parameter_domain.get("candidate_profile") or "unknown")
-    if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
+    if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
         return CandidateConflictContext(
             candidate_profile=candidate_profile,
             disposition="withhold",
@@ -89,6 +89,7 @@ def build_candidate_conflict_context(
         )
 
     compatibility_pressure_count = int(candidate.parameter_domain.get("compatibility_pressure_count", 0))
+    primary_pressure_reason = str(candidate.parameter_domain.get("primary_pressure_reason") or "none")
     if top_drive != "integrity" and threat_count <= 0:
         return CandidateConflictContext(
             candidate_profile=candidate_profile,
@@ -96,22 +97,32 @@ def build_candidate_conflict_context(
             reasons=tuple([*reasons, "no_release_pressure"]),
         )
 
-    pressure_reasons = [*reasons, "integrity_or_threat_pressure_present"]
+    pressure_reasons = [*reasons, "compatibility_projection_present"]
     score_delta = float(threat_count)
     if candidate_profile == STABILIZE_FIRST_PROFILE:
         if top_drive == "integrity":
             score_delta += 0.75
-            pressure_reasons.append("integrity_bias_for_stabilize_first")
+            pressure_reasons.append("integrity_projection_for_stabilize_first")
         if compatibility_pressure_count > 0:
             score_delta += 0.5
-            pressure_reasons.append("pressure_bias_for_stabilize_first")
+            pressure_reasons.append("pressure_projection_for_stabilize_first")
     elif candidate_profile == OBSERVE_FIRST_PROFILE:
         if top_drive != "integrity":
             score_delta += 0.25
-            pressure_reasons.append("non_integrity_bias_for_observe_first")
+            pressure_reasons.append("non_integrity_projection_for_observe_first")
         if compatibility_pressure_count == 0:
             score_delta += 0.25
-            pressure_reasons.append("low_pressure_bias_for_observe_first")
+            pressure_reasons.append("low_pressure_projection_for_observe_first")
+    elif candidate_profile == ESCALATE_FIRST_PROFILE:
+        if top_drive == "integrity":
+            score_delta += 1.0
+            pressure_reasons.append("integrity_projection_for_escalate_first")
+        if primary_pressure_reason in {"runtime_files_missing", "runtime_not_writable", "recent_distress_detected"}:
+            score_delta += 1.0
+            pressure_reasons.append("high_risk_projection_for_escalate_first")
+        if compatibility_pressure_count > 0:
+            score_delta += 0.25
+            pressure_reasons.append("pressure_projection_for_escalate_first")
 
     drive_tension_reasons = _drive_tension_reasons(
         candidate.drive_impact_schema,

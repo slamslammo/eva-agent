@@ -7,6 +7,8 @@ from typing import Any
 
 from ..contracts import DeliberationInput, ReleaseDecision
 from ..peer_circuit.rpe import LearningOutcomeRecord, build_learning_outcome_record, evaluate_response_outcome
+from .retrieval import pressure_reason_from_input
+from .skill_library import build_situation_key_from_values
 
 __all__ = [
     "LearningOutcomeRecord",
@@ -70,6 +72,12 @@ def build_memory_stub(
     else:
         return None
     drive_state_at_encoding = _drive_state_at_encoding(deliberation_input)
+    pressure_reason = _pressure_reason_for_encoding(deliberation_input)
+    situation_key = _situation_key_for_encoding(
+        top_drive=drive_state_at_encoding["top_drive"],
+        life_state=str(deliberation_input.runtime_gate_context.get("life_state") or "unknown"),
+        pressure_reason=pressure_reason,
+    )
     return MemoryWriteStub(
         recorded_at=recorded_at,
         source="l3_deliberation",
@@ -79,6 +87,8 @@ def build_memory_stub(
         linked_audit_recorded_at=recorded_at,
         content={
             "top_drive": drive_state_at_encoding["top_drive"],
+            "pressure_reason": pressure_reason,
+            "situation_key": situation_key,
             "signal_summary": dict(signal_summary),
             "runtime_gate_context": dict(deliberation_input.runtime_gate_context),
             "release_outcome": release_outcome,
@@ -121,6 +131,22 @@ def _drive_state_at_encoding(deliberation_input: DeliberationInput) -> dict[str,
         "drive_levels": dict(drive_levels) if isinstance(drive_levels, dict) else {},
         "drive_trends": dict(drive_trends) if isinstance(drive_trends, dict) else {},
     }
+
+
+def _pressure_reason_for_encoding(deliberation_input: DeliberationInput) -> str:
+    """Return the bounded pressure reason attached to one encoding event."""
+
+    return pressure_reason_from_input(deliberation_input)
+
+
+def _situation_key_for_encoding(*, top_drive: str, life_state: str, pressure_reason: str) -> str:
+    """Return the compact situation key attached to one encoding event."""
+
+    return build_situation_key_from_values(
+        top_drive=top_drive,
+        life_state=life_state,
+        pressure_reason=pressure_reason,
+    )
 
 
 def _normalized_salience(value: Any) -> float:

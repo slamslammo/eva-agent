@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from .candidate_generation import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
+from .candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
 from .conflict_detection import build_candidate_conflict_context
 from ..contracts import Candidate, CandidateAssessment, DeliberationInput
 
 
 def assess_candidates(candidates: list[Candidate], deliberation_input: DeliberationInput) -> list[CandidateAssessment]:
-    """Assess candidates using drive-weighted scoring plus anchored runtime boundaries."""
+    """Assess candidates using drive-weighted scoring with bounded projection fallback."""
 
     signal_summary = deliberation_input.signal_batch.get("summary", {})
     threat_count = int(signal_summary.get("threat_signal_count", 0))
@@ -33,7 +33,7 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         )
         if candidate.action == "compatibility_release":
             candidate_profile = conflict.candidate_profile
-            if candidate_profile in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
+            if candidate_profile in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
                 habitual_trace = str(candidate.parameter_domain.get("habitual_trace") or "habitual_neutral")
                 if habitual_trace == "habitual_suppression":
                     reasons.append("habitual_suppression_trace")
@@ -50,13 +50,15 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
             if disposition == "allow":
-                score = _drive_weighted_score(candidate.drive_impact_schema, normalized_drive_levels)
-                if threat_count > 0:
-                    score += min(0.2, threat_count * 0.05)
-                    reasons.append("signal_pressure_tiebreak")
-                if conflict.score_delta != 0.0:
-                    score += min(0.15, conflict.score_delta * 0.02)
-                    reasons.append("anchor_pressure_tiebreak")
+                drive_score = _drive_weighted_score(candidate.drive_impact_schema, normalized_drive_levels)
+                score = drive_score
+                projection_score = _projection_fallback_score(
+                    conflict.score_delta,
+                    drive_score=drive_score,
+                )
+                if projection_score != 0.0:
+                    score += projection_score
+                    reasons.append("projection_fallback")
                 learning_bias, bias_reasons = _learning_bias_for_candidate_profile(
                     deliberation_input,
                     candidate_profile=candidate_profile,
@@ -95,6 +97,14 @@ def _drive_weighted_score(
     for drive_name in ("survival", "integrity", "continuity", "curiosity"):
         score += float(drive_levels.get(drive_name, 0.0)) * float(drive_impact_schema.get(drive_name, 0.0))
     return score
+
+
+def _projection_fallback_score(score_delta: float, *, drive_score: float) -> float:
+    """Return a small projection-only fallback when drive scoring does not separate candidates."""
+
+    if score_delta == 0.0 or drive_score != 0.0:
+        return 0.0
+    return min(0.15, score_delta * 0.02)
 
 
 def _learning_bias_for_candidate_profile(

@@ -4,7 +4,7 @@ import unittest
 
 from eva.kernel import ActivePressure, ActivePressureTable, utc_now
 from eva.l3_deliberation import apply_structural_anchors, build_action_domain, build_deliberation_input
-from eva.l3_deliberation.reasoning.candidate_generation import OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, build_candidates
+from eva.l3_deliberation.reasoning.candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, build_candidates
 from eva.l3_deliberation.contracts import Candidate, DeliberationInput
 
 
@@ -57,14 +57,20 @@ class CandidateGenerationTests(unittest.TestCase):
             "curiosity": -0.1,
         })
         self.assertEqual(candidates[1].parameter_domain["candidate_profile"], STABILIZE_FIRST_PROFILE)
-        self.assertNotIn("instance_valid", candidates[0].parameter_domain)
-        self.assertNotIn("turn_allowed", candidates[0].parameter_domain)
-        self.assertNotIn("critical_blocked", candidates[0].parameter_domain)
-        self.assertNotIn("conservative_mode", candidates[0].parameter_domain)
-        self.assertNotIn("life_state", candidates[0].parameter_domain)
+        self.assertEqual(candidates[0].parameter_domain["instance_valid"], True)
+        self.assertEqual(candidates[0].parameter_domain["turn_allowed"], True)
+        self.assertEqual(candidates[0].parameter_domain["critical_blocked"], False)
+        self.assertEqual(candidates[0].parameter_domain["conservative_mode"], False)
+        self.assertEqual(candidates[0].parameter_domain["life_state"], "STABLE")
+        self.assertEqual(candidates[0].parameter_domain["primary_pressure_reason"], "none")
         self.assertEqual(
             candidates[0].justification,
-            ("candidate_profile=observe_first", "top_drive=curiosity", "threat_signal_count=0"),
+            (
+                "candidate_profile=observe_first",
+                "top_drive=curiosity",
+                "threat_signal_count=0",
+                "primary_pressure_reason=none",
+            ),
         )
 
     def test_deliberation_input_rejects_missing_b0_keys(self) -> None:
@@ -549,5 +555,53 @@ class CandidateGenerationTests(unittest.TestCase):
         self.assertEqual(anchored[0].parameter_domain["life_state"], "CRITICAL")
 
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_build_candidates_admits_escalate_first_for_high_risk_integrity_reason(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.9, "survival": 0.7, "continuity": 0.3},
+                "drive_trends": {"integrity": "worsening", "survival": "worsening", "continuity": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "pressure_id": "pressure-integrity-runtime_files_missing",
+                        "type": "integrity",
+                        "severity": "critical",
+                        "evidence": {"reason": "runtime_files_missing"},
+                    }
+                ]
+            },
+        )
+
+        candidates = build_candidates(build_action_domain(deliberation_input))
+
+        self.assertEqual(len(candidates), 3)
+        self.assertEqual(candidates[2].parameter_domain["candidate_profile"], ESCALATE_FIRST_PROFILE)
+        self.assertEqual(candidates[2].parameter_domain["primary_pressure_reason"], "runtime_files_missing")
+        self.assertEqual(candidates[2].action, "compatibility_release")
+        self.assertEqual(candidates[2].drive_impact_schema, {
+            "survival": 0.5,
+            "integrity": 0.8,
+            "continuity": 0.4,
+            "curiosity": -0.3,
+        })
+

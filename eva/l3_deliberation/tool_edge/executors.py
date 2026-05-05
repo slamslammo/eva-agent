@@ -7,11 +7,12 @@ from typing import Any, Protocol
 from ...kernel import ActivePressure, StateStore
 from ..contracts import ReleaseToken
 from ..peer_circuit.mediator import validate_release_token
-from .tool_registry import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, ResponseSelection, _pressure_reason
+from .tool_registry import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, ResponseSelection, _pressure_reason, bridge_policy_from_release_context
 
 __all__ = [
     "ConservativeRuntime",
     "execute_response_action",
+    "execute_integrity_selection",
 ]
 
 
@@ -19,6 +20,36 @@ class ConservativeRuntime(Protocol):
     """Minimal runtime hook used by repair actions."""
 
     def activate_conservative_until_next_patrol(self) -> None: ...
+
+
+
+def execute_integrity_selection(
+    store: StateStore,
+    pressure: ActivePressure,
+    runtime_state: Any,
+    selection: ResponseSelection,
+    *,
+    runtime: ConservativeRuntime | None = None,
+    allow_repair_side_effects: bool = True,
+    release_context: dict[str, Any] | None = None,
+    release_token: ReleaseToken | None = None,
+    selected_candidate_id: str | None = None,
+) -> dict[str, Any]:
+    """Execute one mediated integrity selection under the current bridge policy."""
+
+    return execute_response_action(
+        store,
+        pressure,
+        runtime_state,
+        selection,
+        runtime=runtime,
+        allow_repair_side_effects=_allow_repair_side_effects(
+            bridge_policy=bridge_policy_from_release_context(release_context),
+            default=allow_repair_side_effects,
+        ),
+        release_token=release_token,
+        selected_candidate_id=selected_candidate_id,
+    )
 
 
 

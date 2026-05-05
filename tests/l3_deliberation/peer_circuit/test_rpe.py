@@ -61,7 +61,7 @@ class RpeOwnerTests(unittest.TestCase):
                 "outcome": "compatibility_release",
                 "selected_action": "compatibility_release",
                 "selected_candidate_id": "candidate-compatibility-stabilize-first",
-                "rationale": ["integrity_or_threat_pressure_present"],
+                "rationale": ["compatibility_projection_present"],
                 "release_context": {
                     "bridge_target": "pressure_led_compatibility",
                     "response_mode": "pressure_led_compatibility",
@@ -113,5 +113,60 @@ class RpeOwnerTests(unittest.TestCase):
         self.assertFalse(payload["content"]["habit_narrowed"])
 
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_rpe_owner_builds_learning_outcome_record_for_escalate_first(self) -> None:
+        audit_record = {
+            "recorded_at": "2026-05-05T10:00:00+00:00",
+            "deliberation_input": {},
+            "candidates": [],
+            "assessments": [],
+            "release_decision": {
+                "outcome": "compatibility_release",
+                "selected_action": "compatibility_release",
+                "selected_candidate_id": "candidate-compatibility-escalate-first",
+                "rationale": ["high_risk_projection_for_escalate_first"],
+                "release_context": {
+                    "bridge_target": "pressure_led_compatibility",
+                    "response_mode": "pressure_led_compatibility",
+                    "candidate_profile": "escalate_first",
+                    "bridge_policy": {},
+                },
+                "expected_outcome": "escalate_for_safety_under_pressure",
+            },
+        }
+        response_summary = {
+            "pressure_id": "pressure-integrity-runtime_files_missing",
+            "pressure_type": "integrity",
+            "selected_action": "escalate_integrity_risk",
+            "execution_status": "escalated",
+            "pressure_outcome": "unchanged",
+            "followup_needed": True,
+            "response_mode": "pressure_led_compatibility",
+            "drive_context": {"top_drive": "integrity"},
+        }
+        response_history_entry = {
+            "response_id": "resp-escalate-001",
+            "response_mode": "pressure_led_compatibility",
+            "pressure_id": "pressure-integrity-runtime_files_missing",
+            "pressure_type": "integrity",
+            "pressure_reason": "runtime_files_missing",
+            "life_state": "STABLE",
+            "selected_action": "escalate_integrity_risk",
+            "execution_status": "escalated",
+            "pressure_outcome": "unchanged",
+            "followup_needed": True,
+            "uncertainty_after_action": "cannot_determine_safely",
+            "drive_context": {"top_drive": "integrity"},
+        }
+
+        payload = build_learning_outcome_record(
+            "2026-05-05T10:00:01+00:00",
+            audit_record,
+            response_summary,
+            response_history_entry,
+        ).to_dict()
+
+        self.assertEqual(payload["expected_outcome"], "escalate_for_safety_under_pressure")
+        self.assertEqual(payload["candidate_profile"], "escalate_first")
+        self.assertTrue(payload["content"]["habit_skill_match"])
+        self.assertEqual(payload["observed_outcome"], "escalated")
+

@@ -15,6 +15,7 @@ class GoalDirectedTrackOwnerTests(unittest.TestCase):
     def test_goal_directed_track_maps_candidate_profile_from_id(self) -> None:
         self.assertEqual(candidate_profile_from_id("candidate-compatibility-observe-first"), "observe_first")
         self.assertEqual(candidate_profile_from_id("candidate-compatibility-stabilize-first"), "stabilize_first")
+        self.assertEqual(candidate_profile_from_id("candidate-compatibility-escalate-first"), "escalate_first")
         self.assertEqual(candidate_profile_from_id("candidate-compatibility-other"), "unknown")
         self.assertEqual(candidate_profile_from_id(None), "unknown")
 
@@ -43,7 +44,32 @@ class GoalDirectedTrackOwnerTests(unittest.TestCase):
             },
         )
 
-    def test_goal_directed_track_builds_learning_context_from_selected_assessment(self) -> None:
+    def test_goal_directed_track_builds_release_context_for_escalate_first(self) -> None:
+        self.assertEqual(
+            build_release_context("escalate_first"),
+            {
+                "bridge_target": "pressure_led_compatibility",
+                "response_mode": "pressure_led_compatibility",
+                "candidate_profile": "escalate_first",
+                "bridge_policy": {
+                    "policy_name": "escalate_first_bias",
+                    "selection": {
+                        "preferred_action": "escalate_integrity_risk",
+                        "fallback_action": "recheck_runtime_integrity",
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["runtime_files_missing", "runtime_not_writable", "recent_distress_detected"],
+                        "life_states": ["RECOVERING", "STABLE", "DEGRADED", "CRITICAL"],
+                    },
+                    "execution": {
+                        "allow_repair_side_effects": False,
+                    },
+                },
+            },
+        )
+
+    def test_goal_directed_track_builds_learning_context_from_assessment(self) -> None:
         assessment = CandidateAssessment(
             candidate_id="candidate-compatibility-observe-first",
             action="compatibility_release",
@@ -72,6 +98,10 @@ class GoalDirectedTrackOwnerTests(unittest.TestCase):
         self.assertEqual(
             expected_outcome_for_release("compatibility_release", "stabilize_first"),
             "stabilize_or_relieve_pressure",
+        )
+        self.assertEqual(
+            expected_outcome_for_release("compatibility_release", "escalate_first"),
+            "escalate_for_safety_under_pressure",
         )
         self.assertEqual(
             expected_outcome_for_release("compatibility_release", "unknown"),

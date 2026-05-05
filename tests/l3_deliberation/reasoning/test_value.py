@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation import Candidate, apply_structural_anchors, build_action_domain, build_deliberation_input
-from eva.l3_deliberation.reasoning.candidate_generation import OBSERVE_FIRST_PROFILE, build_candidates
+from eva.l3_deliberation.reasoning.candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
 
 
@@ -35,7 +35,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(len(assessments), 2)
         self.assertEqual(assessments[0].disposition, "allow")
@@ -70,11 +70,11 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "allow")
         self.assertEqual(assessments[1].disposition, "allow")
-        self.assertIn("non_integrity_bias_for_observe_first", assessments[0].reasons)
+        self.assertIn("non_integrity_projection_for_observe_first", assessments[0].reasons)
         self.assertGreater(assessments[1].score, assessments[0].score)
 
     def test_conservative_mode_defers_release(self) -> None:
@@ -103,7 +103,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "defer")
         self.assertIn("conservative_mode_active", assessments[0].reasons)
@@ -134,7 +134,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "defer")
         self.assertIn("critical_life_state", assessments[0].reasons)
@@ -166,7 +166,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "withhold")
         self.assertIn("turn_not_allowed", assessments[0].reasons)
@@ -259,7 +259,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertGreater(assessments[0].learning_bias, 0.0)
         self.assertEqual(assessments[0].disposition, "allow")
@@ -307,7 +307,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "withhold")
         self.assertIn("turn_not_allowed", assessments[0].reasons)
@@ -354,7 +354,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertLess(assessments[0].learning_bias, 0.0)
         self.assertIn("recent_negative_outcome_bias", assessments[0].bias_reasons)
@@ -404,7 +404,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertLess(assessments[0].learning_bias, 0.0)
         self.assertEqual(assessments[1].learning_bias, 0.0)
@@ -452,7 +452,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].learning_bias, 0.0)
         self.assertNotIn("recent_negative_outcome_bias", assessments[0].bias_reasons)
@@ -499,7 +499,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].learning_bias, 0.0)
         self.assertNotIn("positive_habit_bias", assessments[0].bias_reasons)
@@ -582,9 +582,9 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
         baseline_assessments = assess_candidates(
-            apply_structural_anchors(build_candidates(build_action_domain(baseline_input)), baseline_input),
+            build_candidates(build_action_domain(baseline_input)),
             baseline_input,
         )
 
@@ -636,7 +636,7 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertNotIn("crystallized_habit_skill_hint", assessments[0].reasons)
 
@@ -693,11 +693,11 @@ class ValueJudgmentTests(unittest.TestCase):
         )
 
         low_assessment = assess_candidates(
-            apply_structural_anchors(build_candidates(build_action_domain(low_survival_input)), low_survival_input),
+            build_candidates(build_action_domain(low_survival_input)),
             low_survival_input,
         )[1]
         high_assessment = assess_candidates(
-            apply_structural_anchors(build_candidates(build_action_domain(high_survival_input)), high_survival_input),
+            build_candidates(build_action_domain(high_survival_input)),
             high_survival_input,
         )[1]
 
@@ -742,13 +742,13 @@ class ValueJudgmentTests(unittest.TestCase):
             },
         )
 
-        assessments = assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input)
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
 
         self.assertEqual(assessments[0].disposition, "allow")
         self.assertEqual(assessments[1].disposition, "allow")
         self.assertGreater(assessments[0].score, assessments[1].score)
 
-    def test_zero_impact_schema_degrades_to_tiebreak_only(self) -> None:
+    def test_zero_impact_schema_uses_projection_fallback_only(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}, {"class": "threat"}],
@@ -779,7 +779,7 @@ class ValueJudgmentTests(unittest.TestCase):
                 "seconds_to_heartbeat": 10.0,
             },
         )
-        candidates = apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
+        candidates = build_candidates(build_action_domain(deliberation_input))
         zeroed_candidates = [
             Candidate(
                 candidate_id=candidate.candidate_id,
@@ -797,9 +797,12 @@ class ValueJudgmentTests(unittest.TestCase):
 
         self.assertEqual(assessments[0].disposition, "allow")
         self.assertEqual(assessments[1].disposition, "allow")
+        self.assertIn("projection_fallback", assessments[0].reasons)
+        self.assertIn("projection_fallback", assessments[1].reasons)
         self.assertGreater(assessments[1].score, assessments[0].score)
         self.assertLess(assessments[1].score, 1.0)
 
+    def test_unknown_candidate_action_withholds(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}],
@@ -839,6 +842,54 @@ class ValueJudgmentTests(unittest.TestCase):
         self.assertIn("unknown_candidate_action", assessments[0].reasons)
         self.assertEqual(assessments[0].score, 0.0)
 
+    def test_high_risk_integrity_reason_prefers_escalate_first(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {
+                    "survival": 0.7,
+                    "integrity": 0.95,
+                    "continuity": 0.4,
+                    "curiosity": 0.1,
+                },
+                "drive_trends": {"integrity": "worsening", "survival": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "pressure_id": "pressure-integrity-runtime_files_missing",
+                        "type": "integrity",
+                        "severity": "critical",
+                        "evidence": {"reason": "runtime_files_missing"},
+                    }
+                ]
+            },
+        )
 
-if __name__ == "__main__":
-    unittest.main()
+        assessments = assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input)
+
+        self.assertEqual(len(assessments), 3)
+        self.assertEqual(assessments[2].candidate_id, "candidate-compatibility-escalate-first")
+        self.assertEqual(assessments[2].disposition, "allow")
+        self.assertIn("high_risk_projection_for_escalate_first", assessments[2].reasons)
+        self.assertGreater(assessments[2].score, assessments[1].score)
+        self.assertGreater(assessments[2].score, assessments[0].score)
+

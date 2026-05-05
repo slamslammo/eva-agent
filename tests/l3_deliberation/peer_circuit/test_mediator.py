@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from eva.l3_deliberation import CandidateAssessment, ReleaseToken, apply_structural_anchors, build_action_domain, build_deliberation_input
+from eva.l3_deliberation import CandidateAssessment, ReleaseToken, build_action_domain, build_deliberation_input
 from eva.l3_deliberation.peer_circuit.mediator import decide_release, validate_release_token
 from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
@@ -36,7 +36,7 @@ class MediatorTests(unittest.TestCase):
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input))
 
         self.assertEqual(decision.outcome, "withhold")
         self.assertIsNone(decision.selected_action)
@@ -69,7 +69,7 @@ class MediatorTests(unittest.TestCase):
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input))
 
         self.assertEqual(decision.outcome, "compatibility_release")
         self.assertEqual(decision.selected_action, "compatibility_release")
@@ -134,7 +134,7 @@ class MediatorTests(unittest.TestCase):
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input))
 
         self.assertIn(decision.outcome, {"withhold", "defer"})
         self.assertNotEqual(decision.outcome, "compatibility_release")
@@ -164,7 +164,7 @@ class MediatorTests(unittest.TestCase):
             },
         )
 
-        decision = decide_release(assess_candidates(apply_structural_anchors(build_candidates(build_action_domain(deliberation_input)), deliberation_input), deliberation_input))
+        decision = decide_release(assess_candidates(build_candidates(build_action_domain(deliberation_input)), deliberation_input))
 
         self.assertEqual(decision.outcome, "defer")
         self.assertEqual(decision.selected_action, "compatibility_release")
@@ -175,7 +175,7 @@ class MediatorTests(unittest.TestCase):
             CandidateAssessment(
                 candidate_id="candidate-compatibility-observe-first",
                 action="compatibility_release",
-                score=1.25,
+                score=1.0,
                 disposition="allow",
                 reasons=("candidate_profile=observe_first",),
                 learning_bias=0.25,
@@ -320,7 +320,46 @@ class MediatorTests(unittest.TestCase):
                 "habit_narrowed": False,
             },
         )
-    def test_validate_release_token_rejects_candidate_mismatch(self) -> None:
+    def test_high_risk_integrity_reason_releases_escalate_first_profile(self) -> None:
+        assessments = [
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-observe-first",
+                action="compatibility_release",
+                score=0.55,
+                disposition="allow",
+                reasons=("candidate_profile=observe_first",),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-stabilize-first",
+                action="compatibility_release",
+                score=1.15,
+                disposition="allow",
+                reasons=("candidate_profile=stabilize_first",),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+            CandidateAssessment(
+                candidate_id="candidate-compatibility-escalate-first",
+                action="compatibility_release",
+                score=1.65,
+                disposition="allow",
+                reasons=("candidate_profile=escalate_first", "high_risk_projection_for_escalate_first"),
+                learning_bias=0.0,
+                bias_reasons=(),
+            ),
+        ]
+
+        decision = decide_release(assessments)
+
+        self.assertEqual(decision.outcome, "compatibility_release")
+        self.assertEqual(decision.selected_candidate_id, "candidate-compatibility-escalate-first")
+        self.assertEqual(decision.release_token.candidate_profile, "escalate_first")
+        self.assertEqual(decision.release_context["candidate_profile"], "escalate_first")
+        self.assertEqual(decision.release_context["bridge_policy"]["selection"]["preferred_action"], "escalate_integrity_risk")
+        self.assertEqual(decision.expected_outcome, "escalate_for_safety_under_pressure")
+
         token = ReleaseToken(
             token_id="release-token::candidate-compatibility-stabilize-first",
             outcome="compatibility_release",

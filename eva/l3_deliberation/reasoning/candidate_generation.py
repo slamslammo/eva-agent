@@ -6,6 +6,7 @@ from ..contracts import Candidate
 from ...anchor.domain_restriction import (
     ActionDomain,
     COMPATIBILITY_RELEASE_IMPACT,
+    ESCALATE_FIRST_PROFILE,
     OBSERVE_FIRST_PROFILE,
     STABILIZE_FIRST_PROFILE,
 )

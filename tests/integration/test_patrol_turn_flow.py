@@ -350,5 +350,23 @@ class PatrolTurnFlowTests(unittest.TestCase):
         self.assertTrue(self.runtime.has_pending_work())
 
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_high_risk_integrity_reason_releases_escalate_first_response(self) -> None:
+        now = utc_now()
+        self.runtime.pending_work.clear()
+        self.store.paths.runtime_state_file.unlink(missing_ok=True)
+        self.runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=now - timedelta(seconds=1)))
+
+        result = self.runtime.run_turn(
+            self.state,
+            next_heartbeat_at=now + timedelta(seconds=1),
+            now=now,
+        )
+
+        self.assertTrue(result.executed)
+        self.assertEqual(result.details["deliberation"]["outcome"], "compatibility_release")
+        self.assertEqual(result.details["deliberation"]["selected_candidate_id"], "candidate-compatibility-escalate-first")
+        self.assertEqual(result.details["response"]["selected_action"], "escalate_integrity_risk")
+        response_history = self.store.read_response_history()
+        self.assertEqual(response_history[0]["release_context"]["candidate_profile"], "escalate_first")
+        self.assertEqual(response_history[0]["selected_action"], "escalate_integrity_risk")
+

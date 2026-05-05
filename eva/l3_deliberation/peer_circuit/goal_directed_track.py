@@ -23,6 +23,8 @@ def candidate_profile_from_id(candidate_id: str | None) -> str:
         return "observe_first"
     if candidate_id.endswith("stabilize-first"):
         return "stabilize_first"
+    if candidate_id.endswith("escalate-first"):
+        return "escalate_first"
     return "unknown"
 
 
@@ -56,6 +58,8 @@ def expected_outcome_for_release(outcome: str, candidate_profile: str | None) ->
             return "improve_information_under_pressure"
         if candidate_profile == "stabilize_first":
             return "stabilize_or_relieve_pressure"
+        if candidate_profile == "escalate_first":
+            return "escalate_for_safety_under_pressure"
         return "bounded_pressure_response"
     if outcome == "defer":
         return "wait_for_safer_boundary"
@@ -93,6 +97,22 @@ def _bridge_policy_for_candidate_profile(candidate_profile: str) -> dict[str, ob
             "applicability": applicability,
             "execution": {
                 "allow_repair_side_effects": True,
+            },
+        }
+    if candidate_profile == "escalate_first":
+        return {
+            "policy_name": "escalate_first_bias",
+            "selection": {
+                "preferred_action": "escalate_integrity_risk",
+                "fallback_action": "recheck_runtime_integrity",
+                "default_path": "pressure_default",
+            },
+            "applicability": {
+                "pressure_reasons": ["runtime_files_missing", "runtime_not_writable", "recent_distress_detected"],
+                "life_states": ["RECOVERING", "STABLE", "DEGRADED", "CRITICAL"],
+            },
+            "execution": {
+                "allow_repair_side_effects": False,
             },
         }
     return {

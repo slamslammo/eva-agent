@@ -7,14 +7,17 @@ from datetime import timedelta
 from eva.kernel import ActivePressure, ActivePressureTable, DriveState, DriveStateTable, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.l3_deliberation import ReleaseToken
 from eva.l3_deliberation.tool_edge import (
+    DEFAULT_RESPONSE_MODE,
     ESCALATE_ACTION,
     RECHECK_ACTION,
     REPAIR_ACTION,
     build_integrity_response_candidates,
     build_response_selected_event_details,
+    build_response_summary,
     filter_response_candidates,
     maybe_respond_after_patrol,
     respond_to_integrity_pressure,
+    select_integrity_response,
     select_response_action,
 )
 from eva.l2_drive.broadcast import build_drive_broadcast
@@ -320,6 +323,7 @@ class ResponseTests(unittest.TestCase):
             )
             history = store.read_response_history()
 
+            self.assertEqual(summary["response_mode"], DEFAULT_RESPONSE_MODE)
             self.assertEqual(summary["selected_action"], RECHECK_ACTION)
             self.assertEqual(summary["execution_status"], "completed")
             self.assertEqual(summary["pressure_outcome"], "unchanged")
@@ -382,7 +386,49 @@ class ResponseTests(unittest.TestCase):
             self.assertEqual(history[0]["selected_action_reason"], "bridge_policy_bias")
             self.assertEqual(history[0]["release_context"], release_context)
 
-    def test_respond_to_integrity_pressure_records_protective_reflex_mode(self) -> None:
+    def test_respond_to_integrity_pressure_uses_escalate_first_profile_from_release_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            now = utc_now()
+            state = self._state("STABLE", instance_valid=True)
+            pressure = self._pressure("runtime_files_missing", runtime_state_present=False)
+            release_context = {
+                "bridge_target": "pressure_led_compatibility",
+                "response_mode": "pressure_led_compatibility",
+                "candidate_profile": "escalate_first",
+                "bridge_policy": {
+                    "policy_name": "escalate_first_bias",
+                    "selection": {
+                        "preferred_action": ESCALATE_ACTION,
+                        "fallback_action": RECHECK_ACTION,
+                        "default_path": "pressure_default",
+                    },
+                    "applicability": {
+                        "pressure_reasons": ["runtime_files_missing", "runtime_not_writable", "recent_distress_detected"],
+                        "life_states": ["RECOVERING", "STABLE", "DEGRADED", "CRITICAL"],
+                    },
+                    "execution": {
+                        "allow_repair_side_effects": False,
+                    },
+                },
+            }
+
+            summary = respond_to_integrity_pressure(
+                store,
+                pressure,
+                state,
+                now,
+                release_context=release_context,
+                release_token=self._token("escalate_first"),
+                selected_candidate_id="candidate-compatibility-escalate-first",
+            )
+            history = store.read_response_history()
+
+            self.assertEqual(summary["selected_action"], ESCALATE_ACTION)
+            self.assertEqual(summary["response_mode"], "pressure_led_compatibility")
+            self.assertEqual(history[0]["selected_action"], ESCALATE_ACTION)
+            self.assertEqual(history[0]["release_context"], release_context)
+
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
             now = utc_now()
@@ -588,6 +634,25 @@ class ResponseTests(unittest.TestCase):
             self.assertEqual(history[0]["response_mode"], "pressure_led_compatibility")
             self.assertEqual(history[0]["release_context"], release_context)
             self.assertIsNone(store.read_drive_state())
+
+    def test_build_response_summary_returns_bounded_payload(self) -> None:
+        pressure = self._pressure("instance_invalid")
+        summary = build_response_summary(
+            pressure,
+            select_integrity_response(pressure, self._state("STABLE")),
+            {
+                "execution_status": "completed",
+                "pressure_outcome": "unchanged",
+                "followup_needed": True,
+            },
+            drive_context=self._drive_broadcast(),
+            response_mode="protective_reflex",
+        )
+
+        self.assertEqual(summary["pressure_id"], pressure.pressure_id)
+        self.assertEqual(summary["pressure_type"], "integrity")
+        self.assertEqual(summary["response_mode"], "protective_reflex")
+        self.assertEqual(summary["drive_context"]["top_drive"], "integrity")
 
     def test_build_response_selected_event_details_returns_minimal_payload(self) -> None:
         payload = build_response_selected_event_details(

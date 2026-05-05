@@ -11,7 +11,13 @@ from .structural import apply_structural_anchor
 
 OBSERVE_FIRST_PROFILE = "observe_first"
 STABILIZE_FIRST_PROFILE = "stabilize_first"
+ESCALATE_FIRST_PROFILE = "escalate_first"
 HEARTBEAT_SCHEMA_NARROWING_WINDOW_SEC = 0.75
+HIGH_RISK_ESCALATION_REASONS = frozenset({
+    "runtime_files_missing",
+    "runtime_not_writable",
+    "recent_distress_detected",
+})
 COMPATIBILITY_RELEASE_IMPACT = {
     STABILIZE_FIRST_PROFILE: {
         "survival": 0.7,
@@ -25,6 +31,12 @@ COMPATIBILITY_RELEASE_IMPACT = {
         "continuity": 0.3,
         "curiosity": 0.4,
     },
+    ESCALATE_FIRST_PROFILE: {
+        "survival": 0.5,
+        "integrity": 0.8,
+        "continuity": 0.4,
+        "curiosity": -0.3,
+    },
 }
 
 
@@ -37,6 +49,7 @@ class AgentState:
     signal_summary: dict[str, Any]
     runtime_gate_context: dict[str, Any]
     compatibility_pressure_count: int = 0
+    primary_pressure_reason: str = "none"
     seconds_to_heartbeat: float | None = None
     working_memory_context: dict[str, Any] | None = None
 
@@ -49,6 +62,7 @@ class AgentState:
             "signal_summary": dict(self.signal_summary),
             "runtime_gate_context": dict(self.runtime_gate_context),
             "compatibility_pressure_count": self.compatibility_pressure_count,
+            "primary_pressure_reason": self.primary_pressure_reason,
         }
         if self.seconds_to_heartbeat is not None:
             payload["seconds_to_heartbeat"] = self.seconds_to_heartbeat
@@ -125,10 +139,23 @@ def build_action_domain(deliberation_input: DeliberationInput) -> ActionDomain:
     drive_levels = deliberation_input.drive_broadcast.get("drive_levels")
     normalized_drive_levels = dict(drive_levels) if isinstance(drive_levels, dict) else {}
     compatibility_pressure_count = 0
+    primary_pressure_reason = "none"
     if deliberation_input.compatibility_pressure_table is not None:
         pressures = deliberation_input.compatibility_pressure_table.get("pressures", [])
         if isinstance(pressures, list):
             compatibility_pressure_count = len(pressures)
+            first_integrity_pressure = next(
+                (
+                    pressure
+                    for pressure in pressures
+                    if isinstance(pressure, dict) and str(pressure.get("type") or "") == "integrity"
+                ),
+                None,
+            )
+            if first_integrity_pressure is not None:
+                evidence = first_integrity_pressure.get("evidence")
+                if isinstance(evidence, dict):
+                    primary_pressure_reason = str(evidence.get("reason") or "none")
     runtime_gate = deliberation_input.runtime_gate_context
     agent_state = AgentState(
         top_drive=top_drive,
@@ -136,6 +163,7 @@ def build_action_domain(deliberation_input: DeliberationInput) -> ActionDomain:
         signal_summary=dict(signal_summary),
         runtime_gate_context=dict(runtime_gate),
         compatibility_pressure_count=compatibility_pressure_count,
+        primary_pressure_reason=primary_pressure_reason,
         seconds_to_heartbeat=_seconds_to_heartbeat(runtime_gate),
         working_memory_context=deliberation_input.working_memory_context,
     )
@@ -179,10 +207,13 @@ def _build_base_candidates(agent_state: AgentState) -> list[Candidate]:
         "top_drive": agent_state.top_drive,
         "threat_signal_count": int(agent_state.signal_summary.get("threat_signal_count", 0)),
         "compatibility_pressure_count": agent_state.compatibility_pressure_count,
+        "primary_pressure_reason": agent_state.primary_pressure_reason,
+        **_runtime_gate_projection(agent_state),
     }
     common_justification = (
         f"top_drive={agent_state.top_drive}",
         f"threat_signal_count={int(agent_state.signal_summary.get('threat_signal_count', 0))}",
+        f"primary_pressure_reason={agent_state.primary_pressure_reason}",
     )
     return [
         _build_candidate(
@@ -196,6 +227,18 @@ def _build_base_candidates(agent_state: AgentState) -> list[Candidate]:
             candidate_profile=STABILIZE_FIRST_PROFILE,
             common_domain=common_domain,
             common_justification=common_justification,
+        ),
+        *(
+            [
+                _build_candidate(
+                    candidate_id="candidate-compatibility-escalate-first",
+                    candidate_profile=ESCALATE_FIRST_PROFILE,
+                    common_domain=common_domain,
+                    common_justification=common_justification,
+                )
+            ]
+            if agent_state.primary_pressure_reason in HIGH_RISK_ESCALATION_REASONS
+            else []
         ),
     ]
 
@@ -253,7 +296,23 @@ def _restriction_reasons_from_candidates(agent_state: AgentState, candidates: li
     reasons.insert(0, f"admitted_candidate_schemas={len(candidates)}")
     if len(candidates) == 1 and "habit_candidate_narrowing" in candidates[0].justification:
         reasons.append("habit_candidate_narrowing")
+    if any(str(candidate.parameter_domain.get("candidate_profile") or "") == ESCALATE_FIRST_PROFILE for candidate in candidates):
+        reasons.append("high_risk_escalation_schema_admitted")
     return tuple(reasons)
+
+
+def _runtime_gate_projection(agent_state: AgentState) -> dict[str, Any]:
+    """Return the minimal runtime-gate projection that must already exist pre-generation."""
+
+    runtime_gate = agent_state.runtime_gate_context
+    return {
+        "instance_valid": bool(runtime_gate.get("instance_valid", False)),
+        "turn_allowed": bool(runtime_gate.get("turn_allowed", False)),
+        "critical_blocked": bool(runtime_gate.get("critical_blocked", False)),
+        "conservative_mode": bool(runtime_gate.get("conservative_mode", False)),
+        "life_state": runtime_gate.get("life_state"),
+    }
+
 
 
 def _seconds_to_heartbeat(runtime_gate_context: dict[str, Any]) -> float | None:
@@ -272,6 +331,8 @@ __all__ = [
     "COMPATIBILITY_RELEASE_IMPACT",
     "OBSERVE_FIRST_PROFILE",
     "STABILIZE_FIRST_PROFILE",
+    "ESCALATE_FIRST_PROFILE",
+    "HIGH_RISK_ESCALATION_REASONS",
     "build_action_domain",
     "apply_dynamic_anchor",
     "apply_structural_anchor",

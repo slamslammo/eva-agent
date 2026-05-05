@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from ..kernel import StateStore, to_iso8601
-from ..anchor import apply_structural_anchors, build_action_domain
+from ..anchor import build_action_domain
 from .contracts import DeliberationAuditRecord, DeliberationInput, build_deliberation_audit_record, build_deliberation_input
 from .memory import WorkingMemoryAdapter, build_memory_stub
 from .peer_circuit import decide_release
@@ -52,7 +52,7 @@ def run_deliberation(now: datetime, deliberation_input: DeliberationInput) -> tu
 
     recorded_at = to_iso8601(now) or now.isoformat()
     action_domain = build_action_domain(deliberation_input)
-    candidates = apply_structural_anchors(build_candidates(action_domain), deliberation_input)
+    candidates = build_candidates(action_domain)
     assessments = assess_candidates(candidates, deliberation_input)
     release_decision = decide_release(assessments)
     memory_stub = build_memory_stub(recorded_at, deliberation_input, release_decision)

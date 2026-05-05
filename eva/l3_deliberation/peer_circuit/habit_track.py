@@ -8,6 +8,7 @@ from ..contracts import Candidate, DeliberationInput
 
 OBSERVE_FIRST_PROFILE = "observe_first"
 STABILIZE_FIRST_PROFILE = "stabilize_first"
+ESCALATE_FIRST_PROFILE = "escalate_first"
 MIN_HABIT_NARROWING_EVIDENCE = 4
 MIN_HABIT_NARROWING_STABILITY = 0.75
 MIN_HABIT_NARROWING_CONFIDENCE = 0.8
@@ -41,6 +42,7 @@ def shape_candidates_with_habit_track(
     base_order = {
         OBSERVE_FIRST_PROFILE: 0,
         STABILIZE_FIRST_PROFILE: 1,
+        ESCALATE_FIRST_PROFILE: 2,
     }
     return sorted(
         enriched_candidates,
@@ -64,7 +66,7 @@ def crystallized_habit_skill_hints(deliberation_input: DeliberationInput) -> dic
         if not isinstance(skill, dict) or not bool(skill.get("crystallized", False)):
             continue
         candidate_profile = str(skill.get("candidate_profile") or "")
-        if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
+        if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
             continue
         current = hints.get(candidate_profile)
         candidate_hint = {
@@ -90,7 +92,7 @@ def habitual_candidate_explanations(deliberation_input: DeliberationInput) -> di
             if not isinstance(summary, dict):
                 continue
             candidate_profile = str(summary.get("candidate_profile") or "")
-            if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
+            if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
                 continue
             explanations[candidate_profile] = {
                 "habit_eligible": bool(summary.get("habit_eligible", False)),
@@ -105,7 +107,7 @@ def habitual_candidate_explanations(deliberation_input: DeliberationInput) -> di
             if not isinstance(outcome, dict):
                 continue
             candidate_profile = str(outcome.get("candidate_profile") or "")
-            if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE}:
+            if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
                 continue
             entry = explanations.setdefault(candidate_profile, {})
             inferred_trace = _habitual_trace_from_outcome(outcome)

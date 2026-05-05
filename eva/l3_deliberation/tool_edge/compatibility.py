@@ -7,15 +7,17 @@ from typing import TYPE_CHECKING
 
 from ...kernel import RuntimeState, StateStore
 from ..contracts import ReleaseToken
-from ..peer_circuit.mediator import validate_release_token
-from .executors import ConservativeRuntime, _allow_repair_side_effects, execute_response_action
-from .history import append_response_history
+from .executors import ConservativeRuntime, execute_integrity_selection
+from .history import append_response_history, build_response_summary
 from .tool_registry import (
+    DEFAULT_RESPONSE_MODE,
     ResponseCandidate,
     ResponseFilterDecision,
     ResponseSelection,
     build_integrity_response_candidates,
     filter_response_candidates,
+    response_mode_from_release_context,
+    select_integrity_response,
     select_response_action,
 )
 
@@ -28,10 +30,12 @@ __all__ = [
     "ResponseFilterDecision",
     "ResponseSelection",
     "ConservativeRuntime",
+    "DEFAULT_RESPONSE_MODE",
     "build_integrity_response_candidates",
     "filter_response_candidates",
+    "select_integrity_response",
     "select_response_action",
-    "execute_response_action",
+    "execute_integrity_selection",
     "respond_to_integrity_pressure",
     "maybe_respond_after_patrol",
 ]
@@ -52,36 +56,24 @@ def respond_to_integrity_pressure(
 ) -> dict[str, object]:
     """Run the compatibility-only response closure for one integrity pressure."""
 
-    candidates = build_integrity_response_candidates(pressure, runtime_state)
-    decisions = filter_response_candidates(pressure, runtime_state, candidates)
-    selection = select_response_action(
+    normalized_release_context = None if release_context is None else dict(release_context)
+    selection = select_integrity_response(
         pressure,
         runtime_state,
-        candidates,
-        decisions,
-        bridge_policy=((release_context or {}).get("bridge_policy") if isinstance((release_context or {}).get("bridge_policy"), dict) else None),
+        release_context=normalized_release_context,
     )
-    normalized_release_context = None if release_context is None else dict(release_context)
-    validate_release_token(
-        release_token,
-        selected_candidate_id=selected_candidate_id,
-        expected_outcome="compatibility_release",
-    )
-    effective_allow_repair_side_effects = _allow_repair_side_effects(
-        bridge_policy=((normalized_release_context or {}).get("bridge_policy") if isinstance((normalized_release_context or {}).get("bridge_policy"), dict) else None),
-        default=allow_repair_side_effects,
-    )
-    execution_result = execute_response_action(
+    execution_result = execute_integrity_selection(
         store,
         pressure,
         runtime_state,
         selection,
         runtime=runtime,
-        allow_repair_side_effects=effective_allow_repair_side_effects,
+        allow_repair_side_effects=allow_repair_side_effects,
+        release_context=normalized_release_context,
         release_token=release_token,
         selected_candidate_id=selected_candidate_id,
     )
-    response_mode = str((normalized_release_context or {}).get("response_mode") or "pressure_led_compatibility")
+    response_mode = response_mode_from_release_context(normalized_release_context)
     drive_context_payload = None if drive_context is None else (drive_context.to_dict() if hasattr(drive_context, "to_dict") else dict(drive_context))
     append_response_history(
         store,
@@ -94,17 +86,13 @@ def respond_to_integrity_pressure(
         release_context=normalized_release_context,
         response_mode=response_mode,
     )
-    return {
-        "pressure_id": pressure.pressure_id,
-        "pressure_type": pressure.type,
-        "selected_action": selection.selected_action,
-        "selected_posture": selection.selected_posture,
-        "execution_status": execution_result["execution_status"],
-        "pressure_outcome": execution_result["pressure_outcome"],
-        "followup_needed": execution_result["followup_needed"],
-        "drive_context": drive_context_payload,
-        "response_mode": response_mode,
-    }
+    return build_response_summary(
+        pressure,
+        selection,
+        execution_result,
+        drive_context=drive_context_payload,
+        response_mode=response_mode,
+    )
 
 
 def maybe_respond_after_patrol(

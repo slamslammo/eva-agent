@@ -10,7 +10,9 @@ from ...kernel import ActivePressure, RuntimeState, StateStore, to_iso8601
 if TYPE_CHECKING:
     from .tool_registry import ResponseSelection
 
-__all__ = ["append_response_history", "build_response_selected_event_details"]
+from .tool_registry import DEFAULT_RESPONSE_MODE
+
+__all__ = ["append_response_history", "build_response_selected_event_details", "build_response_summary"]
 
 
 def append_response_history(
@@ -22,7 +24,7 @@ def append_response_history(
     now: datetime,
     drive_context: dict[str, Any] | None = None,
     release_context: dict[str, Any] | None = None,
-    response_mode: str = "pressure_led_compatibility",
+    response_mode: str = DEFAULT_RESPONSE_MODE,
 ) -> dict[str, Any]:
     """Append one complete Step 2 response record and return it."""
 
@@ -58,6 +60,32 @@ def append_response_history(
     if release_context is not None:
         payload["release_context"] = dict(release_context)
     store.append_response_history(payload)
+    return payload
+
+
+
+def build_response_summary(
+    pressure: ActivePressure,
+    selection: ResponseSelection,
+    execution_result: dict[str, Any],
+    *,
+    drive_context: dict[str, Any] | None = None,
+    response_mode: str = DEFAULT_RESPONSE_MODE,
+) -> dict[str, Any]:
+    """Build the bounded response summary returned to lifecycle after execution."""
+
+    payload = {
+        "pressure_id": pressure.pressure_id,
+        "pressure_type": pressure.type,
+        "selected_action": selection.selected_action,
+        "selected_posture": selection.selected_posture,
+        "execution_status": execution_result["execution_status"],
+        "pressure_outcome": execution_result["pressure_outcome"],
+        "followup_needed": execution_result["followup_needed"],
+        "response_mode": response_mode,
+    }
+    if drive_context is not None:
+        payload["drive_context"] = drive_context
     return payload
 
 

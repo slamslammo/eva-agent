@@ -157,9 +157,120 @@
 - `eva/l3_deliberation/tool_edge/executors.py`
 
 
+## 7.6 B-1 anchor pre-generative residue closeout
+
+在 A-1 ~ A-4 milestone 之后，仓库继续完成了一轮面向 anchor 收口的 B-1 slice：
+- `ActionDomain` 继续作为候选生成主入口，生成后的候选已内建最小 runtime-gate projection
+- `apply_structural_anchors(...)` 已收窄为 residual compatibility projection seam，不再承担主要 candidate legality 语义
+- `eva/anchor/cross_layer.py` 保留为极小兼容投影层，用于 legacy/manual candidate 路径
+
+本轮边界仍保持：
+- 不恢复 post-hoc anchor 为主要合法化路径
+- 不扩写 compatibility bridge
+- 不改动 mediator / tool-edge authority 链
+- 不引入新的 root-level owner
+
+本轮验证已完成：
+- `python -m unittest tests.anchor.test_domain_restriction`
+- `python -m unittest tests.anchor.test_structural`
+- `python -m unittest tests.l3_deliberation.reasoning.test_candidates`
+- `python -m unittest tests.l3_deliberation.reasoning.test_value`
+- `python -m unittest tests.l3_deliberation.peer_circuit.test_mediator`
+- `python -m unittest tests.integration.test_patrol_turn_flow tests.integration.test_main_runtime tests.integration.test_lifecycle_patrol_learning tests.l3_deliberation.memory.test_stub`
+- 全量回归：`193 tests`
+
+Transitional / residual 评估：
+- `eva/anchor/cross_layer.py` 仍保留，但已降为 residual compatibility projection seam
+- 该文件保留的理由是兼容手工构造候选与少量 legacy 路径；若后续 slice 不再需要，可继续退场
+
+## 7.7 B-2 richer episodic retrieval
+
+在 B-1 之后，仓库继续完成了一轮面向 retrieval / working-memory 读侧的 B-2 slice：
+- `memory/retrieval.py` 现在按 `situation_key`、`pressure_reason`、`top_drive`、`life_state` 与连续 `salience` 组合排序 episodic / learning traces
+- `memory/encoding.py` 已把 `drive_state_at_encoding`、`pressure_reason` 与 `situation_key` 写入 append-only episodic payload
+- `reasoning/working_memory.py` 已按 `learning_outcomes -> response_history -> episodic traces` 的顺序组装 advisory context
+
+本轮边界仍保持：
+- working memory 仍是 advisory-only context，不成为 release authority
+- retrieval 只深化读侧语义，不回写 drive state
+- audit / memory / learning 继续分轨
+
+本轮验证已完成：
+- `python -m unittest tests.l3_deliberation.memory.test_stub`
+- `python -m unittest tests.l3_deliberation.memory.test_encoding`
+- `python -m unittest tests.l3_deliberation.reasoning.test_working_memory`
+- `python -m unittest tests.l3_deliberation.memory.test_episodic`
+- `python -m unittest tests.integration.test_lifecycle_patrol_learning`
+- 全量回归：`193 tests`
+
+## 7.8 B-3 compatibility bridge demotion
+
+在 B-2 之后，仓库继续完成了一轮面向 tool-edge owner demotion 的 B-3 slice：
+- `tool_registry.py` 现在拥有可复用的 response selection / bridge-policy 消费 helper
+- `executors.py` 现在拥有 mediated execution closeout 与 release-context execution policy 消费
+- `history.py` 现在拥有 response summary / history 组装
+- `compatibility.py` 已压薄为 pressure-scoped wrapper，不再内联通用选择 / 执行 / summary 语义
+
+本轮边界仍保持：
+- 不扩大 action surface
+- 不放松 mediator / release-token authority
+- response history 继续 append-only
+- compatibility bridge 继续保持 bounded
+
+本轮验证已完成：
+- `python -m unittest tests.l3_deliberation.tool_edge.test_tool_registry`
+- `python -m unittest tests.l3_deliberation.tool_edge.test_executors`
+- `python -m unittest tests.l3_deliberation.tool_edge.test_compatibility`
+- `python -m unittest tests.l3_deliberation.peer_circuit.test_goal_directed_track`
+- `python -m unittest tests.integration.test_patrol_turn_flow tests.integration.test_main_runtime`
+- 全量回归：`195 tests`
+
+## 7.9 B-4 drive-native L3 shaping
+
+在 B-3 之后，仓库继续完成了一轮面向 L3 reasoning / selection 语义收紧的 B-4 slice：
+- `reasoning/value_judgment.py` 现在以 drive-weighted score 作为 allowed candidate 的主排序依据
+- pressure / threat / compatibility-pressure 现在只保留为 compatibility projection reasons 与 bounded fallback score；仅在 drive score 无法分化候选时提供极小 fallback
+- `peer_circuit/selection.py` 现在保持 drive-led score ordering，learning bias 只在同分 allowed candidate 内做 bounded tie-break
+- `reasoning/conflict_detection.py` 的 reason vocabulary 已从 bias/pressure-led 表述收紧为 projection/fallback 表述
+
+本轮边界仍保持：
+- pressure 不恢复为 primary decision owner
+- compatibility bridge 不扩大
+- learning bias 继续保持 advisory and bounded
+- mediator / default inhibition / release-token authority 不变
+
+本轮验证已完成：
+- `python -m unittest tests.l3_deliberation.reasoning.test_value`
+- `python -m unittest tests.l3_deliberation.reasoning.test_conflict_detection`
+- `python -m unittest tests.l3_deliberation.peer_circuit.test_mediator`
+- `python -m unittest tests.integration.test_patrol_turn_flow`
+- `python -m unittest tests.l3_deliberation.tool_edge.test_tool_registry tests.l3_deliberation.tool_edge.test_executors tests.l3_deliberation.tool_edge.test_compatibility tests.l3_deliberation.peer_circuit.test_goal_directed_track tests.l3_deliberation.memory.test_encoding tests.l3_deliberation.peer_circuit.test_rpe`
+- `python -m unittest tests.integration.test_main_runtime`
+- 全量回归：`195 tests`
+
+## 7.10 B-5 candidate and release vocabulary widening
+
+在 B-4 之后，仓库继续完成了一轮面向 candidate / release 词汇受限扩展的 B-5 slice：
+- `anchor/domain_restriction.py` 现在会在高风险 integrity reason（`runtime_files_missing`、`runtime_not_writable`、`recent_distress_detected`）下额外 admitted 一个受限 `escalate_first` candidate profile
+- `reasoning/conflict_detection.py`、`reasoning/value_judgment.py` 与 `peer_circuit/goal_directed_track.py` 现在可在不放松 drive-led judgment 与 mediator-owned release 的前提下处理 `escalate_first` profile / policy / expected outcome
+- `tool_edge/tool_registry.py` 与 bounded compatibility response path 继续复用既有 `escalate_integrity_risk` action，不新增 side-effect authority，也不新增并行 execution owner
+- `peer_circuit/rpe.py` 与 `habit_track.py` 已对更宽 internal profile vocabulary 保持兼容，learning artifact 仍沿 append-only 轨道记录
+
+本轮边界仍保持：
+- 不新增新的 release authority
+- 不绕过 mediator / release token
+- 不扩大 compatibility bridge 为通用 execution layer
+- 不新增 side-effect action；仅复用 bounded `escalate_integrity_risk`
+
+本轮验证已完成：
+- `python -m unittest tests.anchor.test_domain_restriction tests.l3_deliberation.reasoning.test_candidates tests.l3_deliberation.reasoning.test_conflict_detection tests.l3_deliberation.reasoning.test_value`
+- `python -m unittest tests.l3_deliberation.peer_circuit.test_goal_directed_track tests.l3_deliberation.peer_circuit.test_mediator tests.l3_deliberation.peer_circuit.test_rpe`
+- `python -m unittest tests.l3_deliberation.tool_edge.test_tool_registry tests.l3_deliberation.tool_edge.test_compatibility tests.integration.test_patrol_turn_flow`
+- 全量回归：`203 tests`
+
 ## 8. 下一步
 
 下一步继续聚焦：
-1. 基于当前 stable owner tree 梳理下一开发 slice，而不是恢复 transitional root path
-2. 优先补齐仍在 `docs/current-status.md` 中标为 gap 的 L1 / L2 / L3 能力深挖项
+1. 基于已扩宽的 candidate / release baseline，评估下一个 mediated action-surface slice
+2. 保持 compatibility bridge bounded，不把 pressure 投影重新升格为主语义
 3. 继续保持 `README.md`、`docs/eva-agent-full-implementation.md`、`docs/current-status.md`、`maintainer/development/roadmap.md` 与本文件口径一致
