@@ -5,11 +5,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from eva.kernel import ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
 from eva.l1_sensing import SensorOutput, SensorSpec, build_sensor_registry
-from eva.l3_deliberation.memory import WorkingMemoryAdapterRequest, WorkingMemoryAdapterResponse
+from eva.l3_deliberation.memory import WorkingMemoryAdapterRequest, WorkingMemoryAdapterResponse, WorkingMemoryModelClientConfig
 from eva.kernel.main import run_runtime
 
 
@@ -29,6 +30,12 @@ class CapturingRuntimeWorkingMemoryAdapter:
         )
 
 
+class FailingRuntimeWorkingMemoryAdapter:
+    def build_advisory_context(self, request: WorkingMemoryAdapterRequest) -> WorkingMemoryAdapterResponse | None:
+        del request
+        raise RuntimeError("anthropic_transport_unavailable")
+
+
 class MainLoopTests(unittest.TestCase):
     def test_runtime_config_carries_working_memory_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -36,8 +43,9 @@ class MainLoopTests(unittest.TestCase):
             self.assertEqual(config.working_memory_backend, "auto")
             self.assertIsNone(config.working_memory_adapter)
             self.assertEqual(config.working_memory_adapter_mode, "inert")
-            self.assertEqual(config.working_memory_model_client_mode, "inert")
-            self.assertEqual(config.working_memory_model_client_config.provider, "placeholder")
+            self.assertEqual(config.working_memory_model_client_mode, "anthropic")
+            self.assertEqual(config.working_memory_model_client_config.provider, "anthropic")
+            self.assertEqual(config.working_memory_model_client_config.model, "claude-sonnet-4-6")
 
     def test_bounded_run_creates_runtime_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -242,7 +250,7 @@ class MainLoopTests(unittest.TestCase):
             self.assertGreaterEqual(len(patrol_turns), 1)
             self.assertEqual(patrol_turns[0]["details"]["signal_summary"]["status_signal_count"], 1)
 
-    def test_runtime_defaults_to_inert_null_adapter_for_llm_backend(self) -> None:
+    def test_runtime_defaults_to_anthropic_client_shell_and_falls_back_locally_when_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = build_runtime_config(
                 temp_dir,
@@ -260,14 +268,25 @@ class MainLoopTests(unittest.TestCase):
                 ),
                 control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
                 working_memory_backend="llm_assisted",
+                working_memory_model_client_config=WorkingMemoryModelClientConfig(request_timeout_sec=1.5),
             )
-            run_runtime(config)
-            audits = StateStore(config.paths).read_deliberation_audit()
+            with patch.dict(os.environ, {}, clear=True):
+                run_runtime(config)
+            store = StateStore(config.paths)
+            audits = store.read_deliberation_audit()
+            llm_audits = store.read_llm_advisory_audit()
             self.assertGreaterEqual(len(audits), 1)
+            self.assertGreaterEqual(len(llm_audits), 1)
             working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
-            self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
-            self.assertEqual(working_memory_context["advisory_source"], "client_backed_model_shell")
+            self.assertEqual(working_memory_context["source_backend"], "local_rule_based")
+            self.assertEqual(working_memory_context["advisory_source"], "client_backed_anthropic:fallback")
             self.assertEqual(working_memory_context["advisory_context"], {})
+            self.assertTrue(working_memory_context["advisory_fallback"])
+            self.assertEqual(llm_audits[0]["provider"], "anthropic")
+            self.assertEqual(llm_audits[0]["model"], "claude-sonnet-4-6")
+            self.assertEqual(llm_audits[0]["request_timeout_sec"], 1.5)
+            self.assertEqual(llm_audits[0]["outcome"], "fallback_local")
+            self.assertEqual(llm_audits[0]["error"], "anthropic_api_key_missing")
 
     def test_runtime_uses_explicit_working_memory_adapter_when_provided(self) -> None:
         adapter = CapturingRuntimeWorkingMemoryAdapter()
@@ -360,8 +379,11 @@ class MainLoopTests(unittest.TestCase):
                 working_memory_model_client_mode="heuristic",
             )
             run_runtime(config)
-            audits = StateStore(config.paths).read_deliberation_audit()
+            store = StateStore(config.paths)
+            audits = store.read_deliberation_audit()
+            llm_audits = store.read_llm_advisory_audit()
             self.assertGreaterEqual(len(audits), 1)
+            self.assertGreaterEqual(len(llm_audits), 1)
             working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
             advisory_context = working_memory_context["advisory_context"]
             self.assertEqual(working_memory_context["source_backend"], "llm_assisted")
@@ -369,6 +391,42 @@ class MainLoopTests(unittest.TestCase):
             self.assertEqual(advisory_context["candidate_suggestions"], ["observe_first"])
             self.assertIn("model_client_provider_heuristic", advisory_context["reasoning_trace"])
             self.assertIn("model_client_bounded-local-placeholder", advisory_context["reasoning_trace"])
+            self.assertEqual(llm_audits[0]["provider"], "heuristic")
+            self.assertEqual(llm_audits[0]["outcome"], "advisory_attached")
+
+    def test_runtime_fallback_writes_separate_llm_audit_without_changing_release_flow(self) -> None:
+        adapter = FailingRuntimeWorkingMemoryAdapter()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                working_memory_backend="llm_assisted",
+            )
+            run_runtime(config, working_memory_adapter=adapter)
+            store = StateStore(config.paths)
+            audits = store.read_deliberation_audit()
+            llm_audits = store.read_llm_advisory_audit()
+            self.assertGreaterEqual(len(audits), 1)
+            self.assertGreaterEqual(len(llm_audits), 1)
+            working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
+            self.assertEqual(working_memory_context["source_backend"], "local_rule_based")
+            self.assertEqual(working_memory_context["advisory_source"], "explicit_adapter:fallback")
+            self.assertTrue(working_memory_context["advisory_fallback"])
+            self.assertIn(audits[0]["release_decision"]["outcome"], {"released", "deferred", "withhold"})
+            self.assertEqual(llm_audits[0]["outcome"], "fallback_local")
+            self.assertEqual(llm_audits[0]["error"], "anthropic_transport_unavailable")
 
     def test_cli_accepts_working_memory_backend_flag(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -465,11 +523,16 @@ class MainLoopTests(unittest.TestCase):
                 env=env,
             )
             self.assertIn("event=startup", result.stdout)
-            audits = StateStore(build_runtime_config(temp_dir).paths).read_deliberation_audit()
+            store = StateStore(build_runtime_config(temp_dir).paths)
+            audits = store.read_deliberation_audit()
+            llm_audits = store.read_llm_advisory_audit()
             self.assertGreaterEqual(len(audits), 1)
+            self.assertGreaterEqual(len(llm_audits), 1)
             advisory_context = audits[0]["deliberation_input"]["working_memory_context"]["advisory_context"]
             self.assertIn("model_client_provider_cli-test-provider", advisory_context["reasoning_trace"])
             self.assertIn("model_client_cli-test-model", advisory_context["reasoning_trace"])
+            self.assertEqual(llm_audits[0]["provider"], "cli-test-provider")
+            self.assertEqual(llm_audits[0]["model"], "cli-test-model")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(__file__).resolve().parents[2]

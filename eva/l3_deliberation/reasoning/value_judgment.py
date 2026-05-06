@@ -76,6 +76,13 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                 if habit_priority_bonus != 0.0:
                     score += habit_priority_bonus
                     reasons.append("crystallized_habit_skill_hint")
+                advisory_bonus, advisory_reasons = _llm_advisory_bonus_for_candidate_profile(
+                    deliberation_input,
+                    candidate_profile=candidate_profile,
+                )
+                if advisory_bonus != 0.0:
+                    score += advisory_bonus
+                    reasons.extend(reason for reason in advisory_reasons if reason not in reasons)
         else:
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
@@ -221,6 +228,31 @@ def _habit_skill_priority_bonus(parameter_domain: dict[str, object]) -> float:
     if confidence < 0.6 or evidence_count < 3:
         return 0.0
     return min(0.1, confidence * 0.1)
+
+
+
+def _llm_advisory_bonus_for_candidate_profile(
+    deliberation_input: DeliberationInput,
+    *,
+    candidate_profile: str,
+) -> tuple[float, list[str]]:
+    """Return a tiny bounded advisory bias for one admitted candidate profile."""
+
+    working_memory_context = deliberation_input.working_memory_context or {}
+    if str(working_memory_context.get("source_backend") or "") != "llm_assisted":
+        return 0.0, []
+    advisory_context = working_memory_context.get("advisory_context")
+    if not isinstance(advisory_context, dict):
+        return 0.0, []
+    candidate_suggestions = advisory_context.get("candidate_suggestions")
+    if not isinstance(candidate_suggestions, list) or candidate_profile not in candidate_suggestions:
+        return 0.0, []
+    advisory_confidence = float(advisory_context.get("confidence", 0.0))
+    if advisory_confidence <= 0.0:
+        return 0.0, []
+    bounded_bonus = min(0.12, advisory_confidence * 0.12)
+    return bounded_bonus, ["llm_advisory_candidate_preference"]
+
 
 
 def _bounded_learning_bias(raw_bias: float) -> float:

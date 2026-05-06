@@ -39,6 +39,20 @@ class CapturingWorkingMemoryAdapter:
         return self.response
 
 
+class FailingWorkingMemoryAdapter:
+    def __init__(self, message: str = "anthropic_transport_unavailable") -> None:
+        self.message = message
+        self.called = False
+
+    def build_advisory_context(
+        self,
+        request: WorkingMemoryAdapterRequest,
+    ) -> WorkingMemoryAdapterResponse | None:
+        self.called = True
+        del request
+        raise RuntimeError(self.message)
+
+
 class WorkingMemoryReasoningTests(unittest.TestCase):
     def test_build_working_memory_context_returns_empty_safe_defaults(self) -> None:
         deliberation_input = build_deliberation_input(
@@ -143,7 +157,7 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
 
         adapter = CapturingWorkingMemoryAdapter(
             WorkingMemoryAdapterResponse(
-                candidate_suggestions=("observe_first",),
+                candidate_suggestions=("observe_first", "invented_profile"),
                 prediction_hints=("likely_information_gain",),
                 reasoning_trace=("integrity_conflict_detected",),
                 confidence=0.61,
@@ -443,6 +457,56 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             )
 
         self.assertEqual(context.advisory_source, "client_backed_model_shell")
+
+    def test_llm_backend_falls_back_to_local_context_and_writes_audit_record(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        adapter = FailingWorkingMemoryAdapter("anthropic_transport_unavailable")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            context = build_working_memory_context_from_store(
+                store,
+                deliberation_input,
+                backend="llm_assisted",
+                llm_adapter=adapter,
+                advisory_source="client_backed_anthropic",
+            )
+            llm_audit = store.read_llm_advisory_audit()
+
+        self.assertTrue(adapter.called)
+        self.assertEqual(context.source_backend, "local_rule_based")
+        self.assertEqual(context.advisory_source, "client_backed_anthropic:fallback")
+        self.assertEqual(context.advisory_context, {})
+        self.assertTrue(context.advisory_fallback)
+        self.assertEqual(len(llm_audit), 1)
+        self.assertEqual(llm_audit[0]["provider"], "anthropic")
+        self.assertEqual(llm_audit[0]["model"], "claude-sonnet-4-6")
+        self.assertEqual(llm_audit[0]["outcome"], "fallback_local")
+        self.assertEqual(llm_audit[0]["error"], "anthropic_transport_unavailable")
 
         summaries = summarize_habit_bias(
             [

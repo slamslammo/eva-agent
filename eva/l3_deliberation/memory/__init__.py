@@ -14,7 +14,10 @@ from .working_memory_adapter import (
     build_builtin_working_memory_adapter,
 )
 from .working_memory_model_client import (
+    DEFAULT_ANTHROPIC_MODEL,
+    AnthropicWorkingMemoryModelClient,
     HeuristicWorkingMemoryModelClient,
+    MODEL_CLIENT_MODE_ANTHROPIC,
     MODEL_CLIENT_MODE_HEURISTIC,
     MODEL_CLIENT_MODE_INERT,
     NullWorkingMemoryModelClient,
@@ -63,7 +66,10 @@ __all__ = [
     "WorkingMemoryModelClientResponse",
     "NullWorkingMemoryModelClient",
     "HeuristicWorkingMemoryModelClient",
+    "AnthropicWorkingMemoryModelClient",
+    "DEFAULT_ANTHROPIC_MODEL",
     "MODEL_CLIENT_MODE_INERT",
     "MODEL_CLIENT_MODE_HEURISTIC",
+    "MODEL_CLIENT_MODE_ANTHROPIC",
     "build_builtin_working_memory_model_client",
 ]

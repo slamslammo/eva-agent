@@ -24,16 +24,17 @@ Instead of starting from a task-first agent and adding more orchestration, the p
 
 ## Current project posture
 
-The repository is an early reference implementation, not a complete EVA system.
+The repository is still an early reference implementation, not a complete EVA system.
 
 It already contains:
 
 - a stable kernel baseline
 - an L1 / L2 baseline
-- a minimal L3 deliberation skeleton
-- a first bounded learning baseline around outcome evaluation, bounded bias, and habit shaping
+- a bounded L3 deliberation skeleton with learning and habit shaping
+- a real but advisory-only Anthropic-backed working-memory path with automatic local fallback
+- separated append-only audit, episodic, learning, habit, and LLM-advisory tracks
 
-The project is currently consolidating its public architecture and status documents before deciding the next implementation step.
+The current priority is to deepen retrieval/context composition and broaden mediated action vocabulary without weakening the advisory-only and mediator-owned release boundaries.
 
 ## Core architectural commitments
 

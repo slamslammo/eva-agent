@@ -17,12 +17,15 @@ from ..l3_deliberation import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,
     ClientBackedWorkingMemoryAdapter,
+    DEFAULT_ANTHROPIC_MODEL,
     HeuristicWorkingMemoryAdapter,
+    MODEL_CLIENT_MODE_ANTHROPIC,
     MODEL_CLIENT_MODE_HEURISTIC,
     MODEL_CLIENT_MODE_INERT,
     NullWorkingMemoryAdapter,
     WorkingMemoryAdapter,
     WorkingMemoryModelClientConfig,
+    AnthropicWorkingMemoryModelClient,
     build_builtin_working_memory_adapter,
 )
 
@@ -168,6 +171,9 @@ def _working_memory_advisory_source(
         if isinstance(resolved_adapter, HeuristicWorkingMemoryAdapter):
             return "builtin_heuristic_adapter"
         if isinstance(resolved_adapter, ClientBackedWorkingMemoryAdapter):
+            client = getattr(resolved_adapter, "client", None)
+            if isinstance(client, AnthropicWorkingMemoryModelClient):
+                return "client_backed_anthropic"
             return "client_backed_model_shell"
         if isinstance(resolved_adapter, NullWorkingMemoryAdapter):
             return "auto_no_adapter"
@@ -177,6 +183,9 @@ def _working_memory_advisory_source(
     if isinstance(resolved_adapter, HeuristicWorkingMemoryAdapter):
         return "builtin_heuristic_adapter"
     if isinstance(resolved_adapter, ClientBackedWorkingMemoryAdapter):
+        client = getattr(resolved_adapter, "client", None)
+        if isinstance(client, AnthropicWorkingMemoryModelClient):
+            return "client_backed_anthropic"
         return "client_backed_model_shell"
     if isinstance(resolved_adapter, NullWorkingMemoryAdapter):
         return "null_adapter"
@@ -202,9 +211,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--recent-event-window", type=float, default=1800.0)
     parser.add_argument("--working-memory-backend", choices=["local_rule_based", "auto", "llm_assisted"], default="local_rule_based")
     parser.add_argument("--working-memory-adapter-mode", choices=[ADAPTER_MODE_INERT, ADAPTER_MODE_HEURISTIC], default=ADAPTER_MODE_INERT)
-    parser.add_argument("--working-memory-model-client-mode", choices=[MODEL_CLIENT_MODE_INERT, MODEL_CLIENT_MODE_HEURISTIC], default=MODEL_CLIENT_MODE_INERT)
-    parser.add_argument("--working-memory-model-client-provider", default="placeholder")
-    parser.add_argument("--working-memory-model-client-model", default="bounded-local-placeholder")
+    parser.add_argument("--working-memory-model-client-mode", choices=[MODEL_CLIENT_MODE_INERT, MODEL_CLIENT_MODE_HEURISTIC, MODEL_CLIENT_MODE_ANTHROPIC], default=MODEL_CLIENT_MODE_ANTHROPIC)
+    parser.add_argument("--working-memory-model-client-provider", default="anthropic")
+    parser.add_argument("--working-memory-model-client-model", default=DEFAULT_ANTHROPIC_MODEL)
     parser.add_argument("--working-memory-model-client-timeout-sec", type=float, default=5.0)
     return parser.parse_args()
 

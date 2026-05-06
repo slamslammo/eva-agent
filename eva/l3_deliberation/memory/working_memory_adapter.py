@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from .working_memory_model_client import (
-    MODEL_CLIENT_MODE_INERT,
+    MODEL_CLIENT_MODE_ANTHROPIC,
     WorkingMemoryModelClient,
     WorkingMemoryModelClientConfig,
     WorkingMemoryModelClientRequest,
@@ -15,6 +15,7 @@ from .working_memory_model_client import (
 
 ADAPTER_MODE_INERT = "inert"
 ADAPTER_MODE_HEURISTIC = "heuristic"
+ALLOWED_CANDIDATE_SUGGESTIONS = frozenset({"observe_first", "stabilize_first", "escalate_first"})
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,7 @@ class WorkingMemoryAdapterResponse:
         """Serialize the bounded advisory response."""
 
         advisory_context: dict[str, Any] = {}
-        candidate_suggestions = _sanitize_string_sequence(self.candidate_suggestions)
+        candidate_suggestions = _sanitize_candidate_suggestions(self.candidate_suggestions)
         if candidate_suggestions:
             advisory_context["candidate_suggestions"] = candidate_suggestions
         prediction_hints = _sanitize_string_sequence(self.prediction_hints)
@@ -139,7 +140,7 @@ class ClientBackedWorkingMemoryAdapter:
         self,
         client: WorkingMemoryModelClient | None = None,
         *,
-        client_mode: str = MODEL_CLIENT_MODE_INERT,
+        client_mode: str = MODEL_CLIENT_MODE_ANTHROPIC,
         client_config: WorkingMemoryModelClientConfig | None = None,
     ) -> None:
         if client is not None:
@@ -157,7 +158,7 @@ class ClientBackedWorkingMemoryAdapter:
             return None
         payload = client_response.to_dict()
         return WorkingMemoryAdapterResponse(
-            candidate_suggestions=tuple(_sanitize_string_sequence(payload.get("candidate_suggestions"))),
+            candidate_suggestions=tuple(_sanitize_candidate_suggestions(payload.get("candidate_suggestions"))),
             prediction_hints=tuple(_sanitize_string_sequence(payload.get("prediction_hints"))),
             reasoning_trace=tuple(_sanitize_string_sequence(payload.get("reasoning_trace"))),
             confidence=_sanitize_optional_confidence(payload.get("confidence")),
@@ -190,3 +191,10 @@ def _sanitize_string_sequence(values: Any) -> list[str]:
     if not isinstance(values, (list, tuple)):
         return []
     return [value for value in values if isinstance(value, str) and value]
+
+
+
+def _sanitize_candidate_suggestions(values: Any) -> list[str]:
+    """Return only admitted candidate-profile suggestions from one advisory sequence."""
+
+    return [value for value in _sanitize_string_sequence(values) if value in ALLOWED_CANDIDATE_SUGGESTIONS]

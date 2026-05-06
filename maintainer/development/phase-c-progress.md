@@ -5,8 +5,8 @@
 ## 1. 当前状态
 
 - 日期：2026-05-06
-- 阶段状态：**Phase C 已完成并通过架构师核验；Stage D 已启动；external ChatGPT review 继续作为阶段外部 gate**
-- 判断：当前代码路径上已经形成 bounded learning、habit crystallization、working-memory advisory seam、secondary admission gate、transitional closeout 与四轨 append-only schema freeze；Phase C 仓库内 closeout 已完成并获准进入后续阶段，外部 ChatGPT review 不再阻塞 Stage D 启动，而是作为阶段外部 review gate 继续保留
+- 阶段状态：**Phase C 已完成并通过架构师核验；Stage D 与 Stage E 也已完成；本文件主要保留 Phase C closeout 与后续承接背景**
+- 判断：当前代码路径上已经形成 bounded learning、habit crystallization、working-memory advisory seam、secondary admission gate、transitional closeout 与四轨 append-only schema freeze；并已在后续 Stage E 内把 working-memory advisory seam 扩展为真实但 advisory-only 的 Anthropic-backed 路径，带 degraded fallback 与独立 LLM advisory audit。当前全量回归为 `230 tests` 全部通过。
 
 ## 2. 当前落地进展表
 
@@ -15,7 +15,7 @@
 | C-1 最小 learning slice | 建立 outcome-based learning 最小闭环 | 已完成 | `outcome delta`、`RPE-like evaluation`、append-only learning artifact 已成立 |
 | C-2 learning reinforcement | 强化 evidence / recency / stability / confidence gating | 已完成 | 低证据、stale、recent negative 等约束已进入读侧 |
 | C-3 habit crystallization | 从 recurring bias 派生 bounded habit skill | 已完成 | 单一强 skill 可触发 bounded candidate narrowing |
-| C-4 working-memory adapter baseline | 建立 advisory-only adapter seam / protocol | baseline 已形成 | 当前不继续扩写真实 llm-assisted adapter |
+| C-4 working-memory adapter baseline | 建立 advisory-only adapter seam / protocol | baseline 已形成，后续已在 Stage E 扩展为真实但 advisory-only 的 Anthropic-backed path | 仍保持 release-authority hard boundary |
 | Alignment / consolidation | 完成 theory → engineering → plan → progress 的口径统一 | 已完成 | module organization、public status 与 tests owner tree 已完成落账 |
 
 ## 3. 当前已完成内容
@@ -63,17 +63,19 @@
 - mediator 选择层已收紧为：优先保持结构分排序，learning bias 只在 allowed 候选并列时作为有界 tie-break
 - C-4 已建立 `local_rule_based / auto / llm_assisted` backend seam、`inert / heuristic` built-in adapter mode，以及独立 model-client shell
 
-## 4. 当前收口点
+## 4. Phase C closeout handoff
 
-当前收口点非常明确：
-- 当前不直接推进真实 llm-assisted adapter
-- 当前不扩写新的 release authority 或新的 habitual execution path
-- 本轮 alignment / consolidation gate 已完成
+Phase C 完成时的收口点非常明确：
+- 当时不直接推进真实 llm-assisted adapter
+- 不扩写新的 release authority 或新的 habitual execution path
+- alignment / consolidation gate 已完成
 
-这意味着当前工作的重心已切换为：
-- 基于 stable owner tree 重新评估下一开发 slice
-- 保持目标架构、当前状态与 maintainer progress 文档一致
-- 不再恢复 root-level transitional owner 或 compatibility shim
+后续阶段继续保留同一硬边界，并已在 Stage E 内把该 seam 扩展为真实但 advisory-only 的 Anthropic-backed path，仍未触碰 release authority。
+
+这意味着当前回看 Phase C 的意义主要是：
+- 作为 stable owner tree 的 closeout handoff 基线
+- 解释后续 Stage D / Stage E 为何必须沿既有边界深化
+- 避免恢复 root-level transitional owner 或 compatibility shim
 
 ## 5. 当前边界仍保持不变
 
@@ -425,10 +427,10 @@ Transitional / residual 评估：
 - `python -m unittest discover -s tests -t . -p 'test_*.py'`
 - 全量回归：`217 tests`
 
-## 8. 下一步
+## 8. 后续承接
 
-下一步主线已切换为：
-1. D-1：落地 threat-triggered reflex fast path，并保持 mediated token gate
-2. D-2：把 L1 sensing 收口到 plugin-style sensor registry composition
-3. D-3：把 drive update mechanics 收口为显式命名语义与参数面
-4. external ChatGPT review 继续作为 Stage D 阶段外部 review gate 保留
+在 Phase C closeout 之后，仓库已继续完成：
+1. Stage D：threat-triggered reflex fast path、sensor registry composition、drive update semantics 等后续 lower-layer 收口
+2. Stage E：Anthropic-backed working-memory advisory integration，包含 degraded fallback、separate LLM advisory audit 与 bounded advisory score participation
+
+当前下一步应基于 stable owner tree 继续评估 retrieval/context deepening 或下一项 lower-layer capability slice，而不是回到 Phase C closeout 之前的 transitional 清理问题。

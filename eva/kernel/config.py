@@ -20,6 +20,7 @@ class EvaPaths:
     survival_log_file: Path
     response_history_file: Path
     deliberation_audit_file: Path
+    llm_advisory_audit_file: Path
     cognitive_memory_stub_file: Path
     learning_outcomes_file: Path
     habit_bias_file: Path
@@ -77,7 +78,7 @@ class RuntimeConfig:
     working_memory_backend: str = "local_rule_based"
     working_memory_adapter: Any | None = None
     working_memory_adapter_mode: str = "inert"
-    working_memory_model_client_mode: str = "inert"
+    working_memory_model_client_mode: str = "anthropic"
     working_memory_model_client_config: Any | None = None
 
 
@@ -95,6 +96,7 @@ def build_runtime_paths(base_dir: str | Path) -> EvaPaths:
         survival_log_file=runtime_dir / "survival_log.jsonl",
         response_history_file=runtime_dir / "response_history.jsonl",
         deliberation_audit_file=runtime_dir / "deliberation_audit.jsonl",
+        llm_advisory_audit_file=runtime_dir / "llm_advisory_audit.jsonl",
         cognitive_memory_stub_file=runtime_dir / "cognitive_memory_stub.jsonl",
         learning_outcomes_file=runtime_dir / "learning_outcomes.jsonl",
         habit_bias_file=runtime_dir / "habit_bias.jsonl",
@@ -113,7 +115,7 @@ def build_runtime_config(
     working_memory_backend: str = "local_rule_based",
     working_memory_adapter: Any | None = None,
     working_memory_adapter_mode: str = "inert",
-    working_memory_model_client_mode: str = "inert",
+    working_memory_model_client_mode: str = "anthropic",
     working_memory_model_client_config: Any | None = None,
 ) -> RuntimeConfig:
     """Build a runtime config and fill in omitted sections with defaults."""

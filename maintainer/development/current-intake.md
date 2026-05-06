@@ -9,38 +9,27 @@
 
 > 这是本地单-Claude 开发阶段的轻量工作入口，不是长期归档文档。
 
-## Intake status
-
-- 当前进行中：**D-3 explicit L2 drive update semantics**
-
 ## Change intake
 
-- **Change title**: D-3 explicit L2 drive update semantics
-- **Goal**: 把 L2 drive update 从隐式算术收口为显式命名语义：decay、severity accumulation、threat bonus、curiosity recovery、curiosity suppression，并把 tunable 参数集中到 `drive_registry` 的明确配置面
-- **Change type**: feature
+- **Change title**: Stage E working-memory Anthropic advisory integration closeout
+- **Goal**: 已完成在不改变 release authority 的前提下，把 working-memory advisory seam 真实接入 Anthropic `claude-sonnet-4-6`，补上 degraded fallback，并新增独立 LLM advisory audit 轨道。
+- **Change type**: feature closeout
 
 ## Ownership
 
-- **Layer**: `l2_drive`
-- **Canonical owner**:
-  - `eva/l2_drive/drive_state.py`
-  - `eva/l2_drive/drive_registry.py`
-  - `eva/l2_drive/broadcast.py`
-- **Touched current files**:
-  - named drive update helpers, explicit policy config surface, drive tests, patrol integration assertions if needed
+- **Layer**: `l3_deliberation`
+- **Canonical owner**: `eva/l3_deliberation/memory/working_memory_model_client.py` 与 `eva/l3_deliberation/reasoning/working_memory.py` 的 working-memory advisory seam
+- **Touched current files**: `eva/l3_deliberation/memory/working_memory_model_client.py`, `eva/l3_deliberation/memory/working_memory_adapter.py`, `eva/l3_deliberation/reasoning/working_memory.py`, `eva/kernel/config.py`, `eva/kernel/state.py`, `eva/kernel/main.py`, related tests, `README.md`, `docs/current-status.md`, `maintainer/development/roadmap.md`, `maintainer/development/phase-c-progress.md`
 - **Owner class**: stable
 
 ## Realignment stage
 
 - **Stage**: `other`
-- **If other, why**: 当前属于 Stage D 的新能力切片，不是 Phase C realignment 收口
+- **If other, why**: 这是 Stage E 新 feature slice，不属于当前 codebase realignment 的 R1/R2/R3 收敛动作
 
 ## Boundary check
 
-- **Affected contracts**:
-  - `update_drive_state()` policy surface
-  - drive contributor semantics in broadcast/read-side tests
-  - patrol-facing drive summary observability
+- **Affected contracts**: working-memory advisory request/response schema、runtime advisory source selection、append-only runtime audit persistence
 - **Hard boundaries to preserve**:
   - heartbeat-first
   - default inhibition
@@ -48,30 +37,29 @@
   - drive read-only
   - mediated release
   - append-only artifact discipline
-- **Why this change does not widen a transitional owner**:
-  - 仅在 canonical L2 owner 内把现有更新逻辑显式化，不新增新的 cross-layer policy shim，也不让下游写回 drive state
+- **Why this change does not widen a transitional owner**: 改动限定在既有 working-memory adapter/model-client seam 与 runtime append-only persistence surface；不扩张 mediator、tool edge 或 transitional action path 的长期职责
 
 ## Verification
 
-- **Freeze tests**:
-  - `python -m unittest tests.l2_drive.test_drive`
-  - `python -m unittest tests.integration.test_patrol_turn_flow`
-- **Additional tests**:
-  - add one policy-surface assertion covering custom parameters or named helper effects
+- **Freeze tests**: `tests/l3_deliberation/memory/test_working_memory_adapter.py`, `tests/l3_deliberation/memory/test_working_memory_model_client.py`, `tests/l3_deliberation/reasoning/test_working_memory.py`, `tests/l3_deliberation/tool_edge/test_executors.py`, `tests/l3_deliberation/peer_circuit/test_mediator.py`, `tests/integration/test_main_runtime.py`
+- **Additional tests**: Anthropic client request shaping、LLM failure fallback、独立 audit file persistence、advisory-only schema bound、bounded advisory score participation
 - **Need full regression?** yes
 
 ## Docs sync
 
 - **Docs to update**:
-  - `docs/eva-agent-full-implementation.md`
+  - `README.md`
   - `docs/current-status.md`
   - `maintainer/development/current-intake.md`
-  - related `phase-*.md`
-- **Docs actually needed for this change**:
-  - `maintainer/development/current-intake.md`
-  - `docs/current-status.md`
+  - `maintainer/development/roadmap.md`
+  - `maintainer/development/phase-c-progress.md`
+- **Docs actually needed for this change**: `README.md`, `docs/current-status.md`, `maintainer/development/current-intake.md`, `maintainer/development/roadmap.md`, `maintainer/development/phase-c-progress.md`
 
 ## Go / no-go
 
 - **Can implementation start now?** yes
 - **If no, what must be clarified first?**:
+
+## Intake status
+
+- 当前状态：**已完成（实现、验证与文档同步已落账；待下一项 intake 覆盖）**

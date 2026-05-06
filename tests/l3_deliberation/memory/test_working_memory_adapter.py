@@ -1,25 +1,15 @@
 from __future__ import annotations
-import tempfile
 import unittest
-from eva.kernel import StateStore, build_runtime_paths
-from eva.l3_deliberation import build_deliberation_input, build_learning_outcome_record, evaluate_response_outcome
-from eva.l3_deliberation.memory import derive_habit_skills, summarize_habit_bias
-from eva.l3_deliberation.reasoning import build_working_memory_context, build_working_memory_context_from_store
+
 from eva.l3_deliberation.memory import (
     ClientBackedWorkingMemoryAdapter,
     HeuristicWorkingMemoryAdapter,
     NullWorkingMemoryAdapter,
     WorkingMemoryAdapterRequest,
     WorkingMemoryAdapterResponse,
-)
-from eva.l3_deliberation.memory import (
-    HeuristicWorkingMemoryModelClient,
-    MODEL_CLIENT_MODE_HEURISTIC,
     NullWorkingMemoryModelClient,
-    WorkingMemoryModelClientConfig,
     WorkingMemoryModelClientRequest,
     WorkingMemoryModelClientResponse,
-    build_builtin_working_memory_model_client,
 )
 
 
@@ -43,7 +33,7 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
         client = CapturingWorkingMemoryModelClient(
             WorkingMemoryModelClientResponse(
                 payload={
-                    "candidate_suggestions": ["observe_first", ""],
+                    "candidate_suggestions": ["observe_first", "", "invented_profile"],
                     "prediction_hints": ["bounded_client_hint"],
                     "reasoning_trace": ["client_shell_invoked"],
                     "confidence": 1.3,
@@ -158,7 +148,7 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
 
     def test_working_memory_adapter_response_serializes_only_bounded_fields(self) -> None:
         payload = WorkingMemoryAdapterResponse(
-            candidate_suggestions=("observe_first", ""),
+            candidate_suggestions=("observe_first", "", "invented_profile"),
             prediction_hints=("likely_information_gain",),
             reasoning_trace=("integrity_conflict_detected",),
             confidence=1.5,

@@ -532,6 +532,19 @@ class StateStore:
         lines = self.paths.deliberation_audit_file.read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
 
+    def append_llm_advisory_audit(self, payload: dict[str, Any]) -> None:
+        """Append one Stage E LLM advisory audit record."""
+
+        self._append_jsonl(self.paths.llm_advisory_audit_file, payload)
+
+    def read_llm_advisory_audit(self) -> list[dict[str, Any]]:
+        """Read the append-only Stage E LLM advisory audit log."""
+
+        if not self.paths.llm_advisory_audit_file.exists():
+            return []
+        lines = self.paths.llm_advisory_audit_file.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
     def append_cognitive_memory_stub(self, payload: dict[str, Any]) -> None:
         """Append one minimal cognitive-memory stub entry."""
 

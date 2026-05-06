@@ -20,11 +20,11 @@
 当前仓库已经具备：
 - kernel baseline
 - 已落地的 L1 / L2 baseline
-- compatibility projection / compatibility execution path
-- Phase B 最小 L3 骨架
-- Phase C 的 C-1 / C-2 / C-3 首轮落地，以及 C-4 protocol / placeholder baseline
+- bounded reflex / routing / sensor-registry / drive-policy surfaces
+- 稳定的 L3 deliberation / learning / mediator boundary
+- 真实但 advisory-only 的 Anthropic-backed working-memory path，带 local fallback 与独立 LLM advisory audit
 
-当前判断：**Phase C 的 C-1 / C-2 / C-3 已完成，C-4 baseline 已形成，alignment / consolidation gate 也已完成；R1 first-wave owner realignment 与 R2 聚合 owner 收窄均已完成并通过全量回归。R3 也已完成 explicit owner-gap closeout：`l3_deliberation/memory/retrieval.py`、`l3_deliberation/memory/episodic.py`、`l3_deliberation/reasoning/conflict_detection.py`、`l3_deliberation/peer_circuit/selection.py`、`l3_deliberation/peer_circuit/rpe.py`、`l3_deliberation/peer_circuit/goal_directed_track.py`、`l3_deliberation/peer_circuit/habit_track.py`、`l3_deliberation/tool_edge/tool_registry.py`、`l3_deliberation/tool_edge/executors.py`、`l1_sensing/state_sensors.py` 与 `l1_sensing/rate_sensors.py` 已全部于 2026-05-03 落位；随后 A-1 drive-weighted value judgment、A-2 anchor pre-generative restriction、A-3 salience-weighted episodic encoding 与 A-4 structural default inhibition 也已于 2026-05-05 形成阶段性里程碑，并通过定向验证与全量回归 `193 tests`；其后 B-1 anchor residue closeout、B-2 richer episodic retrieval、B-3 compatibility bridge demotion、B-4 drive-native L3 shaping 与 B-5 candidate / release vocabulary widening 也已完成，并通过当前全量回归 `203 tests`。后续开发应继续以 `development-standards.md`、`module-organization-contract.md` 与 `codebase-realignment-plan.md` 作为 maintainer source of truth，并在 stable owner tree 上评估下一项 mediated action-surface slice。**
+当前判断：**Phase C 已完成并完成 closeout；Stage D（reflex fast path、sensor registry composition、drive update semantics）已完成；Stage E working-memory Anthropic advisory integration 也已完成。当前仓库已经在 stable owner tree 上具备真实但有界的 model-backed working-memory advisory path，并继续保持 advisory-only / mediated-release 边界；全量回归当前为 `230 tests` 通过。后续开发应继续以 `development-standards.md`、`module-organization-contract.md` 与 `codebase-realignment-plan.md` 作为 maintainer source of truth，并在不触碰 release authority 的前提下评估下一项 lower-layer capability slice。**
 
 本轮 gate 已完成并完成落账，核心是把以下四层链条重新梳理并对齐：
 
@@ -43,7 +43,7 @@
 | Phase C-1 | 最小 learning slice | 已完成 | `maintainer/development/phase-c-progress.md` | 进入 C-2 |
 | Phase C-2 | learning reinforcement | 已完成 | `maintainer/development/phase-c-progress.md` | 进入 C-3 |
 | Phase C-3 | habit crystallization closeout | 已完成 | `maintainer/development/phase-c-progress.md` | 进入 alignment gate |
-| Phase C-4 baseline | working-memory adapter seam / protocol baseline | 已形成 baseline，未继续扩展 | `maintainer/development/phase-c-progress.md` | 等待 alignment 完成后再决定继续推进 |
+| Phase C-4 baseline | working-memory adapter seam / protocol baseline | baseline 已形成，后续已在 Stage E 收口为真实但 advisory-only 的 Anthropic-backed path | `maintainer/development/phase-c-progress.md`、`maintainer/development/current-intake.md`、`docs/current-status.md` | 继续深化 retrieval / context composition，而不放松 authority boundary |
 | Alignment / Consolidation Gate | 统一 theory → engineering → plan → progress | 已完成 | `maintainer/development/module-organization-plan.md`、`docs/current-status.md`、`maintainer/development/phase-c-progress.md` | 基于当前 stable owner tree 重新评估下一开发 slice |
 | B-1 anchor residue closeout | 收紧 A-2 已落地的 pre-generative anchor restriction，并把 runtime gate projection 前移到 `ActionDomain` candidate materialization；将 `apply_structural_anchors(...)` 收窄为 residual compatibility projection seam | 已完成 | `maintainer/development/current-intake.md`、`maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 进入 B-2 richer episodic retrieval |
 | B-2 richer episodic retrieval | 深化 episodic retrieval / working-memory 读侧语义，让 retrieval 按 `situation_key`、`pressure_reason`、continuous `salience` 与 `drive_state_at_encoding` 组合排序，并保留 advisory-only 边界 | 已完成 | `maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 进入 B-3 compatibility bridge demotion |
@@ -63,7 +63,7 @@
 | Compatibility projection layer | pressure / history / compatibility execution bridge | 仍保留，但已降级为 compatibility layer | `maintainer/development/phase-a-progress.md`、`maintainer/development/phase-b-progress.md` |
 | L3 core skeleton | candidate / value judgment / mediator / audit / memory stub | 最小骨架已落地 | `maintainer/development/phase-b-progress.md` |
 | L3 learning loop | outcome delta / bounded bias / habit crystallization | C-1 / C-2 / C-3 已完成 | `maintainer/development/phase-c-progress.md` |
-| L3 working-memory adapter | advisory-only adapter seam / protocol / placeholder / client shell | baseline 已形成，后续扩展暂挂 | `maintainer/development/phase-c-progress.md` |
+| L3 working-memory adapter | advisory-only adapter seam / protocol / real model-backed client shell / degraded fallback / separate audit track | 已形成真实但有界的 advisory path | `maintainer/development/phase-c-progress.md`、`maintainer/development/current-intake.md`、`docs/current-status.md` |
 | Anchor / mediated release | 结构性候选约束与 default inhibition release boundary | 已有最小边界，尚非完整系统 | `maintainer/development/phase-b-progress.md` |
 | Cognitive memory | salience retrieval / richer episodic memory / full skill library | 尚未完整落地 | `docs/current-status.md`、`maintainer/development/phase-c-progress.md` |
 | L4 Self Model | 更高阶主体自我模型 | 未展开 | `docs/eva-agent-full-implementation.md` |
@@ -147,13 +147,13 @@ sensing -> signal classification -> drive update -> drive broadcast
 - **C-1**：最小 learning slice（已完成）
 - **C-2**：learning reinforcement（已完成）
 - **C-3**：habit crystallization（closeout 已完成）
-- **C-4 baseline**：working-memory adapter seam / protocol baseline（已形成）
+- **C-4 baseline**：working-memory adapter seam / protocol baseline（已形成，并已在后续 Stage E 扩展为真实但 advisory-only 的 Anthropic-backed path）
 
 ### 当前边界
 - learning 只能在现有 mediator / compatibility bridge 边界内回流为 bounded bias
 - habit path 只能缩窄或优先候选，不能绕过 runtime gate、anchors、mediator
 - LLM 只能作为 working-memory / reasoning adapter，不是 release authority
-- 当前不在 alignment gate 完成前继续扩写 C-4
+- 即使 Stage E 已落地真实模型接入，working-memory 仍保留 degraded fallback、schema-bound normalization 与 advisory-only 语义
 
 ## 9. Phase D：L4 雏形
 
@@ -166,7 +166,7 @@ L4 只有在下层已经积累出足够稳定的行为史、memory 史与 releas
 - 先对齐架构与合同，再进入后续代码实现
 - 先把结构搭对，再扩高层能力
 - 过渡结构可以短期保留，但不再作为未来主路线继续长大
-- 当前文档性 alignment gate 已完成；R1 与 R2 owner realignment 已完成；R3 explicit owner-gap closeout 也已完成；下一步在 stable owner tree 上重新评估 semantic realignment、C-4 与后续功能 slice
+- 当前文档性 alignment gate、Stage D 与 Stage E 已完成；下一步在 stable owner tree 上重新评估 retrieval/context deepening 与后续 lower-layer capability slice
 - 每个 phase 都应维持：目标、边界、进展三类文档的一致性
 
 ## 11. 相关文档
