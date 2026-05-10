@@ -7,13 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Iterable
 
 from ..kernel import DimensionSnapshot, DriveState, DriveStateTable, ExternalLifeSnapshot
-from .drive_registry import (
-    DEFAULT_DRIVE_UPDATE_POLICY,
-    DRIVE_TYPES,
-    DRIVE_TYPE_BY_DIMENSION,
-    DriveUpdatePolicy,
-    severity_delta_for_status,
-)
+from .drive_registry import DrivePreset, DriveUpdatePolicy, get_default_drive_preset, severity_delta_for_status
 
 if TYPE_CHECKING:
     from ..l1_sensing.signal_bus import SignalRecord
@@ -39,12 +33,17 @@ class DriveSummary:
         }
 
 
-def build_default_drive_state(captured_at: datetime) -> DriveStateTable:
-    """Build the default Phase A drive table with all four drives present."""
+def build_default_drive_state(
+    captured_at: datetime,
+    *,
+    preset: DrivePreset | None = None,
+) -> DriveStateTable:
+    """Build the default drive table for the active scenario preset."""
 
+    resolved_preset = preset or get_default_drive_preset()
     return DriveStateTable(
         captured_at=captured_at,
-        drives=[DriveState(drive_type=drive_type, updated_at=captured_at) for drive_type in DRIVE_TYPES],
+        drives=[DriveState(drive_type=drive_type, updated_at=captured_at) for drive_type in resolved_preset.drive_types],
         updated_at=captured_at,
     )
 
@@ -54,20 +53,23 @@ def update_drive_state(
     snapshot: ExternalLifeSnapshot,
     signals: Iterable[SignalRecord],
     *,
-    policy: DriveUpdatePolicy = DEFAULT_DRIVE_UPDATE_POLICY,
+    policy: DriveUpdatePolicy | None = None,
+    preset: DrivePreset | None = None,
 ) -> tuple[DriveStateTable, DriveSummary]:
     """Update the continuous drive table from the latest patrol snapshot and signal batch."""
 
-    previous_table = previous or build_default_drive_state(snapshot.captured_at)
+    resolved_preset = preset or get_default_drive_preset()
+    resolved_policy = policy or resolved_preset.default_policy
+    previous_table = previous or build_default_drive_state(snapshot.captured_at, preset=resolved_preset)
     previous_by_type = {drive.drive_type: drive for drive in previous_table.drives}
     signal_list = list(signals)
     threat_present = any(signal.signal_class == "threat" for signal in signal_list)
     updated_drives: list[DriveState] = []
     changed_drives: list[str] = []
 
-    for drive_type in DRIVE_TYPES:
+    for drive_type in resolved_preset.drive_types:
         previous_drive = previous_by_type.get(drive_type, DriveState(drive_type=drive_type, updated_at=snapshot.captured_at))
-        drive = _update_one_drive(previous_drive, drive_type, snapshot, threat_present, policy)
+        drive = _update_one_drive(previous_drive, drive_type, snapshot, threat_present, resolved_preset, resolved_policy)
         updated_drives.append(drive)
         if abs(drive.delta) > 1e-9:
             changed_drives.append(drive_type)
@@ -85,7 +87,7 @@ def summarize_drive_state(table: DriveStateTable, *, changed_drives: list[str] |
     """Summarize the latest drive state for patrol/lifecycle visibility."""
 
     drives_by_level = sorted(table.drives, key=lambda drive: (-drive.level, drive.drive_type))
-    top_drive = drives_by_level[0] if drives_by_level else DriveState(drive_type="survival", level=0.0)
+    top_drive = drives_by_level[0] if drives_by_level else DriveState(drive_type="unknown", level=0.0)
     return DriveSummary(
         top_drive=top_drive.drive_type,
         top_level=top_drive.level,
@@ -99,16 +101,17 @@ def _update_one_drive(
     drive_type: str,
     snapshot: ExternalLifeSnapshot,
     threat_present: bool,
+    preset: DrivePreset,
     policy: DriveUpdatePolicy,
 ) -> DriveState:
     """Apply one deterministic update step for a single drive."""
 
     contributors: list[str] = []
     level = previous_drive.level
-    if drive_type == "curiosity":
+    if preset.is_curiosity_drive(drive_type):
         delta = _curiosity_delta(snapshot, threat_present, contributors, policy)
     else:
-        delta = _risk_drive_delta(drive_type, snapshot, threat_present, contributors, policy)
+        delta = _risk_drive_delta(drive_type, snapshot, threat_present, contributors, preset, policy)
     new_level = _clamp(level + delta)
     actual_delta = new_level - level
     return DriveState(
@@ -126,13 +129,14 @@ def _risk_drive_delta(
     snapshot: ExternalLifeSnapshot,
     threat_present: bool,
     contributors: list[str],
+    preset: DrivePreset,
     policy: DriveUpdatePolicy,
 ) -> float:
     """Apply named update policies for one non-curiosity drive."""
 
     delta = 0.0
     delta += _apply_base_decay(contributors, policy)
-    delta += _apply_dimension_severity_accumulation(drive_type, snapshot, contributors, policy)
+    delta += _apply_dimension_severity_accumulation(drive_type, snapshot, contributors, preset, policy)
     delta += _apply_threat_bonus(threat_present, contributors, policy)
     return delta
 
@@ -148,13 +152,14 @@ def _apply_dimension_severity_accumulation(
     drive_type: str,
     snapshot: ExternalLifeSnapshot,
     contributors: list[str],
+    preset: DrivePreset,
     policy: DriveUpdatePolicy,
 ) -> float:
     """Accumulate judged dimension severity onto the mapped drive."""
 
     delta = 0.0
     for dimension_name, dimension in snapshot.dimensions.items():
-        if DRIVE_TYPE_BY_DIMENSION.get(dimension_name) != drive_type:
+        if preset.drive_for_dimension(dimension_name) != drive_type:
             continue
         severity_delta = severity_delta_for_status(dimension.status, policy)
         if severity_delta <= 0:

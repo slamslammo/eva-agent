@@ -1,0 +1,206 @@
+# Phase A Refactor Progress
+
+## Slice A-1 — directory structure creation
+
+- **Status**: completed
+- **Goal**: create the Phase A target repository skeleton without moving logic or changing runtime behavior
+- **Touched paths**:
+  - `scenarios/__init__.py`
+  - `scenarios/linux_runtime/__init__.py`
+  - `scenarios/linux_runtime/README.md`
+  - `scenarios/linux_runtime/sensors/__init__.py`
+  - `scenarios/linux_runtime/actions/__init__.py`
+  - `scenarios/linux_runtime/anchors/__init__.py`
+  - `scenarios/linux_runtime/outcome_observers/__init__.py`
+  - `scenarios/linux_runtime/prior_skills/__init__.py`
+  - `scenarios/linux_runtime/persistence/__init__.py`
+  - `scenarios/linux_runtime/viability/__init__.py`
+  - `runners/__init__.py`
+  - `stability_metrics/README.md`
+  - `eva/persistence_targets/__init__.py`
+  - `eva/skills/__init__.py`
+  - `maintainer/development/current-intake.md`
+- **Behavior-equivalence result**:
+  - full regression baseline before A-1: `243 passed`
+  - fragile subset baseline before A-1: `59 passed`
+  - representative runtime baseline captured via `eva.kernel.main.run_runtime()` with accelerated patrol cadence
+  - full regression after A-1: `243 passed`
+  - fragile subset after A-1: `59 passed`
+- **Representative runtime baseline snapshot**:
+  - ticks: `1`
+  - turns: `5`
+  - final_life_state: `RECOVERING`
+  - patrol_turns: `3`
+  - first patrol execution_lane: `slow`
+  - first patrol top_drive: `curiosity`
+  - deliberation_audit entries: `3`
+  - cognitive_memory_stub entries: `2`
+  - learning_outcomes entries: `0`
+  - habit_bias entries: `0`
+  - llm_advisory_audit entries: `0`
+  - baseline runtime dir: `/var/folders/1b/xmsycvls2b30_8r_qxnfwxb00000gn/T/eva-a1-baseline-4cvyjkz7`
+- **Notes**:
+  - no logic moved in this slice
+  - no persistent schema changed
+  - no test logic changed
+  - `eva/skills/` was created as a reserved skeleton only; no skill ownership moved yet
+- **Next slice**: A-2 drive registry separation
+
+## Slice A-2 — drive registry separation
+
+- **Status**: completed
+- **Goal**: move Linux-specific drive preset ownership out of framework while preserving current behavior and public L2 usage
+- **Touched paths**:
+  - `eva/l2_drive/drive_registry.py`
+  - `eva/l2_drive/drive_state.py`
+  - `eva/l2_drive/__init__.py`
+  - `scenarios/linux_runtime/drive_preset.py`
+  - `scenarios/linux_runtime/__init__.py`
+  - `maintainer/development/current-intake.md`
+  - `maintainer/development/phase-a-refactor-progress.md`
+- **What changed**:
+  - framework `eva/l2_drive/drive_registry.py` now provides `DrivePreset`, `DriveRegistry`, default preset registration / resolution, and generic policy helpers
+  - Linux-specific drive names, dimension mapping, and default policy moved to `scenarios/linux_runtime/drive_preset.py`
+  - `eva/l2_drive/drive_state.py` now resolves a scenario drive preset instead of importing Linux constants directly
+  - `eva/l2_drive/__init__.py` now exports the framework seam rather than Linux constants
+  - Phase A compatibility is preserved by defaulting the framework resolver to `LINUX_RUNTIME_DRIVE_PRESET` until runner-based assembly lands later
+- **Behavior-equivalence result**:
+  - targeted A-2 subset: `94 passed`
+  - full regression after A-2: `243 passed`
+  - representative runtime trace matched A-1 baseline on the tracked summary points
+- **Representative runtime A-2 snapshot**:
+  - ticks: `1`
+  - turns: `5`
+  - final_life_state: `RECOVERING`
+  - patrol_turns: `3`
+  - first patrol execution_lane: `slow`
+  - first patrol top_drive: `curiosity`
+  - deliberation_audit entries: `3`
+  - cognitive_memory_stub entries: `2`
+  - learning_outcomes entries: `0`
+  - habit_bias entries: `0`
+  - llm_advisory_audit entries: `0`
+  - runtime dir: `/var/folders/1b/xmsycvls2b30_8r_qxnfwxb00000gn/T/eva-a2-baseline-5x856ai5`
+- **Notes**:
+  - no persistent schema changed
+  - no test logic changed
+  - no runner integration yet; default preset resolution remains a temporary Phase A compatibility mechanism
+- **Next action**: A-3 sensor implementation separation
+
+## Slice A-3 — sensor implementation separation
+
+- **Status**: completed
+- **Goal**: move Linux-specific concrete sensor collectors out of framework while preserving current L1 collection contracts, payloads, ordering, and runtime behavior
+- **Touched paths**:
+  - `eva/l1_sensing/state_sensors.py`
+  - `scenarios/linux_runtime/sensors/__init__.py`
+  - `scenarios/linux_runtime/sensors/heartbeat.py`
+  - `scenarios/linux_runtime/sensors/instance.py`
+  - `scenarios/linux_runtime/sensors/resource.py`
+  - `scenarios/linux_runtime/sensors/runtime.py`
+  - `scenarios/linux_runtime/sensors/anomaly.py`
+  - `maintainer/development/current-intake.md`
+  - `maintainer/development/phase-a-refactor-progress.md`
+- **What changed**:
+  - framework `eva/l1_sensing/state_sensors.py` now acts as a compatibility wrapper that delegates built-in provider resolution to the Linux scenario package
+  - Linux-specific host continuity, runtime integrity, resource state, and anomaly accumulation collectors now live under `scenarios/linux_runtime/sensors/`
+  - instance-validity evidence fragments are separated into `scenarios/linux_runtime/sensors/instance.py` and composed by the Linux runtime-integrity sensor
+  - framework `eva/l1_sensing/sensor_registry.py` and `eva/l1_sensing/sensing.py` remain the canonical registry / collection contract without payload or ordering changes
+- **Behavior-equivalence result**:
+  - targeted A-3 subset: `65 passed`
+  - full regression after A-3: `243 passed`
+  - representative runtime trace matched the A-2 baseline on the tracked summary points
+- **Representative runtime A-3 snapshot**:
+  - ticks: `1`
+  - turns: `5`
+  - final_life_state: `RECOVERING`
+  - patrol_turns: `3`
+  - first patrol execution_lane: `slow`
+  - first patrol top_drive: `curiosity`
+  - deliberation_audit entries: `3`
+  - cognitive_memory_stub entries: `2`
+  - learning_outcomes entries: `0`
+  - habit_bias entries: `0`
+  - llm_advisory_audit entries: `0`
+  - runtime dir: `/private/var/folders/1b/xmsycvls2b30_8r_qxnfwxb00000gn/T/eva-a3-baseline-2kfksgo1`
+- **Notes**:
+  - no persistent schema changed
+  - no test logic changed
+  - no runner integration yet; `default_sensor_registry()` still resolves Linux providers through the temporary Phase A compatibility wrapper
+- **Next action**: A-4 action implementation separation
+
+## Slice A-4 — action implementation separation
+
+- **Status**: completed
+- **Goal**: move Linux-specific action names, selection policy, and concrete handlers out of framework while preserving current mediated execution behavior and public L3 compatibility surfaces
+- **Touched paths**:
+  - `eva/l3_deliberation/tool_edge/tool_registry.py`
+  - `eva/l3_deliberation/tool_edge/executors.py`
+  - `scenarios/linux_runtime/actions/__init__.py`
+  - `scenarios/linux_runtime/actions/compatibility.py`
+  - `maintainer/development/current-intake.md`
+  - `maintainer/development/phase-a-refactor-progress.md`
+- **What changed**:
+  - framework `eva/l3_deliberation/tool_edge/tool_registry.py` now keeps the response dataclasses, bridge-policy helpers, and compatibility wrapper seam while delegating Linux-specific action policy to the scenario package
+  - Linux action names, action metadata, candidate construction, filter logic, response selection, and concrete bounded handlers now live in `scenarios/linux_runtime/actions/compatibility.py`
+  - framework `eva/l3_deliberation/tool_edge/executors.py` still owns release-token validation and mediated execution flow, but delegates the concrete selected-action payload execution to the Linux scenario package
+  - public tool-edge import surface remains unchanged through compatibility exports in `eva/l3_deliberation/tool_edge/__init__.py`
+- **Behavior-equivalence result**:
+  - targeted A-4 subset: `92 passed`
+  - full regression after A-4: `243 passed`
+  - representative runtime trace matched the A-3 baseline on the tracked summary points
+- **Representative runtime A-4 snapshot**:
+  - ticks: `1`
+  - turns: `5`
+  - final_life_state: `RECOVERING`
+  - patrol_turns: `3`
+  - first patrol execution_lane: `slow`
+  - first patrol top_drive: `curiosity`
+  - deliberation_audit entries: `3`
+  - cognitive_memory_stub entries: `2`
+  - learning_outcomes entries: `0`
+  - habit_bias entries: `0`
+  - llm_advisory_audit entries: `0`
+  - runtime dir: `/private/var/folders/1b/xmsycvls2b30_8r_qxnfwxb00000gn/T/eva-a4-baseline-n15npyze`
+- **Notes**:
+  - no persistent schema changed
+  - no test logic changed
+  - no runner integration yet; framework tool-edge surfaces still resolve Linux action policy through the temporary Phase A compatibility wrapper
+- **Next action**: A-5 anchor rules separation
+
+## Slice A-5 — anchor rules separation
+
+- **Status**: completed
+- **Goal**: move Linux-specific candidate profiles, restriction reasons, secondary gates, and drive impact defaults out of framework while preserving current anchor admission behavior and public reasoning compatibility surfaces
+- **Touched paths**:
+  - `eva/anchor/domain_restriction.py`
+  - `scenarios/linux_runtime/anchors/__init__.py`
+  - `scenarios/linux_runtime/anchors/compatibility.py`
+  - `maintainer/development/current-intake.md`
+  - `maintainer/development/phase-a-refactor-progress.md`
+- **What changed**:
+  - framework `eva/anchor/domain_restriction.py` now keeps `AgentState`, `CandidateSchema`, `ActionDomain`, runtime-gate projection, and structural anchor entrypoints while delegating Linux admission policy to the scenario package
+  - Linux candidate profile names, high-risk escalation reasons, secondary admission gate, heartbeat narrowing policy, and compatibility release impact defaults now live in `scenarios/linux_runtime/anchors/compatibility.py`
+  - framework reasoning / mediator import surfaces remain stable through compatibility re-exports from `eva/anchor/domain_restriction.py`
+- **Behavior-equivalence result**:
+  - targeted A-5 subset: `99 passed`
+  - full regression after A-5: `243 passed`
+  - representative runtime trace matched the A-4 baseline on the tracked summary points
+- **Representative runtime A-5 snapshot**:
+  - ticks: `1`
+  - turns: `5`
+  - final_life_state: `RECOVERING`
+  - patrol_turns: `3`
+  - first patrol execution_lane: `slow`
+  - first patrol top_drive: `curiosity`
+  - deliberation_audit entries: `3`
+  - cognitive_memory_stub entries: `2`
+  - learning_outcomes entries: `0`
+  - habit_bias entries: `0`
+  - llm_advisory_audit entries: `0`
+  - runtime dir: `/private/var/folders/1b/xmsycvls2b30_8r_qxnfwxb00000gn/T/eva-a5-baseline-w48nst8v`
+- **Notes**:
+  - no persistent schema changed
+  - no test logic changed
+  - no runner integration yet; framework anchor surfaces still resolve Linux policy through the temporary Phase A compatibility wrapper
+- **Next action**: mandatory architect review checkpoint

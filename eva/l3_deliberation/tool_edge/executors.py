@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from ...kernel import ActivePressure, StateStore
+from scenarios.linux_runtime.actions import execute_linux_runtime_action
 from ..contracts import ReleaseToken
 from ..peer_circuit.mediator import validate_release_token
-from .tool_registry import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, ResponseSelection, _pressure_reason, bridge_policy_from_release_context
+from .tool_registry import ResponseSelection, bridge_policy_from_release_context
 
 __all__ = [
     "ConservativeRuntime",
@@ -20,7 +21,6 @@ class ConservativeRuntime(Protocol):
     """Minimal runtime hook used by repair actions."""
 
     def activate_conservative_until_next_patrol(self) -> None: ...
-
 
 
 def execute_integrity_selection(
@@ -52,7 +52,6 @@ def execute_integrity_selection(
     )
 
 
-
 def execute_response_action(
     store: StateStore,
     pressure: ActivePressure,
@@ -71,83 +70,13 @@ def execute_response_action(
         selected_candidate_id=selected_candidate_id,
         expected_outcome="compatibility_release",
     )
-    if selection.selected_action == RECHECK_ACTION:
-        return _execute_recheck_action(store, pressure)
-    if selection.selected_action == REPAIR_ACTION:
-        if runtime is not None and allow_repair_side_effects:
-            runtime.activate_conservative_until_next_patrol()
-        return {
-            "execution_status": "completed",
-            "pressure_outcome": "unknown",
-            "side_effects": ["temporary_conservative_until_next_patrol"] if runtime is not None and allow_repair_side_effects else [],
-            "uncertainty_after_action": "still_needs_confirmation",
-            "followup_needed": True,
-            "integration_hint": "worth_review",
-        }
-    return {
-        "execution_status": "escalated",
-        "pressure_outcome": "unchanged",
-        "side_effects": [],
-        "uncertainty_after_action": "cannot_determine_safely",
-        "followup_needed": True,
-        "integration_hint": "needs_human_review",
-    }
-
-
-
-def _execute_recheck_action(store: StateStore, pressure: ActivePressure) -> dict[str, Any]:
-    """Re-read current runtime artifacts and compare them with the active pressure."""
-
-    artifacts_ok = all(
-        path.exists()
-        for path in (
-            store.paths.active_instance_file,
-            store.paths.runtime_state_file,
-            store.paths.active_pressures_file,
-            store.paths.events_file,
-        )
+    return execute_linux_runtime_action(
+        store,
+        pressure,
+        selection,
+        runtime=runtime,
+        allow_repair_side_effects=allow_repair_side_effects,
     )
-    if not artifacts_ok:
-        return {
-            "execution_status": "failed",
-            "pressure_outcome": "unknown",
-            "side_effects": [],
-            "uncertainty_after_action": "cannot_determine_safely",
-            "followup_needed": True,
-            "integration_hint": "needs_human_review",
-        }
-
-    active_pressures = store.read_active_pressures()
-    matching = [item for item in active_pressures.pressures if item.pressure_id == pressure.pressure_id]
-    if not matching:
-        return {
-            "execution_status": "completed",
-            "pressure_outcome": "relieved",
-            "side_effects": [],
-            "uncertainty_after_action": "resolved_enough",
-            "followup_needed": False,
-            "integration_hint": "none",
-        }
-
-    current_reason = _pressure_reason(matching[0])
-    if current_reason == _pressure_reason(pressure):
-        return {
-            "execution_status": "completed",
-            "pressure_outcome": "unchanged",
-            "side_effects": [],
-            "uncertainty_after_action": "still_needs_confirmation",
-            "followup_needed": True,
-            "integration_hint": "worth_review",
-        }
-    return {
-        "execution_status": "completed",
-        "pressure_outcome": "unknown",
-        "side_effects": [],
-        "uncertainty_after_action": "cannot_determine_safely",
-        "followup_needed": True,
-        "integration_hint": "worth_review",
-    }
-
 
 
 def _allow_repair_side_effects(*, bridge_policy: dict[str, Any] | None, default: bool) -> bool:
