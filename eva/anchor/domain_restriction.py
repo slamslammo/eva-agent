@@ -5,25 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from scenarios.linux_runtime.anchors import (
-    COMPATIBILITY_RELEASE_IMPACT as _COMPATIBILITY_RELEASE_IMPACT,
-    ESCALATE_FIRST_PROFILE as _ESCALATE_FIRST_PROFILE,
-    HIGH_RISK_ESCALATION_REASONS as _HIGH_RISK_ESCALATION_REASONS,
-    OBSERVE_FIRST_PROFILE as _OBSERVE_FIRST_PROFILE,
-    STABILIZE_FIRST_PROFILE as _STABILIZE_FIRST_PROFILE,
-    admit_linux_runtime_candidates,
-    restriction_reasons_for_linux_runtime_candidates,
-)
-
+from ..scenario_bundle import get_active_runtime_scenario
 from ..l3_deliberation.contracts import Candidate, DeliberationInput
 from .dynamic import apply_dynamic_anchor
 from .structural import apply_structural_anchor
 
-OBSERVE_FIRST_PROFILE = _OBSERVE_FIRST_PROFILE
-STABILIZE_FIRST_PROFILE = _STABILIZE_FIRST_PROFILE
-ESCALATE_FIRST_PROFILE = _ESCALATE_FIRST_PROFILE
-HIGH_RISK_ESCALATION_REASONS = _HIGH_RISK_ESCALATION_REASONS
-COMPATIBILITY_RELEASE_IMPACT = _COMPATIBILITY_RELEASE_IMPACT
+_ACTIVE_ANCHORS = get_active_runtime_scenario().anchors
+
+OBSERVE_FIRST_PROFILE = _ACTIVE_ANCHORS.observe_first_profile
+STABILIZE_FIRST_PROFILE = _ACTIVE_ANCHORS.stabilize_first_profile
+ESCALATE_FIRST_PROFILE = _ACTIVE_ANCHORS.escalate_first_profile
+HIGH_RISK_ESCALATION_REASONS = _ACTIVE_ANCHORS.high_risk_escalation_reasons
+COMPATIBILITY_RELEASE_IMPACT = _ACTIVE_ANCHORS.compatibility_release_impact
 
 
 @dataclass(frozen=True)
@@ -186,7 +179,7 @@ def apply_structural_anchors(candidates: list[Candidate], deliberation_input: De
 def _admit_base_candidates(agent_state: AgentState) -> list[Candidate]:
     """Return the base candidate set admitted before concrete materialization."""
 
-    return admit_linux_runtime_candidates(
+    return get_active_runtime_scenario().anchors.admit_candidates(
         agent_state,
         runtime_gate_projection=_runtime_gate_projection(agent_state),
     )
@@ -210,7 +203,7 @@ def _schema_from_candidate(candidate: Candidate) -> CandidateSchema:
 def _restriction_reasons_from_candidates(agent_state: AgentState, candidates: list[Candidate]) -> tuple[str, ...]:
     """Return compact reasons that explain which schemas were admitted."""
 
-    return restriction_reasons_for_linux_runtime_candidates(agent_state, candidates)
+    return get_active_runtime_scenario().anchors.restriction_reasons_for_candidates(agent_state, candidates)
 
 
 def _runtime_gate_projection(agent_state: AgentState) -> dict[str, Any]:

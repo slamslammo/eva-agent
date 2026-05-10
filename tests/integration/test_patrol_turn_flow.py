@@ -263,6 +263,172 @@ class PatrolTurnFlowTests(unittest.TestCase):
         self.assertIn("pressure_resolved", survival_events)
         self.assertIn("survival_snapshot", survival_events)
 
+    def test_restart_with_preexisting_archives_preserves_patrol_response_and_survival_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paths = build_runtime_paths(temp_dir)
+            lifecycle = LifecycleConfig(
+                heartbeat_interval_sec=0.2,
+                lease_duration_sec=1.0,
+                recovering_window_sec=0.05,
+                turn_guard_window_sec=0.01,
+            )
+            external_life = ExternalLifeConfig(
+                shallow_patrol_interval_sec=0.01,
+                deep_patrol_interval_sec=0.02,
+                full_report_interval_sec=0.03,
+                recent_event_window_sec=60.0,
+            )
+            initial_store = StateStore(paths, append_only_rotation_max_bytes=1)
+            initial_guard = InstanceGuard(initial_store.paths.lock_file, initial_store, lifecycle)
+            initial_guard.acquire()
+            try:
+                initial_record = initial_guard.start_instance("eva-patrol-initial")
+                initial_state = RuntimeState(
+                    life_state=LifeState.STABLE.value,
+                    instance_valid=False,
+                    heartbeat_ok=True,
+                    tick_ok=True,
+                    recovering_until=utc_now() - timedelta(seconds=1),
+                )
+                initial_store.write_runtime_state(initial_state)
+                initial_store.append_event(
+                    EventRecord(
+                        event_type="startup",
+                        timestamp=utc_now(),
+                        instance_id=initial_record.instance_id,
+                        generation=initial_record.generation,
+                    )
+                )
+                initial_runtime = LifecycleRuntime(initial_store, initial_guard, lifecycle, external_life)
+                initial_runtime.pending_work.clear()
+                first_now = utc_now()
+                initial_runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=first_now - timedelta(seconds=1)))
+
+                first = initial_runtime.run_turn(
+                    initial_state,
+                    next_heartbeat_at=first_now + timedelta(seconds=1),
+                    now=first_now,
+                )
+
+                self.assertTrue(first.executed)
+                self.assertEqual(first.details["work_kind"], "patrol")
+                self.assertEqual(first.details["execution_lane"], "fast")
+                self.assertEqual(first.details["response"]["selected_action"], RECHECK_ACTION)
+                initial_store.append_response_history(
+                    {
+                        "response_id": "resp-preexisting-extra",
+                        "recorded_at": utc_now().isoformat(),
+                        "selected_action": RECHECK_ACTION,
+                        "pressure_outcome": "relieved",
+                        "execution_status": "completed",
+                        "followup_needed": False,
+                        "drive_context": {"top_drive": "integrity", "drive_levels": {"integrity": 0.8}},
+                        "life_state": "STABLE",
+                        "pressure_reason": "recent_yield_detected",
+                    }
+                )
+                initial_store.append_learning_outcome(
+                    {
+                        "recorded_at": utc_now().isoformat(),
+                        "candidate_profile": "observe_first",
+                        "selected_action": RECHECK_ACTION,
+                        "observed_outcome": "relieved",
+                        "evaluation_label": "positive",
+                        "outcome_delta": 1.0,
+                        "confidence": 0.9,
+                        "content": {
+                            "top_drive": "integrity",
+                            "life_state": "STABLE",
+                            "pressure_reason": "recent_yield_detected",
+                            "situation_key": "integrity|STABLE|recent_yield_detected",
+                        },
+                    }
+                )
+                initial_store.append_habit_bias(
+                    {
+                        "recorded_at": utc_now().isoformat(),
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                        "candidate_profile": "observe_first",
+                        "preferred_action": RECHECK_ACTION,
+                        "evidence_count": 2,
+                        "stability_score": 0.8,
+                        "confidence": 0.9,
+                        "bias_strength": 0.75,
+                    }
+                )
+            finally:
+                initial_guard.release()
+
+            self.assertGreaterEqual(len(list(paths.append_only_archive_dir.glob("events.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(paths.append_only_archive_dir.glob("survival_log.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(paths.append_only_archive_dir.glob("response_history.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(paths.append_only_archive_dir.glob("learning_outcomes.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(paths.append_only_archive_dir.glob("habit_bias.*.jsonl"))), 1)
+
+            restarted_store = StateStore(paths, append_only_rotation_max_bytes=1)
+            restarted_guard = InstanceGuard(restarted_store.paths.lock_file, restarted_store, lifecycle)
+            restarted_guard.acquire()
+            try:
+                restarted_record = restarted_guard.start_instance("eva-patrol-restarted")
+                restarted_state = restarted_store.read_runtime_state()
+                restarted_state.life_state = LifeState.STABLE.value
+                restarted_state.instance_valid = False
+                restarted_state.heartbeat_ok = True
+                restarted_state.tick_ok = True
+                restarted_state.recovering_until = utc_now() - timedelta(seconds=1)
+                restarted_state.updated_at = utc_now()
+                restarted_store.write_runtime_state(restarted_state)
+                restarted_store.append_event(
+                    EventRecord(
+                        event_type="startup",
+                        timestamp=utc_now(),
+                        instance_id=restarted_record.instance_id,
+                        generation=restarted_record.generation,
+                    )
+                )
+                restarted_runtime = LifecycleRuntime(restarted_store, restarted_guard, lifecycle, external_life)
+                restarted_runtime.pending_work.clear()
+                second_now = utc_now()
+                restarted_runtime.pending_work.append(WorkSlice(name="deep", kind="patrol", due_at=second_now - timedelta(seconds=1)))
+
+                second = restarted_runtime.run_turn(
+                    restarted_state,
+                    next_heartbeat_at=second_now + timedelta(seconds=1),
+                    now=second_now,
+                )
+
+                self.assertTrue(second.executed)
+                self.assertEqual(second.details["work_kind"], "patrol")
+                self.assertGreaterEqual(second.details["pressure_count"], 1)
+                self.assertEqual(second.details["execution_lane"], "fast")
+                self.assertEqual(second.details["response"]["selected_action"], RECHECK_ACTION)
+
+                response_history = restarted_store.read_response_history()
+                self.assertGreaterEqual(len(response_history), 2)
+                self.assertEqual(response_history[0]["selected_action"], RECHECK_ACTION)
+                self.assertEqual(response_history[-1]["selected_action"], RECHECK_ACTION)
+
+                learning_outcomes = restarted_store.read_learning_outcomes()
+                self.assertGreaterEqual(len(learning_outcomes), 2)
+                self.assertEqual(learning_outcomes[0]["selected_action"], RECHECK_ACTION)
+                self.assertEqual(learning_outcomes[-1]["selected_action"], RECHECK_ACTION)
+
+                habit_bias = restarted_store.read_habit_bias()
+                self.assertGreaterEqual(len(habit_bias), 2)
+                self.assertTrue(all(entry["candidate_profile"] == "observe_first" for entry in habit_bias))
+
+                survival_events = [entry["event_type"] for entry in restarted_store.read_survival_log()]
+                self.assertGreaterEqual(survival_events.count("survival_snapshot"), 2)
+                self.assertIn("pressure_opened", survival_events)
+
+                response_events = [event for event in restarted_store.read_events() if event["event_type"] == "response_selected"]
+                self.assertEqual(len(response_events), 2)
+                startup_generations = [event["generation"] for event in restarted_store.read_events() if event["event_type"] == "startup"]
+                self.assertEqual(startup_generations, [initial_record.generation, restarted_record.generation])
+                self.assertEqual(restarted_record.generation, initial_record.generation + 1)
+            finally:
+                restarted_guard.release()
+
     def test_run_turn_exposes_b0_minimal_input_contract(self) -> None:
         now = utc_now()
         self.runtime.pending_work.clear()

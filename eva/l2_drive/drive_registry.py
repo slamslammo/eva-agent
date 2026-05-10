@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from ..scenario_bundle import get_active_runtime_scenario
+
 
 @dataclass(frozen=True)
 class DriveUpdatePolicy:
@@ -56,13 +58,11 @@ def register_default_drive_preset(preset: DrivePreset) -> None:
 
 
 def get_default_drive_preset() -> DrivePreset:
-    """Return the active drive preset, defaulting to the Linux scenario during Phase A."""
+    """Return the active drive preset, defaulting to the active scenario during Phase A."""
 
     global _DEFAULT_DRIVE_PRESET
     if _DEFAULT_DRIVE_PRESET is None:
-        from scenarios.linux_runtime.drive_preset import LINUX_RUNTIME_DRIVE_PRESET
-
-        _DEFAULT_DRIVE_PRESET = LINUX_RUNTIME_DRIVE_PRESET
+        _DEFAULT_DRIVE_PRESET = get_active_runtime_scenario().drive_preset
     return _DEFAULT_DRIVE_PRESET
 
 

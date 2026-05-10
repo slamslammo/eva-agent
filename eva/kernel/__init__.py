@@ -1,6 +1,6 @@
 """Stable runtime infrastructure for eva-agent."""
 
-from .config import EvaPaths, ExternalLifeConfig, LifecycleConfig, LoopControl, RuntimeConfig, build_runtime_config, build_runtime_paths
+from .config import AppendOnlyArtifactsConfig, EvaPaths, ExternalLifeConfig, LifecycleConfig, LoopControl, RuntimeConfig, build_runtime_config, build_runtime_paths
 from .instance import InstanceGuard, InstanceSnapshot
 from .state import (
     ActiveInstanceRecord,
@@ -23,6 +23,7 @@ __all__ = [
     "ActiveInstanceRecord",
     "ActivePressure",
     "ActivePressureTable",
+    "AppendOnlyArtifactsConfig",
     "DimensionSnapshot",
     "DriveState",
     "DriveStateTable",

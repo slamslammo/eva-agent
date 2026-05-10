@@ -400,13 +400,15 @@ class EventRecord:
 class StateStore:
     """Read and write runtime artifacts with atomic current-state updates."""
 
-    def __init__(self, paths: EvaPaths) -> None:
+    def __init__(self, paths: EvaPaths, *, append_only_rotation_max_bytes: int | None = None) -> None:
         self.paths = paths
+        self.append_only_rotation_max_bytes = append_only_rotation_max_bytes
 
     def ensure_runtime_dir(self) -> None:
         """Create the runtime directory if it does not exist yet."""
 
         self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.paths.append_only_archive_dir.mkdir(parents=True, exist_ok=True)
 
     def _atomic_write_json(self, file_path: Path, payload: dict[str, Any]) -> None:
         """Write a JSON artifact through a temp file and atomic replace."""
@@ -424,9 +426,80 @@ class StateStore:
         """Append one JSON object to an append-only log file."""
 
         self.ensure_runtime_dir()
+        encoded_line = json.dumps(payload, ensure_ascii=False) + "\n"
+        if self.append_only_rotation_max_bytes is not None and file_path.exists():
+            current_size = file_path.stat().st_size
+            if current_size > 0 and current_size + len(encoded_line.encode("utf-8")) > self.append_only_rotation_max_bytes:
+                self._rotate_append_only_file(file_path)
         with file_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            handle.write(encoded_line)
             handle.flush()
+
+    def _rotate_append_only_file(self, file_path: Path) -> None:
+        """Seal one live append-only file into the archive directory and reopen the live path."""
+
+        self.ensure_runtime_dir()
+        if not file_path.exists() or file_path.stat().st_size == 0:
+            return
+        archive_path = self._next_archive_path_for(file_path)
+        file_path.replace(archive_path)
+
+    def _next_archive_path_for(self, file_path: Path) -> Path:
+        """Return the next deterministic archived segment path for one live append-only file."""
+
+        stem = file_path.stem
+        suffix = file_path.suffix
+        timestamp = utc_now().strftime("%Y%m%dT%H%M%S%fZ")
+        candidate = self.paths.append_only_archive_dir / f"{stem}.{timestamp}{suffix}"
+        counter = 1
+        while candidate.exists():
+            candidate = self.paths.append_only_archive_dir / f"{stem}.{timestamp}.{counter}{suffix}"
+            counter += 1
+        return candidate
+
+    def _read_jsonl_history(self, file_path: Path) -> list[dict[str, Any]]:
+        """Read archived segments plus the live file as one ordered logical history."""
+
+        lines: list[str] = []
+        lines.extend(self._read_archived_jsonl_lines(file_path))
+        if file_path.exists():
+            lines.extend(file_path.read_text(encoding="utf-8").splitlines())
+        return [json.loads(line) for line in lines if line.strip()]
+
+    def _read_archived_jsonl_lines(self, file_path: Path) -> list[str]:
+        """Read all archived segment lines for one append-only live path in order."""
+
+        archive_prefix = f"{file_path.stem}."
+        archive_suffix = file_path.suffix
+        archived_paths = sorted(
+            (
+                path
+                for path in self.paths.append_only_archive_dir.glob(f"{file_path.stem}.*{file_path.suffix}")
+                if path.is_file() and path.name.startswith(archive_prefix) and path.name.endswith(archive_suffix)
+            ),
+            key=lambda path: self._archived_segment_sort_key(file_path, path),
+        )
+        lines: list[str] = []
+        for archived_path in archived_paths:
+            lines.extend(archived_path.read_text(encoding="utf-8").splitlines())
+        return lines
+
+    def _archived_segment_sort_key(self, live_file_path: Path, archived_path: Path) -> tuple[str, int, str]:
+        """Return a stable ordering key for archived append-only segments."""
+
+        archive_suffix = live_file_path.suffix
+        archive_prefix = f"{live_file_path.stem}."
+        archive_name = archived_path.name
+        if archive_suffix:
+            archive_name = archive_name[: -len(archive_suffix)]
+        remainder = archive_name[len(archive_prefix):]
+        timestamp, separator, counter_text = remainder.partition(".")
+        if not separator:
+            return timestamp, 0, archived_path.name
+        try:
+            return timestamp, int(counter_text), archived_path.name
+        except ValueError:
+            return timestamp, 0, archived_path.name
 
     def write_active_instance(self, record: ActiveInstanceRecord) -> None:
         """Persist the active-instance record."""
@@ -501,10 +574,7 @@ class StateStore:
     def read_survival_log(self) -> list[dict[str, Any]]:
         """Read the append-only survival history log."""
 
-        if not self.paths.survival_log_file.exists():
-            return []
-        lines = self.paths.survival_log_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.survival_log_file)
 
     def append_response_history(self, payload: dict[str, Any]) -> None:
         """Append one Step 2 response entry to response_history.jsonl."""
@@ -514,10 +584,7 @@ class StateStore:
     def read_response_history(self) -> list[dict[str, Any]]:
         """Read the append-only Step 2 response history log."""
 
-        if not self.paths.response_history_file.exists():
-            return []
-        lines = self.paths.response_history_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.response_history_file)
 
     def append_deliberation_audit(self, payload: dict[str, Any]) -> None:
         """Append one Phase B deliberation audit record."""
@@ -527,10 +594,7 @@ class StateStore:
     def read_deliberation_audit(self) -> list[dict[str, Any]]:
         """Read the append-only Phase B deliberation audit log."""
 
-        if not self.paths.deliberation_audit_file.exists():
-            return []
-        lines = self.paths.deliberation_audit_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.deliberation_audit_file)
 
     def append_llm_advisory_audit(self, payload: dict[str, Any]) -> None:
         """Append one Stage E LLM advisory audit record."""
@@ -540,10 +604,7 @@ class StateStore:
     def read_llm_advisory_audit(self) -> list[dict[str, Any]]:
         """Read the append-only Stage E LLM advisory audit log."""
 
-        if not self.paths.llm_advisory_audit_file.exists():
-            return []
-        lines = self.paths.llm_advisory_audit_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.llm_advisory_audit_file)
 
     def append_cognitive_memory_stub(self, payload: dict[str, Any]) -> None:
         """Append one minimal cognitive-memory stub entry."""
@@ -553,10 +614,7 @@ class StateStore:
     def read_cognitive_memory_stub(self) -> list[dict[str, Any]]:
         """Read the append-only cognitive-memory stub log."""
 
-        if not self.paths.cognitive_memory_stub_file.exists():
-            return []
-        lines = self.paths.cognitive_memory_stub_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.cognitive_memory_stub_file)
 
     def append_learning_outcome(self, payload: dict[str, Any]) -> None:
         """Append one Phase C learning outcome record."""
@@ -566,10 +624,7 @@ class StateStore:
     def read_learning_outcomes(self) -> list[dict[str, Any]]:
         """Read the append-only Phase C learning outcome log."""
 
-        if not self.paths.learning_outcomes_file.exists():
-            return []
-        lines = self.paths.learning_outcomes_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.learning_outcomes_file)
 
     def append_habit_bias(self, payload: dict[str, Any]) -> None:
         """Append one Phase C habit-bias summary record."""
@@ -579,10 +634,7 @@ class StateStore:
     def read_habit_bias(self) -> list[dict[str, Any]]:
         """Read the append-only Phase C habit-bias log."""
 
-        if not self.paths.habit_bias_file.exists():
-            return []
-        lines = self.paths.habit_bias_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.habit_bias_file)
 
     def append_event(self, event: EventRecord) -> None:
         """Append one lifecycle event to events.jsonl."""
@@ -592,7 +644,4 @@ class StateStore:
     def read_events(self) -> list[dict[str, Any]]:
         """Read the append-only lifecycle event log."""
 
-        if not self.paths.events_file.exists():
-            return []
-        lines = self.paths.events_file.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return self._read_jsonl_history(self.paths.events_file)

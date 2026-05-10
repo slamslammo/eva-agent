@@ -65,6 +65,42 @@ class SensingTests(unittest.TestCase):
                 ("host_continuity", "runtime_integrity", "resource_state", "anomaly_accumulation"),
             )
 
+    def test_collect_external_life_inputs_reads_recent_events_across_archived_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir), append_only_rotation_max_bytes=1)
+            store.ensure_runtime_dir()
+            now = utc_now()
+            store.write_active_instance(
+                ActiveInstanceRecord(
+                    instance_id="eva-sensing",
+                    generation=1,
+                    lease_expires_at=now + timedelta(seconds=30),
+                    lock_holder=True,
+                    updated_at=now,
+                )
+            )
+            runtime_state = RuntimeState(instance_valid=True, heartbeat_ok=True, tick_ok=True, updated_at=now)
+            store.write_runtime_state(runtime_state)
+            store.paths.lock_file.write_text("", encoding="utf-8")
+            store.append_event(EventRecord(event_type="startup", timestamp=now - timedelta(seconds=4)))
+            store.append_event(EventRecord(event_type="yield", timestamp=now - timedelta(seconds=3)))
+            store.append_event(EventRecord(event_type="distress", timestamp=now - timedelta(seconds=2)))
+            store.append_event(EventRecord(event_type="error", timestamp=now - timedelta(seconds=1)))
+
+            inputs = collect_external_life_inputs(
+                store,
+                runtime_state,
+                ExternalLifeConfig(recent_event_window_sec=60.0),
+                now,
+                due_at=now - timedelta(seconds=3),
+            )
+
+            self.assertGreaterEqual(len(list(store.paths.append_only_archive_dir.glob("events.*.jsonl"))), 1)
+            self.assertEqual(inputs["host_continuity"]["recent_restart_count"], 1)
+            self.assertEqual(inputs["runtime_integrity"]["recent_yield_count"], 1)
+            self.assertEqual(inputs["runtime_integrity"]["recent_distress_count"], 1)
+            self.assertEqual(inputs["anomaly_accumulation"]["recent_error_count"], 1)
+
     def test_default_sensor_registry_collects_current_dimension_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-from eva.kernel import ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
+from eva.kernel import AppendOnlyArtifactsConfig, ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
 from eva.l1_sensing import SensorOutput, SensorSpec, build_sensor_registry
 from eva.l3_deliberation.memory import WorkingMemoryAdapterRequest, WorkingMemoryAdapterResponse, WorkingMemoryModelClientConfig
 from eva.kernel.main import run_runtime
@@ -46,6 +46,8 @@ class MainLoopTests(unittest.TestCase):
             self.assertEqual(config.working_memory_model_client_mode, "anthropic")
             self.assertEqual(config.working_memory_model_client_config.provider, "anthropic")
             self.assertEqual(config.working_memory_model_client_config.model, "claude-sonnet-4-6")
+            self.assertIsNone(config.append_only_artifacts.rotation_max_bytes)
+            self.assertTrue(str(config.paths.append_only_archive_dir).endswith("archive"))
 
     def test_bounded_run_creates_runtime_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -161,6 +163,278 @@ class MainLoopTests(unittest.TestCase):
                 self.assertIn("linked_audit_recorded_at", memory_entries[0])
                 self.assertIsInstance(memory_entries[0].get("salience"), float)
                 self.assertIn("drive_state_at_encoding", memory_entries[0].get("content", {}))
+
+    def test_bounded_run_rotates_append_only_tracks_when_threshold_is_low(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=5, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                append_only_artifacts=AppendOnlyArtifactsConfig(rotation_max_bytes=1),
+            )
+            summary = run_runtime(config)
+            self.assertGreaterEqual(summary.turns, 1)
+            self.assertGreaterEqual(len(list(config.paths.append_only_archive_dir.glob("events.*.jsonl"))), 1)
+            events = StateStore(config.paths).read_events()
+            event_types = [event["event_type"] for event in events]
+            self.assertIn("startup", event_types)
+            self.assertIn("shutdown", event_types)
+
+    def test_accelerated_run_reconstructs_complete_history_after_multiple_rotations(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=8, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                append_only_artifacts=AppendOnlyArtifactsConfig(rotation_max_bytes=1),
+            )
+            summary = run_runtime(config)
+            self.assertGreaterEqual(summary.turns, 8)
+            store = StateStore(config.paths)
+            events = store.read_events()
+            self.assertEqual(events[0]["event_type"], "startup")
+            self.assertEqual(events[-1]["event_type"], "shutdown")
+            turn_events = [event for event in events if event["event_type"] == "turn_completed"]
+            self.assertGreaterEqual(len(turn_events), 8)
+            self.assertGreaterEqual(len(list(config.paths.append_only_archive_dir.glob("events.*.jsonl"))), 3)
+            self.assertGreaterEqual(len(list(config.paths.append_only_archive_dir.glob("survival_log.*.jsonl"))), 1)
+            self.assertIn("survival_snapshot", [entry["event_type"] for entry in store.read_survival_log()])
+
+    def test_sequential_runs_preserve_history_and_increment_generation_after_rotation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_first = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                append_only_artifacts=AppendOnlyArtifactsConfig(rotation_max_bytes=1),
+            )
+            first_summary = run_runtime(config_first)
+            self.assertGreaterEqual(first_summary.turns, 1)
+            store_after_first = StateStore(config_first.paths)
+            active_after_first = store_after_first.read_active_instance()
+            self.assertIsNotNone(active_after_first)
+            assert active_after_first is not None
+
+            config_second = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                append_only_artifacts=AppendOnlyArtifactsConfig(rotation_max_bytes=1),
+            )
+            second_summary = run_runtime(config_second)
+            self.assertGreaterEqual(second_summary.turns, 1)
+            store_after_second = StateStore(config_second.paths)
+            active_after_second = store_after_second.read_active_instance()
+            self.assertIsNotNone(active_after_second)
+            assert active_after_second is not None
+            self.assertEqual(active_after_second.generation, active_after_first.generation + 1)
+
+            events = store_after_second.read_events()
+            startup_generations = [event["generation"] for event in events if event["event_type"] == "startup"]
+            shutdown_generations = [event["generation"] for event in events if event["event_type"] == "shutdown"]
+            self.assertEqual(startup_generations, [active_after_first.generation, active_after_second.generation])
+            self.assertEqual(shutdown_generations, [active_after_first.generation, active_after_second.generation])
+            self.assertEqual(events[0]["event_type"], "startup")
+            self.assertEqual(events[-1]["event_type"], "shutdown")
+            self.assertGreaterEqual(len(list(config_second.paths.append_only_archive_dir.glob("events.*.jsonl"))), 2)
+            self.assertIn("survival_snapshot", [entry["event_type"] for entry in store_after_second.read_survival_log()])
+
+    def test_runtime_starts_with_preexisting_archives_across_mixed_tracks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            preload_config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                append_only_artifacts=AppendOnlyArtifactsConfig(rotation_max_bytes=1),
+                working_memory_backend="llm_assisted",
+                working_memory_model_client_mode="heuristic",
+            )
+            preload_summary = run_runtime(preload_config)
+            self.assertGreaterEqual(preload_summary.turns, 1)
+            preload_store = StateStore(preload_config.paths, append_only_rotation_max_bytes=1)
+            preload_store.append_response_history(
+                {
+                    "response_id": "resp-preexisting-1",
+                    "recorded_at": "2026-05-06T10:00:01+00:00",
+                    "selected_action": "recheck_runtime_integrity",
+                    "pressure_outcome": "relieved",
+                    "execution_status": "completed",
+                    "followup_needed": False,
+                    "drive_context": {"top_drive": "integrity", "drive_levels": {"integrity": 0.8}},
+                    "life_state": "STABLE",
+                    "pressure_reason": "recent_yield_detected",
+                }
+            )
+            preload_store.append_response_history(
+                {
+                    "response_id": "resp-preexisting-2",
+                    "recorded_at": "2026-05-06T10:00:02+00:00",
+                    "selected_action": "shrink_to_conservative_mode",
+                    "pressure_outcome": "unchanged",
+                    "execution_status": "completed",
+                    "followup_needed": False,
+                    "drive_context": {"top_drive": "integrity", "drive_levels": {"integrity": 0.8}},
+                    "life_state": "STABLE",
+                    "pressure_reason": "recent_yield_detected",
+                }
+            )
+            preload_store.append_learning_outcome(
+                {
+                    "recorded_at": "2026-05-06T10:00:03+00:00",
+                    "candidate_profile": "observe_first",
+                    "selected_action": "recheck_runtime_integrity",
+                    "observed_outcome": "relieved",
+                    "evaluation_label": "positive",
+                    "outcome_delta": 1.0,
+                    "confidence": 0.9,
+                    "content": {
+                        "top_drive": "integrity",
+                        "life_state": "STABLE",
+                        "pressure_reason": "recent_yield_detected",
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                    },
+                }
+            )
+            preload_store.append_learning_outcome(
+                {
+                    "recorded_at": "2026-05-06T10:00:04+00:00",
+                    "candidate_profile": "stabilize_first",
+                    "selected_action": "shrink_to_conservative_mode",
+                    "observed_outcome": "unchanged",
+                    "evaluation_label": "neutral",
+                    "outcome_delta": 0.0,
+                    "confidence": 0.8,
+                    "content": {
+                        "top_drive": "integrity",
+                        "life_state": "STABLE",
+                        "pressure_reason": "recent_yield_detected",
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                    },
+                }
+            )
+            preload_store.append_habit_bias(
+                {
+                    "recorded_at": "2026-05-06T10:00:05+00:00",
+                    "situation_key": "integrity|STABLE|recent_yield_detected",
+                    "candidate_profile": "observe_first",
+                    "preferred_action": "recheck_runtime_integrity",
+                    "evidence_count": 2,
+                    "stability_score": 0.7,
+                    "confidence": 0.6,
+                    "bias_strength": 0.5,
+                }
+            )
+            preload_store.append_habit_bias(
+                {
+                    "recorded_at": "2026-05-06T10:00:06+00:00",
+                    "situation_key": "integrity|STABLE|recent_yield_detected",
+                    "candidate_profile": "observe_first",
+                    "preferred_action": "recheck_runtime_integrity",
+                    "evidence_count": 3,
+                    "stability_score": 0.8,
+                    "confidence": 0.9,
+                    "bias_strength": 0.75,
+                }
+            )
+
+            resumed_config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                append_only_artifacts=AppendOnlyArtifactsConfig(rotation_max_bytes=1),
+                working_memory_backend="llm_assisted",
+                working_memory_model_client_mode="heuristic",
+            )
+            resumed_summary = run_runtime(resumed_config)
+            self.assertGreaterEqual(resumed_summary.turns, 1)
+            resumed_store = StateStore(resumed_config.paths)
+
+            self.assertGreaterEqual(len(list(resumed_config.paths.append_only_archive_dir.glob("events.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(resumed_config.paths.append_only_archive_dir.glob("survival_log.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(resumed_config.paths.append_only_archive_dir.glob("deliberation_audit.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(resumed_config.paths.append_only_archive_dir.glob("llm_advisory_audit.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(resumed_config.paths.append_only_archive_dir.glob("response_history.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(resumed_config.paths.append_only_archive_dir.glob("learning_outcomes.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(resumed_config.paths.append_only_archive_dir.glob("habit_bias.*.jsonl"))), 1)
+
+            events = resumed_store.read_events()
+            self.assertEqual(events[0]["event_type"], "startup")
+            self.assertEqual(events[-1]["event_type"], "shutdown")
+            self.assertGreaterEqual(sum(1 for event in events if event["event_type"] == "startup"), 2)
+            self.assertGreaterEqual(sum(1 for event in events if event["event_type"] == "shutdown"), 2)
+            self.assertIn("survival_snapshot", [entry["event_type"] for entry in resumed_store.read_survival_log()])
+            self.assertIn("resp-preexisting-1", [entry.get("response_id") for entry in resumed_store.read_response_history()])
+            self.assertIn("recheck_runtime_integrity", [entry["selected_action"] for entry in resumed_store.read_learning_outcomes()])
+            self.assertIn("observe_first", [entry["candidate_profile"] for entry in resumed_store.read_habit_bias()])
+            llm_audits = resumed_store.read_llm_advisory_audit()
+            self.assertGreaterEqual(len(llm_audits), 1)
+            self.assertIn(llm_audits[0]["outcome"], {"advisory_attached", "fallback_local"})
 
     def test_runtime_accepts_injected_sensor_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -533,6 +807,54 @@ class MainLoopTests(unittest.TestCase):
             self.assertIn("model_client_cli-test-model", advisory_context["reasoning_trace"])
             self.assertEqual(llm_audits[0]["provider"], "cli-test-provider")
             self.assertEqual(llm_audits[0]["model"], "cli-test-model")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(__file__).resolve().parents[2]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "eva.kernel.main",
+                    "--runtime-dir",
+                    temp_dir,
+                    "--heartbeat-interval",
+                    "0.2",
+                    "--lease-duration",
+                    "1.0",
+                    "--recovering-window",
+                    "0.05",
+                    "--turn-guard-window",
+                    "0.01",
+                    "--shallow-patrol-interval",
+                    "0.01",
+                    "--deep-patrol-interval",
+                    "0.02",
+                    "--full-report-interval",
+                    "0.03",
+                    "--recent-event-window",
+                    "60",
+                    "--max-turns",
+                    "3",
+                    "--max-runtime-sec",
+                    "1",
+                    "--idle-sleep-sec",
+                    "0.01",
+                    "--append-only-rotation-max-bytes",
+                    "1",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertIn("event=startup", result.stdout)
+            self.assertGreaterEqual(len(list((Path(temp_dir) / "archive").glob("events.*.jsonl"))), 1)
+            store = StateStore(build_runtime_config(temp_dir).paths)
+            events = store.read_events()
+            self.assertIn("startup", [event["event_type"] for event in events])
+            self.assertIn("shutdown", [event["event_type"] for event in events])
 
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(__file__).resolve().parents[2]

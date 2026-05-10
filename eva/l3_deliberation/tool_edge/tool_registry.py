@@ -6,20 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ...kernel import ActivePressure, RuntimeState
-from scenarios.linux_runtime.actions import (
-    ACTION_TO_ALLOWED_STATES as _ACTION_TO_ALLOWED_STATES,
-    ACTION_TO_POSTURE as _ACTION_TO_POSTURE,
-    ACTION_TO_STATE_MODE as _ACTION_TO_STATE_MODE,
-    ALL_LIFE_STATES as _ALL_LIFE_STATES,
-    DEFAULT_RESPONSE_MODE as _DEFAULT_RESPONSE_MODE,
-    ESCALATE_ACTION as _ESCALATE_ACTION,
-    RECHECK_ACTION as _RECHECK_ACTION,
-    REPAIR_ACTION as _REPAIR_ACTION,
-    build_integrity_response_candidates as _build_integrity_response_candidates,
-    filter_response_candidates as _filter_response_candidates,
-    select_integrity_response as _select_integrity_response,
-    select_response_action as _select_response_action,
-)
+from ...scenario_bundle import get_active_runtime_scenario
 
 __all__ = [
     "RECHECK_ACTION",
@@ -41,14 +28,16 @@ __all__ = [
     "select_response_action",
 ]
 
-RECHECK_ACTION = _RECHECK_ACTION
-REPAIR_ACTION = _REPAIR_ACTION
-ESCALATE_ACTION = _ESCALATE_ACTION
-DEFAULT_RESPONSE_MODE = _DEFAULT_RESPONSE_MODE
-ACTION_TO_POSTURE = _ACTION_TO_POSTURE
-ACTION_TO_STATE_MODE = _ACTION_TO_STATE_MODE
-ALL_LIFE_STATES = _ALL_LIFE_STATES
-ACTION_TO_ALLOWED_STATES = _ACTION_TO_ALLOWED_STATES
+_ACTIVE_ACTIONS = get_active_runtime_scenario().actions
+
+RECHECK_ACTION = _ACTIVE_ACTIONS.recheck_action
+REPAIR_ACTION = _ACTIVE_ACTIONS.repair_action
+ESCALATE_ACTION = _ACTIVE_ACTIONS.escalate_action
+DEFAULT_RESPONSE_MODE = _ACTIVE_ACTIONS.default_response_mode
+ACTION_TO_POSTURE = _ACTIVE_ACTIONS.action_to_posture
+ACTION_TO_STATE_MODE = _ACTIVE_ACTIONS.action_to_state_mode
+ALL_LIFE_STATES = _ACTIVE_ACTIONS.all_life_states
+ACTION_TO_ALLOWED_STATES = _ACTIVE_ACTIONS.action_to_allowed_states
 
 
 @dataclass(frozen=True)
@@ -110,7 +99,7 @@ def build_integrity_response_candidates(
 ) -> list[ResponseCandidate]:
     """Build the current scenario-owned candidate set for one integrity pressure."""
 
-    return _build_integrity_response_candidates(pressure, runtime_state)
+    return get_active_runtime_scenario().actions.build_integrity_response_candidates(pressure, runtime_state)
 
 
 def filter_response_candidates(
@@ -120,7 +109,7 @@ def filter_response_candidates(
 ) -> list[ResponseFilterDecision]:
     """Filter candidates using the current scenario-owned response policy."""
 
-    return _filter_response_candidates(pressure, runtime_state, candidates)
+    return get_active_runtime_scenario().actions.filter_response_candidates(pressure, runtime_state, candidates)
 
 
 def select_integrity_response(
@@ -131,7 +120,11 @@ def select_integrity_response(
 ) -> ResponseSelection:
     """Return the mediated selection under the current scenario-owned response policy."""
 
-    return _select_integrity_response(pressure, runtime_state, release_context=release_context)
+    return get_active_runtime_scenario().actions.select_integrity_response(
+        pressure,
+        runtime_state,
+        release_context=release_context,
+    )
 
 
 def select_response_action(
@@ -144,7 +137,7 @@ def select_response_action(
 ) -> ResponseSelection:
     """Select the final Step 2 action under the current scenario-owned response policy."""
 
-    return _select_response_action(
+    return get_active_runtime_scenario().actions.select_response_action(
         pressure,
         runtime_state,
         candidates,

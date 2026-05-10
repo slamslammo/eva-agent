@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from ...kernel import ActivePressure, StateStore
-from scenarios.linux_runtime.actions import execute_linux_runtime_action
+from ...scenario_bundle import get_active_runtime_scenario
 from ..contracts import ReleaseToken
 from ..peer_circuit.mediator import validate_release_token
 from .tool_registry import ResponseSelection, bridge_policy_from_release_context
@@ -70,7 +70,7 @@ def execute_response_action(
         selected_candidate_id=selected_candidate_id,
         expected_outcome="compatibility_release",
     )
-    return execute_linux_runtime_action(
+    return get_active_runtime_scenario().actions.execute_response_action(
         store,
         pressure,
         selection,
