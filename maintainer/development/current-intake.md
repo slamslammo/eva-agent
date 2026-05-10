@@ -11,49 +11,53 @@
 
 ## Change intake
 
-- **Change title**: Stage E working-memory Anthropic advisory integration closeout
-- **Goal**: 已完成在不改变 release authority 的前提下，把 working-memory advisory seam 真实接入 Anthropic `claude-sonnet-4-6`，补上 degraded fallback，并新增独立 LLM advisory audit 轨道。
-- **Change type**: feature closeout
+- **Change title**: Phase A Slice A-8 documentation migration / archive / boundary sync
+- **Goal**: 在不改动 runtime behavior、schema、tests 与 release authority 的前提下，把公开与维护文档更新到 Phase A 已落地的 framework/scenario 边界：`docs/eva-framework-implementation.md` 反映 framework canonical owner，`docs/scenarios-SPEC.md` 反映 scenario contract，新增 `scenarios/linux_runtime/SPEC.md` 反映 Linux scenario canonical owner，`docs/current-status.md` 更新对外入口，`maintainer/development/module-organization-contract.md` 更新 maintainer canonical structure，同时将旧的混合实现文档归档。
+- **Change type**: docs
 
 ## Ownership
 
-- **Layer**: `l3_deliberation`
-- **Canonical owner**: `eva/l3_deliberation/memory/working_memory_model_client.py` 与 `eva/l3_deliberation/reasoning/working_memory.py` 的 working-memory advisory seam
-- **Touched current files**: `eva/l3_deliberation/memory/working_memory_model_client.py`, `eva/l3_deliberation/memory/working_memory_adapter.py`, `eva/l3_deliberation/reasoning/working_memory.py`, `eva/kernel/config.py`, `eva/kernel/state.py`, `eva/kernel/main.py`, related tests, `README.md`, `docs/current-status.md`, `maintainer/development/roadmap.md`, `maintainer/development/phase-c-progress.md`
-- **Owner class**: stable
+- **Layer**: cross-layer documentation / maintainer boundary contract
+- **Canonical owner**: public docs 反映已落地的 framework / scenario / runner boundary；maintainer docs 反映当前 canonical module organization；archive 保留旧混合文档作为历史参考，不再充当主线
+- **Touched current files**: `maintainer/development/current-intake.md`, `docs/eva-framework-implementation.md`, `docs/scenarios-SPEC.md`, `docs/current-status.md`, `docs/eva-agent-full-implementation.md`, `maintainer/development/module-organization-contract.md`, `maintainer/development/phase-a-refactor-progress.md`；预计新增 `scenarios/linux_runtime/SPEC.md` 与 `docs/archive/eva-agent-full-implementation-v0.5.md`
+- **Owner class**: stable docs sync
 
 ## Realignment stage
 
 - **Stage**: `other`
-- **If other, why**: 这是 Stage E 新 feature slice，不属于当前 codebase realignment 的 R1/R2/R3 收敛动作
+- **If other, why**: 这是 `maintainer/development/v0.6-refactor-startup-instruction.md` 定义的 v0.6 Phase A Slice A-8，不属于既有 R1/R2/R3 realignment 收敛动作
 
 ## Boundary check
 
-- **Affected contracts**: working-memory advisory request/response schema、runtime advisory source selection、append-only runtime audit persistence
+- **Affected contracts**: framework/scenario 文档边界、runner canonical entry 描述、public status 入口、maintainer module organization canonical owner、archive path for old mixed doc
 - **Hard boundaries to preserve**:
-  - heartbeat-first
-  - default inhibition
-  - anchor pre-generation
-  - drive read-only
-  - mediated release
-  - append-only artifact discipline
-- **Why this change does not widen a transitional owner**: 改动限定在既有 working-memory adapter/model-client seam 与 runtime append-only persistence surface；不扩张 mediator、tool edge 或 transitional action path 的长期职责
+  - document landed code reality only
+  - no behavior change
+  - no persistent schema change
+  - no test logic change
+  - public docs remain English
+  - maintainer docs may remain Chinese
+  - archived mixed doc must not remain the canonical reference
+- **Why this change does not widen a transitional owner**: A-8 只同步文档到 A-1~A-7 已落地边界，不新增 capability、不回退到旧 mixed owner，也不把 Phase B 设计写成已实现事实
 
 ## Verification
 
-- **Freeze tests**: `tests/l3_deliberation/memory/test_working_memory_adapter.py`, `tests/l3_deliberation/memory/test_working_memory_model_client.py`, `tests/l3_deliberation/reasoning/test_working_memory.py`, `tests/l3_deliberation/tool_edge/test_executors.py`, `tests/l3_deliberation/peer_circuit/test_mediator.py`, `tests/integration/test_main_runtime.py`
-- **Additional tests**: Anthropic client request shaping、LLM failure fallback、独立 audit file persistence、advisory-only schema bound、bounded advisory score participation
-- **Need full regression?** yes
+- **Freeze checks**: `docs/eva-framework-implementation.md`, `docs/scenarios-SPEC.md`, `scenarios/linux_runtime/SPEC.md`, `docs/current-status.md`, `maintainer/development/module-organization-contract.md`, `docs/archive/eva-agent-full-implementation-v0.5.md`, `docs/eva-agent-full-implementation.md`
+- **Additional checks**: path/reference consistency across public docs；archive file exists；current-status no longer points to the mixed doc as canonical
+- **Need full regression?** no
 
 ## Docs sync
 
 - **Docs to update**:
-  - `README.md`
-  - `docs/current-status.md`
   - `maintainer/development/current-intake.md`
-  - `maintainer/development/roadmap.md`
-  - `maintainer/development/phase-c-progress.md`
-- **Docs actually needed for this change**: `README.md`, `docs/current-status.md`, `maintainer/development/current-intake.md`, `maintainer/development/roadmap.md`, `maintainer/development/phase-c-progress.md`
+  - `maintainer/development/phase-a-refactor-progress.md`
+  - `docs/eva-framework-implementation.md`
+  - `docs/scenarios-SPEC.md`
+  - `scenarios/linux_runtime/SPEC.md`
+  - `docs/current-status.md`
+  - `docs/eva-agent-full-implementation.md`
+  - `maintainer/development/module-organization-contract.md`
+- **Docs actually needed for this change**: all of the above
 
 ## Go / no-go
 
@@ -62,4 +66,6 @@
 
 ## Intake status
 
-- 当前状态：**已完成（实现、验证与文档同步已落账；待下一项 intake 覆盖）**
+- 当前检查点：**Phase A Slice A-8 已完成；文档 canonical owner、archive 与 public entry 已同步到已落地代码边界**
+- 已完成验证：**archive file 已创建；public docs reference consistency 已检查；`docs/current-status.md` 已切离 mixed doc canonical reference**
+- 下一 gate：**准备 Phase A A-1~A-8 完整 review 摘要**

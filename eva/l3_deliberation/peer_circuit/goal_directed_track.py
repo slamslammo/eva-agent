@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...scenario_bundle import get_active_runtime_scenario
 from ..contracts import CandidateAssessment
 
 __all__ = [
@@ -58,17 +59,7 @@ def build_release_context(
 def expected_outcome_for_release(outcome: str, candidate_profile: str | None) -> str:
     """Return the minimal expected-outcome label for one mediator outcome."""
 
-    if outcome == "compatibility_release":
-        if candidate_profile == "observe_first":
-            return "improve_information_under_pressure"
-        if candidate_profile == "stabilize_first":
-            return "stabilize_or_relieve_pressure"
-        if candidate_profile == "escalate_first":
-            return "escalate_for_safety_under_pressure"
-        return "bounded_pressure_response"
-    if outcome == "defer":
-        return "wait_for_safer_boundary"
-    return "no_external_change"
+    return get_active_runtime_scenario().outcome_observers.expected_outcome_for_release(outcome, candidate_profile)
 
 
 def _bridge_policy_for_candidate_profile(candidate_profile: str) -> dict[str, object]:

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from uuid import uuid4
 
-from .config import ExternalLifeConfig, LifecycleConfig, LoopControl, RuntimeConfig, build_runtime_config
+from .config import AppendOnlyArtifactsConfig, ExternalLifeConfig, LifecycleConfig, LoopControl, RuntimeConfig, build_runtime_config
 from .instance import InstanceGuard
 from .lifecycle import LifecycleRuntime
 from .state import EventRecord, StateStore, emit_log_line, utc_now
@@ -51,7 +51,10 @@ def run_runtime(
 ) -> RunSummary:
     """Run the lifecycle loop until one of the configured bounds is reached."""
 
-    store = StateStore(config.paths)
+    store = StateStore(
+        config.paths,
+        append_only_rotation_max_bytes=config.append_only_artifacts.rotation_max_bytes,
+    )
     store.ensure_runtime_dir()
     instance_guard = InstanceGuard(config.paths.lock_file, store, config.lifecycle)
     instance_guard.acquire()
@@ -209,6 +212,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--deep-patrol-interval", type=float, default=1800.0)
     parser.add_argument("--full-report-interval", type=float, default=86400.0)
     parser.add_argument("--recent-event-window", type=float, default=1800.0)
+    parser.add_argument("--append-only-rotation-max-bytes", type=int)
+    parser.add_argument("--append-only-archive-dir-name", default="archive")
     parser.add_argument("--working-memory-backend", choices=["local_rule_based", "auto", "llm_assisted"], default="local_rule_based")
     parser.add_argument("--working-memory-adapter-mode", choices=[ADAPTER_MODE_INERT, ADAPTER_MODE_HEURISTIC], default=ADAPTER_MODE_INERT)
     parser.add_argument("--working-memory-model-client-mode", choices=[MODEL_CLIENT_MODE_INERT, MODEL_CLIENT_MODE_HEURISTIC, MODEL_CLIENT_MODE_ANTHROPIC], default=MODEL_CLIENT_MODE_ANTHROPIC)
@@ -240,10 +245,15 @@ def main() -> None:
         max_runtime_sec=args.max_runtime_sec,
         idle_sleep_sec=args.idle_sleep_sec,
     )
+    append_only_artifacts = AppendOnlyArtifactsConfig(
+        rotation_max_bytes=args.append_only_rotation_max_bytes,
+        archive_dir_name=args.append_only_archive_dir_name,
+    )
     config = build_runtime_config(
         args.runtime_dir,
         lifecycle=lifecycle,
         external_life=external_life,
+        append_only_artifacts=append_only_artifacts,
         control=control,
         working_memory_backend=args.working_memory_backend,
         working_memory_adapter_mode=args.working_memory_adapter_mode,

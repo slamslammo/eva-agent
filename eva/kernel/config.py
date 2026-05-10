@@ -12,6 +12,7 @@ class EvaPaths:
     """Resolved paths for runtime state, logs, and control files."""
 
     runtime_dir: Path
+    append_only_archive_dir: Path
     active_instance_file: Path
     runtime_state_file: Path
     external_life_snapshot_file: Path
@@ -58,6 +59,14 @@ class ExternalLifeConfig:
 
 
 @dataclass(frozen=True)
+class AppendOnlyArtifactsConfig:
+    """Optional rotation/archive settings for append-only runtime tracks."""
+
+    rotation_max_bytes: int | None = None
+    archive_dir_name: str = "archive"
+
+
+@dataclass(frozen=True)
 class LoopControl:
     """Optional bounds for local runs, tests, and bounded verification."""
 
@@ -74,6 +83,7 @@ class RuntimeConfig:
     paths: EvaPaths
     lifecycle: LifecycleConfig = LifecycleConfig()
     external_life: ExternalLifeConfig = ExternalLifeConfig()
+    append_only_artifacts: AppendOnlyArtifactsConfig = AppendOnlyArtifactsConfig()
     control: LoopControl = LoopControl()
     working_memory_backend: str = "local_rule_based"
     working_memory_adapter: Any | None = None
@@ -82,12 +92,17 @@ class RuntimeConfig:
     working_memory_model_client_config: Any | None = None
 
 
-def build_runtime_paths(base_dir: str | Path) -> EvaPaths:
+def build_runtime_paths(
+    base_dir: str | Path,
+    *,
+    archive_dir_name: str = "archive",
+) -> EvaPaths:
     """Resolve all runtime artifact paths under the given base directory."""
 
     runtime_dir = Path(base_dir).expanduser().resolve()
     return EvaPaths(
         runtime_dir=runtime_dir,
+        append_only_archive_dir=runtime_dir / archive_dir_name,
         active_instance_file=runtime_dir / "active_instance.json",
         runtime_state_file=runtime_dir / "runtime_state.json",
         external_life_snapshot_file=runtime_dir / "external_life_snapshot.json",
@@ -111,6 +126,7 @@ def build_runtime_config(
     *,
     lifecycle: LifecycleConfig | None = None,
     external_life: ExternalLifeConfig | None = None,
+    append_only_artifacts: AppendOnlyArtifactsConfig | None = None,
     control: LoopControl | None = None,
     working_memory_backend: str = "local_rule_based",
     working_memory_adapter: Any | None = None,
@@ -125,10 +141,13 @@ def build_runtime_config(
 
         working_memory_model_client_config = WorkingMemoryModelClientConfig()
 
+    append_only_config = append_only_artifacts or AppendOnlyArtifactsConfig()
+
     return RuntimeConfig(
-        paths=build_runtime_paths(base_dir),
+        paths=build_runtime_paths(base_dir, archive_dir_name=append_only_config.archive_dir_name),
         lifecycle=lifecycle or LifecycleConfig(),
         external_life=external_life or ExternalLifeConfig(),
+        append_only_artifacts=append_only_config,
         control=control or LoopControl(),
         working_memory_backend=working_memory_backend,
         working_memory_adapter=working_memory_adapter,

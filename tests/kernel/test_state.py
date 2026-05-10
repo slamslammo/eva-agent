@@ -8,6 +8,7 @@ from eva.kernel import (
     ActiveInstanceRecord,
     ActivePressure,
     ActivePressureTable,
+    AppendOnlyArtifactsConfig,
     DimensionSnapshot,
     DriveState,
     DriveStateTable,
@@ -15,6 +16,7 @@ from eva.kernel import (
     ExternalLifeSnapshot,
     RuntimeState,
     StateStore,
+    build_runtime_config,
     build_runtime_paths,
     utc_now,
 )
@@ -23,6 +25,7 @@ from eva.kernel import (
 class StateStoreTests(unittest.TestCase):
     def test_build_runtime_paths_includes_step1_and_step2_files(self) -> None:
         paths = build_runtime_paths("/tmp/eva-state-test")
+        self.assertTrue(str(paths.append_only_archive_dir).endswith("archive"))
         self.assertTrue(str(paths.external_life_snapshot_file).endswith("external_life_snapshot.json"))
         self.assertTrue(str(paths.drive_state_file).endswith("drive_state.json"))
         self.assertTrue(str(paths.active_pressures_file).endswith("active_pressures.json"))
@@ -32,6 +35,18 @@ class StateStoreTests(unittest.TestCase):
         self.assertTrue(str(paths.cognitive_memory_stub_file).endswith("cognitive_memory_stub.jsonl"))
         self.assertTrue(str(paths.learning_outcomes_file).endswith("learning_outcomes.jsonl"))
         self.assertTrue(str(paths.habit_bias_file).endswith("habit_bias.jsonl"))
+
+    def test_build_runtime_config_carries_append_only_artifact_settings(self) -> None:
+        config = build_runtime_config(
+            "/tmp/eva-state-test",
+            append_only_artifacts=AppendOnlyArtifactsConfig(
+                rotation_max_bytes=256,
+                archive_dir_name="sealed-history",
+            ),
+        )
+        self.assertEqual(config.append_only_artifacts.rotation_max_bytes, 256)
+        self.assertEqual(config.append_only_artifacts.archive_dir_name, "sealed-history")
+        self.assertTrue(str(config.paths.append_only_archive_dir).endswith("sealed-history"))
 
     def test_write_and_read_active_instance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -173,6 +188,30 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(entries[0]["event_type"], "survival_snapshot")
             self.assertEqual(entries[1]["event_type"], "pressure_opened")
 
+    def test_append_survival_log_reads_archived_segments_before_live_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir), append_only_rotation_max_bytes=1)
+            now = utc_now()
+            store.append_survival_log(
+                {
+                    "event_type": "survival_snapshot",
+                    "timestamp": now.isoformat(),
+                    "overall_status": "healthy",
+                }
+            )
+            store.append_survival_log(
+                {
+                    "event_type": "pressure_opened",
+                    "timestamp": now.isoformat(),
+                    "pressure_id": "pressure-continuity-restart_loop",
+                }
+            )
+
+            archived_segments = sorted(store.paths.append_only_archive_dir.glob("survival_log.*.jsonl"))
+            self.assertEqual(len(archived_segments), 1)
+            entries = store.read_survival_log()
+            self.assertEqual([entry["event_type"] for entry in entries], ["survival_snapshot", "pressure_opened"])
+
     def test_append_event_log(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -183,6 +222,23 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(len(events), 2)
             self.assertEqual(events[0]["event_type"], "startup")
             self.assertEqual(events[1]["event_type"], "shutdown")
+
+    def test_append_event_log_rotates_and_reconstructs_history_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir), append_only_rotation_max_bytes=1)
+            now = utc_now()
+            store.append_event(EventRecord(event_type="startup", timestamp=now, details={"step": 1}))
+            store.append_event(EventRecord(event_type="tick_completed", timestamp=now, details={"step": 2}))
+            store.append_event(EventRecord(event_type="shutdown", timestamp=now, details={"step": 3}))
+
+            self.assertTrue(store.paths.append_only_archive_dir.exists())
+            archived_segments = sorted(store.paths.append_only_archive_dir.glob("events.*.jsonl"))
+            self.assertEqual(len(archived_segments), 2)
+            self.assertTrue(store.paths.events_file.exists())
+
+            events = store.read_events()
+            self.assertEqual([event["event_type"] for event in events], ["startup", "tick_completed", "shutdown"])
+            self.assertEqual([event["details"]["step"] for event in events], [1, 2, 3])
 
     def test_append_and_read_response_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -304,6 +360,191 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(len(entries), 1)
             self.assertEqual(entries[0]["candidate_profile"], "stabilize_first")
             self.assertEqual(entries[0]["bias_strength"], 1.0)
+
+    def test_readers_reconstruct_preexisting_archives_across_mixed_append_only_tracks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir), append_only_rotation_max_bytes=1)
+            now = utc_now()
+            store.append_event(EventRecord(event_type="startup", timestamp=now, details={"step": 1}))
+            store.append_event(EventRecord(event_type="shutdown", timestamp=now, details={"step": 2}))
+            store.append_survival_log(
+                {
+                    "event_type": "survival_snapshot",
+                    "timestamp": now.isoformat(),
+                    "overall_status": "healthy",
+                }
+            )
+            store.append_survival_log(
+                {
+                    "event_type": "pressure_opened",
+                    "timestamp": now.isoformat(),
+                    "pressure_id": "pressure-integrity-instance_invalid",
+                }
+            )
+            store.append_response_history(
+                {
+                    "response_id": "resp-001",
+                    "recorded_at": now.isoformat(),
+                    "selected_action": "recheck_runtime_integrity",
+                }
+            )
+            store.append_response_history(
+                {
+                    "response_id": "resp-002",
+                    "recorded_at": now.isoformat(),
+                    "selected_action": "escalate_integrity_risk",
+                }
+            )
+            store.append_deliberation_audit(
+                {
+                    "recorded_at": now.isoformat(),
+                    "deliberation_input": {"signal_batch": {}, "drive_broadcast": {}, "runtime_gate_context": {}},
+                    "candidates": [{"candidate_id": "candidate-1"}],
+                    "assessments": [{"candidate_id": "candidate-1", "disposition": "withhold"}],
+                    "release_decision": {"outcome": "withhold"},
+                }
+            )
+            store.append_deliberation_audit(
+                {
+                    "recorded_at": now.isoformat(),
+                    "deliberation_input": {"signal_batch": {}, "drive_broadcast": {}, "runtime_gate_context": {}},
+                    "candidates": [{"candidate_id": "candidate-2"}],
+                    "assessments": [{"candidate_id": "candidate-2", "disposition": "release"}],
+                    "release_decision": {"outcome": "compatibility_release"},
+                }
+            )
+            store.append_llm_advisory_audit(
+                {
+                    "recorded_at": now.isoformat(),
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-6",
+                    "outcome": "fallback_local",
+                }
+            )
+            store.append_llm_advisory_audit(
+                {
+                    "recorded_at": now.isoformat(),
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-6",
+                    "outcome": "advisory_attached",
+                }
+            )
+            store.append_cognitive_memory_stub(
+                {
+                    "recorded_at": now.isoformat(),
+                    "source": "l3_deliberation",
+                    "salience": 0.6,
+                    "memory_type": "release_trace",
+                    "write_reason": "release_outcome=withhold",
+                    "linked_audit_recorded_at": now.isoformat(),
+                    "content": {
+                        "top_drive": "curiosity",
+                        "selected_action": "curiosity_probe",
+                        "drive_state_at_encoding": {
+                            "top_drive": "curiosity",
+                            "drive_levels": {"curiosity": 0.8},
+                            "drive_trends": {"curiosity": "improving"},
+                        },
+                    },
+                }
+            )
+            store.append_cognitive_memory_stub(
+                {
+                    "recorded_at": now.isoformat(),
+                    "source": "l3_deliberation",
+                    "salience": 0.9,
+                    "memory_type": "threat_trace",
+                    "write_reason": "threat_signal_present",
+                    "linked_audit_recorded_at": now.isoformat(),
+                    "content": {
+                        "top_drive": "integrity",
+                        "selected_action": "recheck_runtime_integrity",
+                        "drive_state_at_encoding": {
+                            "top_drive": "integrity",
+                            "drive_levels": {"integrity": 0.8},
+                            "drive_trends": {"integrity": "worsening"},
+                        },
+                    },
+                }
+            )
+            store.append_learning_outcome(
+                {
+                    "recorded_at": now.isoformat(),
+                    "source": "l3_learning",
+                    "selected_action": "curiosity_probe",
+                    "evaluation_label": "positive",
+                    "outcome_delta": 0.5,
+                    "content": {"situation_key": "curiosity|STABLE|none"},
+                }
+            )
+            store.append_learning_outcome(
+                {
+                    "recorded_at": now.isoformat(),
+                    "source": "l3_learning",
+                    "selected_action": "recheck_runtime_integrity",
+                    "evaluation_label": "positive",
+                    "outcome_delta": 1.0,
+                    "content": {"situation_key": "integrity|STABLE|recent_yield_detected"},
+                }
+            )
+            store.append_habit_bias(
+                {
+                    "recorded_at": now.isoformat(),
+                    "situation_key": "curiosity|STABLE|none",
+                    "candidate_profile": "observe_first",
+                    "preferred_action": "curiosity_probe",
+                    "bias_strength": 0.6,
+                }
+            )
+            store.append_habit_bias(
+                {
+                    "recorded_at": now.isoformat(),
+                    "situation_key": "integrity|STABLE|recent_yield_detected",
+                    "candidate_profile": "stabilize_first",
+                    "preferred_action": "recheck_runtime_integrity",
+                    "bias_strength": 0.9,
+                }
+            )
+
+            restarted_store = StateStore(build_runtime_paths(temp_dir))
+
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("events.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("survival_log.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("response_history.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("deliberation_audit.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("llm_advisory_audit.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("cognitive_memory_stub.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("learning_outcomes.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("habit_bias.*.jsonl"))), 1)
+            self.assertEqual([event["details"]["step"] for event in restarted_store.read_events()], [1, 2])
+            self.assertEqual(
+                [entry["event_type"] for entry in restarted_store.read_survival_log()],
+                ["survival_snapshot", "pressure_opened"],
+            )
+            self.assertEqual(
+                [entry["selected_action"] for entry in restarted_store.read_response_history()],
+                ["recheck_runtime_integrity", "escalate_integrity_risk"],
+            )
+            self.assertEqual(
+                [entry["release_decision"]["outcome"] for entry in restarted_store.read_deliberation_audit()],
+                ["withhold", "compatibility_release"],
+            )
+            self.assertEqual(
+                [entry["outcome"] for entry in restarted_store.read_llm_advisory_audit()],
+                ["fallback_local", "advisory_attached"],
+            )
+            self.assertEqual(
+                [entry["content"]["top_drive"] for entry in restarted_store.read_cognitive_memory_stub()],
+                ["curiosity", "integrity"],
+            )
+            self.assertEqual(
+                [entry["selected_action"] for entry in restarted_store.read_learning_outcomes()],
+                ["curiosity_probe", "recheck_runtime_integrity"],
+            )
+            self.assertEqual(
+                [entry["candidate_profile"] for entry in restarted_store.read_habit_bias()],
+                ["observe_first", "stabilize_first"],
+            )
 
     def test_runtime_state_overwrite_remains_readable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

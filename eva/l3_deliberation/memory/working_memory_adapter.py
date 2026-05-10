@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from .working_memory_model_client import (
+    ALLOWED_CANDIDATE_SUGGESTIONS,
     MODEL_CLIENT_MODE_ANTHROPIC,
     WorkingMemoryModelClient,
     WorkingMemoryModelClientConfig,
@@ -15,7 +16,6 @@ from .working_memory_model_client import (
 
 ADAPTER_MODE_INERT = "inert"
 ADAPTER_MODE_HEURISTIC = "heuristic"
-ALLOWED_CANDIDATE_SUGGESTIONS = frozenset({"observe_first", "stabilize_first", "escalate_first"})
 
 
 @dataclass(frozen=True)

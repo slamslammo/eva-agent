@@ -2,114 +2,91 @@
 
 ## Overview
 
-`eva-agent` already has a meaningful lower-layer backbone, but it is still a partial EVA v0.5 implementation rather than a complete system.
+`eva-agent` has completed the Phase A framework/scenario boundary refactor for its currently shipped runtime. The repository now has:
 
-This page reports progress as a **layer-by-layer capability checklist**. It is meant to answer a practical question for external readers: **what is already implemented, what is still missing, and what should come next?**
+- a framework-owned runtime spine under `eva/`
+- a scenario-owned Linux runtime package under `scenarios/linux_runtime/`
+- a per-scenario startup path under `runners/`
 
-For the target architecture, see [Full implementation architecture](eva-agent-full-implementation.md).
+The current public architecture entry points are:
+- [Framework implementation](eva-framework-implementation.md)
+- [Scenario contract](scenarios-SPEC.md)
+- [Linux runtime scenario](../scenarios/linux_runtime/SPEC.md)
 
-This page is a public implementation-status view, not the local development roadmap. It shows the current structural state of the repository in externally readable terms.
+This page is a public status summary. It describes what is already real in the repository.
 
-## How to read this page
+## Current public posture
 
-- **Current implementation**: what already exists in this repository
-- **Target EVA v0.5 state**: what the capability should become in the target architecture
-- **Remaining gap**: the main limitation still left in the current repo
-- **Gap type**:
-  - **Stable baseline**: the basic boundary exists and should be preserved
-  - **Tighten**: the capability exists, but its structure or semantics still need to be tightened
-  - **Missing piece**: a necessary capability is still largely absent
-  - **Misaligned**: a transitional path still carries too much responsibility compared with the target architecture
-  - **Deferred**: intentionally reserved for later layers
+The repository currently ships one concrete scenario: **Linux runtime**.
 
-## Infrastructure / Kernel
+That means the codebase is no longer organized as one mixed implementation document pretending to describe both framework and world-specific content at the same time. Instead:
+- `eva/` owns structural runtime mechanisms
+- `scenarios/linux_runtime/` owns Linux-specific content
+- `runners/run_linux.py` is the canonical Linux startup path
+- `eva.kernel.main` remains available as a compatibility entry
 
-| Capability | Current implementation | Target EVA v0.5 state | Remaining gap | Gap type | Next recommended step |
-| --- | --- | --- | --- | --- | --- |
-| Heartbeat-first lifecycle | Implemented. `tick` and `turn` are separated, and heartbeat deadlines remain ahead of ordinary work. | Must remain the primary runtime rhythm source. | Kernel-critical events are not yet projected into a richer normalized signal surface. | Tighten | Publish kernel-critical events into the L1 signal path without giving L1 control over kernel authority. |
-| Instance validity | Implemented. Lock / generation / lease semantics already gate whether the current instance may continue ordinary turns. | Must remain a hard legitimacy boundary for continuous existence. | Validity transitions are not yet exposed as a richer cross-layer observability surface. | Tighten | Make validity transitions easier to inspect in audit and runtime traces. |
-| Persistence split | Implemented. Atomic current-state files and append-only history tracks are already separated. | Must remain the standard persistence boundary across the architecture. | More L3 artifacts still need the same level of typed separation and long-horizon traceability. | Tighten | Continue the same split for audit, memory, learning, and future retrieval artifacts. |
-| Runtime gate context | Implemented. A minimal `runtime_gate_context` already flows downstream. | Should remain the stable kernel-to-deliberation runtime contract. | The contract is still minimal and not yet a fully articulated gate surface. | Stable baseline | Keep the contract narrow and only refine semantics where downstream structure clearly needs it. |
+## What Phase A established
 
-## L1 Homeostatic Sensing
+### Framework side
 
-| Capability | Current implementation | Target EVA v0.5 state | Remaining gap | Gap type | Next recommended step |
-| --- | --- | --- | --- | --- | --- |
-| State sensing | Implemented. Runtime, instance, disk, and recent-event context already flow through explicit L1 sensing owners, and the repository now includes a formal sensor registration surface. | Should remain the extensible L1 sensing input surface. | Shared-fact sampling and patrol-facing composition are still somewhat centralized relative to the long-term target. | Tighten | Keep the landed sensor owners and move more composition through registered sensors rather than widening centralized sampling logic. |
-| Rate sensing | Implemented at baseline. Delta, direction, and rate-of-change information already influence judgment. | Should support stronger temporal semantics than adjacent-snapshot comparison alone. | Temporal semantics are still thin: little smoothing, windowing, hysteresis, or confidence structure. | Tighten | Add a temporal-evidence structure with window, samples, confidence, and hysteresis semantics. |
-| Judgment rule baseline | Implemented. Deterministic rule-based judgment already reads rate context. | Should remain a rule-grounded L1 judgment sublayer. | Judgment exists, but the interface from judgment to routing is still not explicit enough. | Tighten | Keep the rule baseline, but formalize the judgment-to-routing contract. |
-| Signal publication contract | Implemented. A normalized envelope already exists around source, class, payload, timestamp, and rate context, and the publication path already passes through a dedicated signal-bus owner. | Should remain the standard signal envelope for L1 outputs. | Downstream routing and cross-source branching semantics are still thinner than the long-term target. | Tighten | Freeze the schema and deepen downstream use of the same signal-bus contract rather than re-fragmenting publication paths. |
-| Signal classification | Implemented. Threat / status / background classes already exist. | Should actively drive downstream routing semantics. | Classification is present, but downstream paths do not yet depend on it strongly enough, and background class remains mostly a reserved contract surface. | Tighten | Make later processing paths explicitly branch on signal class rather than only recording summaries. |
-| Routing | Implemented at a stronger baseline. Patrol now emits explicit fast/slow routing semantics, and critical integrity threats can take a protective fast lane that bypasses L3 deliberation while non-critical threat handling remains on the slow path. The fast lane is intentionally limited to critical integrity threats; other critical threat types still stay on the slow path as a conservative design choice. | Should provide explicit routing semantics for reflex vs deliberative handling. | Routing is still narrow and mostly patrol-scoped rather than a richer cross-source dispatch layer. | Stable baseline | Extend the same routing contract to more signal sources without widening authority boundaries. |
-| Urgency / preemption semantics | Implemented at baseline. Bounded internal fields such as `urgency` and `dispatch_hint` already exist in the routing contract. | Should be explicit without breaking heartbeat-first runtime rules. | The current urgency vocabulary is still small and internal-facing. | Stable baseline | Keep urgency semantics bounded and only extend them when new routing branches clearly need it. |
-| Sensor registry | Implemented at a stronger baseline. `SensorSpec`, `SensorOutput`, and `SensorRegistry` already exist as the formal L1 registration surface, and patrol/runtime sensing can now accept injected registries rather than depending only on the built-in assembly path. | Should become the extensible registration surface for L1 sensing. | Patrol collection still uses the registry narrowly rather than as the dominant composition path. | Stable baseline | Move more sensing assembly through registered sensors instead of centralized sampling logic. |
-| Kernel ↔ L1 boundary | Mostly correct. Heartbeat, distress, and yield remain kernel-owned, while L1 does not take over those authority boundaries. | Kernel should keep authority while projecting only necessary state into L1. | Kernel-critical events are not yet systematically projected into the L1 signal layer. | Tighten | Normalize kernel-critical events as high-priority L1 signals without letting L1 rewrite kernel life-boundary decisions. |
+The framework now owns:
+- kernel runtime loop, cadence, instance legitimacy, and persistence boundaries
+- the active-scenario seam in `eva/scenario_bundle.py`
+- L1 sensing registry contracts
+- L2 drive preset seam and generic drive-update surface
+- L3 structural dataclasses and mediated execution / learning seams
+- append-only authority and release-token validation
 
-## L2 Drive Layer
+### Scenario side
 
-| Capability | Current implementation | Target EVA v0.5 state | Remaining gap | Gap type | Next recommended step |
-| --- | --- | --- | --- | --- | --- |
-| Continuous drive state | Implemented. Continuous values already exist for survival, integrity, continuity, and curiosity. | This is the correct long-term direction and should remain. | No major architectural problem at the baseline level. | Stable baseline | Preserve the structure and continue semantic refinement rather than redesigning it. |
-| Drive update mechanics | Implemented at a stronger baseline. `update_drive_state()` now exposes explicit named policy steps for decay, severity accumulation, threat bonus, curiosity recovery, and curiosity suppression through a configurable L2 policy surface. | Should become signal-driven with patrol-based reconciliation, not patrol-driven alone. | Update timing is still too coarse. | Tighten | Let events and signal arrivals trigger lightweight updates while patrol handles periodic reconciliation. |
-| Drive contribution semantics | Implemented at a stronger baseline. Judged dimensions, explicit threat bonus, and curiosity recovery/suppression now flow through named L2 contributor policies with a configurable parameter surface. | Should support clearer per-drive contributors, suppression, recovery, and escalation logic. | Drive semantics are still fairly coarse. | Tighten | Add richer per-drive contributor policies only when new semantics clearly justify more state than the current bounded surface. |
-| Drive broadcast | Implemented. A read-only broadcast surface already exists, and downstream layers cannot write drive state directly. | Must remain the standard downstream drive-reading surface. | Downstream still does not treat it as the dominant behavioral context strongly enough. | Tighten | Require downstream reasoning to read through `DriveBroadcast` rather than treating pressure views as the primary context. |
-| Drive as context, not command | Implemented at a stronger baseline. `DriveBroadcast` now has clearer downstream control meaning, and candidate judgment / selection are driven primarily by drive-weighted scoring rather than pressure-first heuristics. | Should remain contextual rather than imperative. | Candidate and release vocabulary are still intentionally bounded, though the internal profile / release-policy vocabulary is now wider than the original two-profile baseline. | Tighten | Continue broadening mediated candidate and release vocabulary without widening side-effect authority. |
-| Reflex path | Implemented at a stronger baseline. `eva/l2_drive/reflex.py` now owns a bounded protective fast path for critical integrity threats, while mediated release-token validation still remains mandatory before execution. | Should include a small, tightly bounded L2 reflex arc. | Reflex remains intentionally narrow and does not own an independent execution surface. | Stable baseline | Keep the reflex arc small and only add new branches that clearly stay below deliberative complexity. |
-| Downstream consumption | Implemented at a stronger baseline. L3 now treats drive state as the primary reasoning context, while pressure remains a bounded compatibility projection / fallback surface. | Downstream behavior should become drive-native, with pressure retained only as a projection or compatibility view. | The external action surface is still narrow and compatibility-scoped. | Tighten | Expand candidate and tool-edge vocabulary around the same drive-native core. |
-| Pressure role | Implemented at a stronger baseline. `active_pressures` now acts mainly as a readable risk / projection surface plus a bounded compatibility fallback when drive scoring cannot separate candidates. | Should remain a projection layer rather than the internal core model. | The release bridge still carries a pressure-led compatibility target, even though the internal profile / response-policy vocabulary is now wider. | Tighten | Keep shrinking pressure-specific semantics as broader mediated action vocabulary lands. |
-| Persistence boundary | Implemented. `drive_state.json` is already separate from `runtime_state.json`. | This separation should remain. | No major architectural problem at the baseline level. | Stable baseline | Keep state separation; add history and decay traces only when they materially help reasoning or learning. |
-| L2 ↔ L3 boundary | Implemented at the hard-boundary level: L3 and response paths cannot write drive state. | Must remain a hard invariant. | The boundary is present, but L3 is still not yet fully drive-native in its practical behavior. | Tighten | Keep L3 as a consumer of `DriveBroadcast` only, and strengthen drive-native candidate shaping on top of that boundary. |
+The Linux runtime scenario now owns:
+- concrete drives
+- concrete sensors
+- concrete actions
+- concrete anchor admission policy
+- concrete outcome interpretation
+- concrete prior-skill / habit shaping policy
 
-## Transitional compatibility / execution layer
+### Runner side
 
-| Capability | Current implementation | Target EVA v0.5 state | Remaining gap | Gap type | Next recommended step |
-| --- | --- | --- | --- | --- | --- |
-| Pressure / history projection | Implemented. Pressure and response-history views still exist and are usable. | Should remain available only as compatibility or projection surfaces. | These views still carry too much behavioral weight in some paths. | Misaligned | Keep them readable, but continue shrinking their role as primary decision inputs. |
-| Current execution bridge | Implemented. A bounded compatibility execution bridge now lives under `eva/l3_deliberation/tool_edge/`, and post-patrol release remains the actual execution owner. | Should remain only a bounded bridge while broader mediated action ownership moves into L3. | The action surface is still narrow and compatibility-scoped relative to the target architecture. | Stable baseline | Broaden mediated action ownership inside L3 without re-expanding transitional bridges. |
+Startup assembly is now explicit:
+- `runners/run_linux.py` activates the Linux scenario and calls the generic framework loop
 
-## L3 Deliberation, memory, and learning
+## Current capability summary
 
-| Capability | Current implementation | Target EVA v0.5 state | Remaining gap | Gap type | Next recommended step |
-| --- | --- | --- | --- | --- | --- |
-| Deliberation package boundary | Implemented. A distinct L3 package with `reasoning/`, `peer_circuit/`, `memory/`, and `tool_edge/` subtrees already exists. | Should remain the formal home of deliberation, release, memory, and learning coordination. | The package structure is now explicit, but the cognitive layer built on top of it is still intentionally minimal. | Stable baseline | Extend capabilities by deepening these landed subtrees rather than bypassing them. |
-| Deliberation input contract | Implemented. `drive_broadcast`, `signal_batch`, and `runtime_gate_context` already form the required upstream contract; working memory is optional. | These should remain the core required upstream surfaces. | Optional enrichment inputs are still narrow. | Stable baseline | Preserve the narrow required contract and keep optional inputs advisory rather than authoritative. |
-| Candidate generation | Implemented at a stronger baseline. Candidate generation now materializes candidates from anchor-admitted `ActionDomain` schemas instead of assuming the full fixed set first, and that admitted set now includes a bounded high-risk `escalate_first` profile. | Should produce a broader candidate space shaped by drive, anchor, memory, and learned skill. | The admitted schema set is still narrow and compatibility-oriented. | Tighten | Broaden the action-domain schema vocabulary and upstream admission sources before widening the external action surface further. |
-| Anchor restriction | Implemented at a stronger baseline. Anchors now compute a pre-generative `ActionDomain`; generated candidates already carry the minimal runtime-gate projection, and the residual manual / non-domain compatibility projection helper now lives inside the canonical anchor owner rather than in a separate transitional `cross_layer.py` file. | Should become a fuller pre-generative anchor system. | Current anchor sources are still limited, and a small bounded projection helper still exists for non-domain candidates. | Tighten | Expand anchor sources and semantics through `ActionDomain` admission and keep the residual projection helper as small as possible without reintroducing a transitional seam. |
-| Value judgment | Implemented at a stronger baseline. Candidate scoring now reads continuous `drive_levels` through explicit candidate impact schemas; allowed selection preserves this drive-led ordering, while pressure projection and bounded learning remain fallback / advisory shaping only. | Should become a richer but still interpretable judgment layer inside a fuller reasoning core. | The current candidate set is still small and compatibility-oriented, even though drive-led scoring now spans a slightly wider internal profile set. | Tighten | Broaden candidate semantics and conflict handling on top of the landed drive-led scoring / selection baseline rather than reintroducing pressure-led ranking. |
-| Peer-circuit / independent selection | Implemented at a stronger baseline. Release selection now lives in dedicated `peer_circuit/` owners and preserves drive-led candidate score ordering, with learning bias only breaking ties among already-allowed candidates. | Candidate selection should become an independent peer-circuit layer, distinct from reasoning and from execution authorization. | The current peer-circuit still operates over a bounded compatibility-scoped candidate and release vocabulary, despite the new mediated escalation profile. | Tighten | Broaden the candidate and release vocabulary around the same independent peer-circuit boundary. |
-| Mediator / default inhibition | Implemented at a stronger baseline. Release is still withheld by default, and `ReleaseToken` is minted only by the mediator, validated again at tool-edge execution time, threaded through lifecycle handoff for both deliberative and reflex fast-path responses, and kept runtime-only rather than serialized into persisted audit or history artifacts. | Must remain an independent release authority with default inhibition. | The release vocabulary and action surface are still narrow, even though execution authority is now structurally gated and the internal profile / policy vocabulary is wider. | Stable baseline | Preserve mediator-owned runtime authority while expanding the candidate and release vocabulary around the same mediated gate. |
-| Audit vs memory split | Implemented at a stronger baseline. Deliberation audit remains separate from episodic/cognitive memory, and `memory/encoding.py` now owns continuous salience plus `drive_state_at_encoding` for append-only memory writes. The four append-only upstream tracks (audit / episodic / learning / habit) are now explicitly frozen as canonical contract surfaces. | Should become a fuller separation among audit, episodic/cognitive memory, and skill or learning tracks. | Episodic writing and retrieval are now richer, but the memory surface is still narrow and compatibility-oriented. | Tighten | Extend episodic retrieval and memory vocabulary through the landed encoding owner without collapsing audit, memory, and learning into one track. |
-| Outcome evaluation | Implemented at a stronger baseline. Expected outcome, observed outcome, delta, and an RPE-like score are already recorded after execution, and sufficiently strong learning evidence can now flow back into candidate impact estimation through a bounded learned overlay on top of the static cold-start schema. | Should remain a post-hoc evaluation loop rather than becoming pre-release authority. | The loop is still tied to a narrow execution bridge and only adjusts a small part of value estimation so far. | Stable baseline | Keep evaluation post-hoc and extend learned impact carefully without letting it become an independent release or ranking authority. |
-| Bounded learning bias | Implemented. Evidence, recency, stability, and confidence gating already bound how learning feeds back into later judgment. | Should remain bounded and never override runtime gates, anchors, or mediator authority. | Current shaping is still tuned around narrow compatibility profiles. | Tighten | Extend read-side learning effects carefully while preserving hard structural gates. |
-| Habit crystallization | Implemented at an initial level. Recurrent bias can produce bounded habit skills and limited candidate narrowing under strong evidence. | Should reduce deliberative load without becoming autonomous execution. | Current habit usage is still narrow and context-limited. | Tighten | Broaden skill derivation and observability before considering stronger automatic use. |
-| Working-memory interface | Implemented at a stronger baseline. Local rule-based backends, protocol objects, heuristic/client-backed adapters, and bounded advisory-source metadata already exist, and the client-backed path now supports a real Anthropic-backed advisory shell with local fallback and its own append-only audit track. | Should remain an optional advisory context layer. | Retrieval and context composition are still limited, and the advisory surface is still narrow. | Stable baseline | Deepen advisory retrieval and context composition without widening authority. |
-| Model-assisted advisory path | Implemented as a real but bounded advisory path, not as release authority. The runtime can call Anthropic `claude-sonnet-4-6`, normalize the response through the existing adapter seam, fall back to local working memory on failure, and keep a separate append-only LLM advisory audit track. | Should remain advisory even when expanded. | The model-backed path still contributes only a small bounded advisory bias and does not yet draw on richer retrieval or broader candidate semantics. | Stable baseline | Deepen retrieval and bounded context shaping while preserving advisory-only semantics and mediator-owned release authority. |
-| Tool edge / action surface | Implemented at a minimal baseline. A dedicated `tool_edge/` subtree now owns bounded compatibility execution, response-history writing, and `response_selected` payload assembly. High-risk `escalate_first` admission is now also protected by an explicit secondary anchor gate, and the remaining transitional shim modules around drive / learning / pressure have been retired into canonical package owners. | Should become a wider but still mediator-owned external action surface. | The current tool edge is still response-bridge scoped rather than a broader mediated tool registry, even though it now supports a slightly wider bounded response-policy surface. | Stable baseline | Keep widening inside the mediated gate only after the anchor-side secondary admission guard and other Phase C closeout gates are in place. |
-| Full cognitive retrieval | Implemented at a stronger baseline. Retrieval can already fall back to episodic memory traces, and read-side ranking now combines continuous drive similarity with salience rather than relying mainly on discrete `top_drive` matching. | Should provide salience-weighted episodic retrieval and richer cognitive memory use. | Retrieval is still shallow, with a narrow episodic vocabulary and limited downstream use. | Tighten | Broaden retrieval semantics and consumers through the landed retrieval owner before attempting higher-order self-model or social-layer expansion, while keeping the model-assisted path advisory-only. |
+### Implemented and structurally landed
 
-## Higher layers
+- heartbeat-first runtime loop
+- instance legitimacy and bounded continuous execution
+- normalized L1 sensing contract with scenario-provided sensors
+- drive-native internal state with scenario-provided drive preset
+- pre-generative anchor domain construction with scenario-provided admission policy
+- mediated response execution with scenario-provided action vocabulary
+- append-only learning records with scenario-provided outcome interpretation
+- habit-bias and habit-skill shaping with scenario-provided policy
 
-| Capability | Current implementation | Target EVA v0.5 state | Remaining gap | Gap type | Next recommended step |
-| --- | --- | --- | --- | --- | --- |
-| L4 Self-Model | Reserved only. | Should provide higher-order self-model interfaces grounded in stable lower-layer history. | The layer is intentionally not implemented yet. | Deferred | Do not expand L4 until lower-layer behavior, memory, and release history are more stable. |
-| L5 Social / External Coordination | Reserved only. | Should provide social and coordination interfaces on top of a stable lower architecture. | The layer is intentionally not implemented yet. | Deferred | Keep L5 deferred until the lower layers are behaviorally and architecturally steadier. |
+### Intentionally still narrow
 
-## Current public development posture
+- only one shipped scenario (`linux_runtime`)
+- bounded compatibility-style response vocabulary rather than a broad tool ecosystem
+- no generic scenario loader / validator yet
+- no richer persistence-target abstraction documented as implemented
+- no full L4 self-model or L5 social runtime yet
 
-The recent lower-layer closeout work is complete inside the repository:
+## Recommended reading order
 
-- kernel, L1, L2, anchor, and L3 owners are now placed under their intended namespaces,
-- `reasoning/`, `peer_circuit/`, `memory/`, and `tool_edge/` are established as real L3 subtrees,
-- the remaining transitional shim modules for this stage have been retired,
-- the append-only audit / episodic / learning / habit tracks remain structurally separate, and the model-backed advisory path now writes to its own separate LLM advisory audit track,
-- the runtime now includes a real but advisory-only Anthropic-backed working-memory path with bounded normalization and automatic fallback to local working memory,
-- the reorganized test tree currently passes end-to-end regression.
+For external readers, the cleanest reading order is:
 
-The practical near-term priority is now:
+1. `docs/eva-framework-implementation.md`
+2. `docs/scenarios-SPEC.md`
+3. `scenarios/linux_runtime/SPEC.md`
+4. this page
 
-1. keep the public target-architecture document and this public status page consistent,
-2. preserve the landed owner tree, append-only data-track split, and mediator-owned release boundary,
-3. deepen retrieval and advisory context composition without upgrading the model-backed path into authority,
-4. broaden mediated action vocabulary only inside the same anchor and mediator gates.
+For historical context only:
+- `docs/archive/eva-agent-full-implementation-v0.5.md`
 
-In short: the repository already contains a structurally aligned lower-layer prototype with a real but bounded model-backed advisory path. The next work is controlled deepening of the same architecture, not re-opening transitional cleanup or turning the advisory seam into release authority.
+## Practical summary
+
+`eva-agent` is currently best understood as a **framework-separated EVA runtime with one shipped Linux scenario**.
+
+The important architectural fact is no longer just that lower layers exist. It is that framework ownership, scenario ownership, and runner assembly are now explicitly separated in code and documentation.

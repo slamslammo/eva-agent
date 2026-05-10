@@ -24,7 +24,7 @@
 - 稳定的 L3 deliberation / learning / mediator boundary
 - 真实但 advisory-only 的 Anthropic-backed working-memory path，带 local fallback 与独立 LLM advisory audit
 
-当前判断：**Phase C 已完成并完成 closeout；Stage D（reflex fast path、sensor registry composition、drive update semantics）已完成；Stage E working-memory Anthropic advisory integration 也已完成。当前仓库已经在 stable owner tree 上具备真实但有界的 model-backed working-memory advisory path，并继续保持 advisory-only / mediated-release 边界；全量回归当前为 `230 tests` 通过。后续开发应继续以 `development-standards.md`、`module-organization-contract.md` 与 `codebase-realignment-plan.md` 作为 maintainer source of truth，并在不触碰 release authority 的前提下评估下一项 lower-layer capability slice。**
+当前判断：**Phase C 已完成并完成 closeout；Stage D（reflex fast path、sensor registry composition、drive update semantics）已完成；Stage E working-memory Anthropic advisory integration 也已完成。Stage F 已进入 long-running infrastructure 入口，且 append-only size-management baseline 与 restart-matrix hardening 已完成首轮收口：kernel persistence seam 已具备 rotation / archive contract、segment-aware logical-history reads，以及 mixed-track + preexisting-archive restart coverage；当前仍保持 advisory-only / mediated-release 边界，不进入 24h soak 或 L4 contract。全量回归当前为 `243 tests` 通过。后续开发应继续以 `development-standards.md`、`module-organization-contract.md` 与 `codebase-realignment-plan.md` 作为 maintainer source of truth，并在不触碰 release authority 的前提下推进更强的 endurance / restart 组合验证。**
 
 本轮 gate 已完成并完成落账，核心是把以下四层链条重新梳理并对齐：
 

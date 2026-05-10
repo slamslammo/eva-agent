@@ -129,6 +129,286 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
         self.assertEqual(context.advisory_context, {})
         self.assertEqual(context.situation_key, "curiosity|STABLE|none")
 
+    def test_build_working_memory_context_from_store_reads_rotated_histories_after_restart(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "type": "integrity",
+                        "evidence": {"reason": "recent_yield_detected"},
+                    }
+                ]
+            },
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            initial_store = StateStore(build_runtime_paths(temp_dir), append_only_rotation_max_bytes=1)
+            initial_store.append_habit_bias(
+                {
+                    "recorded_at": "2026-04-29T10:00:01+00:00",
+                    "situation_key": "integrity|STABLE|recent_yield_detected",
+                    "candidate_profile": "observe_first",
+                    "preferred_action": "recheck_runtime_integrity",
+                    "support_count": 2,
+                    "failure_count": 0,
+                    "recent_negative_count": 0,
+                    "evidence_count": 2,
+                    "stability_score": 0.7,
+                    "confidence": 0.5,
+                    "bias_strength": 0.8,
+                    "last_outcome_delta": 1.0,
+                }
+            )
+            initial_store.append_habit_bias(
+                {
+                    "recorded_at": "2026-04-29T10:00:02+00:00",
+                    "situation_key": "integrity|STABLE|recent_yield_detected",
+                    "candidate_profile": "observe_first",
+                    "preferred_action": "recheck_runtime_integrity",
+                    "support_count": 2,
+                    "failure_count": 1,
+                    "recent_negative_count": 1,
+                    "evidence_count": 3,
+                    "stability_score": 0.8,
+                    "confidence": 0.9,
+                    "bias_strength": -0.5,
+                    "last_outcome_delta": -0.5,
+                }
+            )
+            initial_store.append_learning_outcome(
+                {
+                    "recorded_at": "2026-04-29T10:00:03+00:00",
+                    "candidate_profile": "observe_first",
+                    "selected_action": "recheck_runtime_integrity",
+                    "observed_outcome": "relieved",
+                    "evaluation_label": "positive",
+                    "outcome_delta": 1.0,
+                    "confidence": 0.95,
+                    "content": {
+                        "top_drive": "integrity",
+                        "life_state": "STABLE",
+                        "pressure_reason": "recent_yield_detected",
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                    },
+                }
+            )
+            initial_store.append_learning_outcome(
+                {
+                    "recorded_at": "2026-04-29T10:00:04+00:00",
+                    "candidate_profile": "stabilize_first",
+                    "selected_action": "shrink_to_conservative_mode",
+                    "observed_outcome": "unchanged",
+                    "evaluation_label": "neutral",
+                    "outcome_delta": 0.0,
+                    "confidence": 0.85,
+                    "content": {
+                        "top_drive": "integrity",
+                        "life_state": "STABLE",
+                        "pressure_reason": "recent_yield_detected",
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                    },
+                }
+            )
+
+            restarted_store = StateStore(build_runtime_paths(temp_dir))
+            context = build_working_memory_context_from_store(restarted_store, deliberation_input)
+
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("habit_bias.*.jsonl"))), 1)
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("learning_outcomes.*.jsonl"))), 1)
+            self.assertEqual(context.bias_summaries[0]["candidate_profile"], "observe_first")
+            self.assertEqual(context.bias_summaries[0]["bias_strength"], -0.5)
+            self.assertEqual(context.bias_summaries[0]["confidence"], 0.9)
+            self.assertEqual(context.recent_relevant_outcomes[0]["selected_action"], "recheck_runtime_integrity")
+            self.assertEqual(
+                {outcome["selected_action"] for outcome in context.recent_relevant_outcomes},
+                {"recheck_runtime_integrity", "shrink_to_conservative_mode"},
+            )
+
+    def test_build_working_memory_context_from_store_reads_rotated_response_history_after_restart(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8, "survival": 0.2},
+                "drive_trends": {"curiosity": "improving", "survival": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            initial_store = StateStore(build_runtime_paths(temp_dir), append_only_rotation_max_bytes=1)
+            initial_store.append_response_history(
+                {
+                    "recorded_at": "2026-05-01T10:00:01+00:00",
+                    "selected_action": "curiosity_probe",
+                    "pressure_outcome": "relieved",
+                    "execution_status": "completed",
+                    "followup_needed": False,
+                    "drive_context": {
+                        "top_drive": "curiosity",
+                        "drive_levels": {"curiosity": 0.8, "survival": 0.2},
+                    },
+                    "life_state": "STABLE",
+                    "pressure_reason": "none",
+                }
+            )
+            initial_store.append_response_history(
+                {
+                    "recorded_at": "2026-05-01T10:00:02+00:00",
+                    "selected_action": "observe_environment",
+                    "pressure_outcome": "unchanged",
+                    "execution_status": "completed",
+                    "followup_needed": False,
+                    "drive_context": {
+                        "top_drive": "curiosity",
+                        "drive_levels": {"curiosity": 0.8, "survival": 0.2},
+                    },
+                    "life_state": "STABLE",
+                    "pressure_reason": "none",
+                }
+            )
+
+            restarted_store = StateStore(build_runtime_paths(temp_dir))
+            context = build_working_memory_context_from_store(restarted_store, deliberation_input, max_recent_outcomes=2)
+
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("response_history.*.jsonl"))), 1)
+            self.assertEqual(
+                [outcome["selected_action"] for outcome in context.recent_relevant_outcomes],
+                ["observe_environment", "curiosity_probe"],
+            )
+            self.assertEqual(
+                [outcome["top_drive"] for outcome in context.recent_relevant_outcomes],
+                ["curiosity", "curiosity"],
+            )
+
+    def test_build_working_memory_context_from_store_reads_rotated_memory_stub_fallback_after_restart(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "type": "integrity",
+                        "evidence": {"reason": "recent_yield_detected"},
+                    }
+                ]
+            },
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            initial_store = StateStore(build_runtime_paths(temp_dir), append_only_rotation_max_bytes=1)
+            initial_store.append_cognitive_memory_stub(
+                {
+                    "recorded_at": "2026-05-03T10:00:00+00:00",
+                    "source": "l3_deliberation",
+                    "salience": 0.7,
+                    "memory_type": "release_trace",
+                    "write_reason": "release_outcome=compatibility_release",
+                    "linked_audit_recorded_at": "2026-05-03T10:00:00+00:00",
+                    "content": {
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                        "pressure_reason": "recent_yield_detected",
+                        "runtime_gate_context": {"life_state": "STABLE"},
+                        "top_drive": "integrity",
+                        "selected_action": "shrink_to_conservative_mode",
+                        "candidate_profile": "stabilize_first",
+                        "drive_state_at_encoding": {
+                            "top_drive": "integrity",
+                            "drive_levels": {"integrity": 0.8},
+                            "drive_trends": {"integrity": "worsening"},
+                        },
+                    },
+                }
+            )
+            initial_store.append_cognitive_memory_stub(
+                {
+                    "recorded_at": "2026-05-03T10:05:00+00:00",
+                    "source": "l3_deliberation",
+                    "salience": 1.0,
+                    "memory_type": "threat_trace",
+                    "write_reason": "threat_signal_present",
+                    "linked_audit_recorded_at": "2026-05-03T10:05:00+00:00",
+                    "content": {
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                        "pressure_reason": "recent_yield_detected",
+                        "runtime_gate_context": {"life_state": "STABLE"},
+                        "top_drive": "integrity",
+                        "selected_action": "recheck_runtime_integrity",
+                        "candidate_profile": "observe_first",
+                        "drive_state_at_encoding": {
+                            "top_drive": "integrity",
+                            "drive_levels": {"integrity": 0.8},
+                            "drive_trends": {"integrity": "worsening"},
+                        },
+                    },
+                }
+            )
+
+            restarted_store = StateStore(build_runtime_paths(temp_dir))
+            context = build_working_memory_context_from_store(restarted_store, deliberation_input, max_recent_outcomes=2)
+
+            self.assertGreaterEqual(len(list(restarted_store.paths.append_only_archive_dir.glob("cognitive_memory_stub.*.jsonl"))), 1)
+            self.assertEqual(
+                [outcome["selected_action"] for outcome in context.recent_relevant_outcomes],
+                ["recheck_runtime_integrity", "shrink_to_conservative_mode"],
+            )
+            self.assertEqual(context.recent_relevant_outcomes[0]["memory_type"], "threat_trace")
+            self.assertEqual(context.recent_relevant_outcomes[0]["habitual_trace"], "habitual_suppression")
+
     def test_build_working_memory_context_from_store_can_attach_llm_advisory_context(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={
