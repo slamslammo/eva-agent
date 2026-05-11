@@ -54,6 +54,34 @@ def build_deliberation_input(
 
 
 @dataclass(frozen=True)
+class OutcomeVector:
+    """Canonical multi-dimensional outcome contract for L3 learning records."""
+
+    task_progress: float | None = None
+    viability_delta: dict[str, float] | None = None
+    resource_delta: dict[str, float] | None = None
+    capability_delta: dict[str, float] | None = None
+    risk_delta: float | None = None
+    reversibility: float | None = None
+    cost: dict[str, float] | None = None
+    uncertainty: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the canonical outcome vector with explicit optional fields."""
+
+        return {
+            "task_progress": self.task_progress,
+            "viability_delta": None if self.viability_delta is None else dict(self.viability_delta),
+            "resource_delta": None if self.resource_delta is None else dict(self.resource_delta),
+            "capability_delta": None if self.capability_delta is None else dict(self.capability_delta),
+            "risk_delta": self.risk_delta,
+            "reversibility": self.reversibility,
+            "cost": None if self.cost is None else dict(self.cost),
+            "uncertainty": self.uncertainty,
+        }
+
+
+@dataclass(frozen=True)
 class DeliberationInput:
     """Frozen L3 input assembled from the B0 runtime contracts."""
 
@@ -246,3 +274,16 @@ def build_deliberation_audit_record(
         release_decision=release_decision.to_dict(),
         release_token=release_decision.release_token,
     )
+
+
+__all__ = [
+    "Candidate",
+    "CandidateAssessment",
+    "DeliberationAuditRecord",
+    "DeliberationInput",
+    "OutcomeVector",
+    "ReleaseDecision",
+    "ReleaseToken",
+    "build_deliberation_audit_record",
+    "build_deliberation_input",
+]

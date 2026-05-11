@@ -5,10 +5,12 @@ import unittest
 from datetime import timedelta
 from eva.kernel import EventRecord, ActiveInstanceRecord, InstanceGuard, LifecycleConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.kernel.lifecycle import LifeState, LifecycleRuntime, WorkSlice
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 
 
 class LifecycleRuntimeTests(unittest.TestCase):
     def setUp(self) -> None:
+        activate_linux_runtime_scenario()
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = StateStore(build_runtime_paths(self.temp_dir.name))
         self.lifecycle = LifecycleConfig(

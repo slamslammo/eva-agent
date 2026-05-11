@@ -11,6 +11,7 @@ from eva.scenario_bundle import (
     SensorPolicyBundle,
     activate_runtime_scenario,
 )
+from eva.persistence_targets import build_linux_runtime_persistence_hierarchy, register_default_persistence_hierarchy
 
 from .actions import (
     ACTION_TO_ALLOWED_STATES,
@@ -105,7 +106,9 @@ LINUX_RUNTIME_SCENARIO_BUNDLE = RuntimeScenarioBundle(
 def activate_linux_runtime_scenario() -> RuntimeScenarioBundle:
     """Activate the Linux runtime bundle for framework compatibility lookups."""
 
-    return activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+    bundle = activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+    register_default_persistence_hierarchy(build_linux_runtime_persistence_hierarchy())
+    return bundle
 
 
 __all__ = [

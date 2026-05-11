@@ -3,15 +3,20 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation import Candidate
-from eva.l3_deliberation.reasoning import (
+from eva.l3_deliberation.reasoning import build_candidate_conflict_context
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import (
     ESCALATE_FIRST_PROFILE,
+    LINUX_RUNTIME_SCENARIO_BUNDLE,
     OBSERVE_FIRST_PROFILE,
     STABILIZE_FIRST_PROFILE,
-    build_candidate_conflict_context,
 )
 
 
 class ConflictDetectionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def test_unknown_candidate_action_is_withheld(self) -> None:
         conflict = build_candidate_conflict_context(
             Candidate(candidate_id="candidate-unknown", capability="unknown", action="unknown_action"),

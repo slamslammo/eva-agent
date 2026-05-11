@@ -10,12 +10,12 @@ from ..contracts import ReleaseToken
 from .executors import ConservativeRuntime, execute_integrity_selection
 from .history import append_response_history, build_response_summary
 from .tool_registry import (
-    DEFAULT_RESPONSE_MODE,
     ResponseCandidate,
     ResponseFilterDecision,
     ResponseSelection,
     build_integrity_response_candidates,
     filter_response_candidates,
+    get_action_constants,
     response_mode_from_release_context,
     select_integrity_response,
     select_response_action,
@@ -30,15 +30,21 @@ __all__ = [
     "ResponseFilterDecision",
     "ResponseSelection",
     "ConservativeRuntime",
-    "DEFAULT_RESPONSE_MODE",
     "build_integrity_response_candidates",
     "filter_response_candidates",
+    "get_default_response_mode",
     "select_integrity_response",
     "select_response_action",
     "execute_integrity_selection",
     "respond_to_integrity_pressure",
     "maybe_respond_after_patrol",
 ]
+
+
+def get_default_response_mode() -> str:
+    """Return the current scenario default response mode."""
+
+    return get_action_constants().default_response_mode
 
 
 def respond_to_integrity_pressure(

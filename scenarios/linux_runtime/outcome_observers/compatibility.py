@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from eva.l3_deliberation.contracts import OutcomeVector
+
 from ..prior_skills import habit_skill_match_for_candidate_profile
 
 
@@ -26,7 +28,7 @@ def expected_outcome_for_release(outcome: str, candidate_profile: str | None) ->
 def evaluate_response_outcome(
     response_summary: dict[str, Any],
     response_history_entry: dict[str, Any] | None = None,
-) -> tuple[str, float, str, float]:
+) -> tuple[str, float, str, float, OutcomeVector]:
     """Map the current Linux compatibility response result into a minimal outcome-delta signal."""
 
     history = {} if response_history_entry is None else dict(response_history_entry)
@@ -38,20 +40,70 @@ def evaluate_response_outcome(
     uncertainty_after_action = str(history.get("uncertainty_after_action") or "unknown")
 
     if execution_status == "failed":
-        return ("failed", -1.0, "negative", 0.95)
+        outcome_delta = -1.0
+        return (
+            "failed",
+            outcome_delta,
+            "negative",
+            0.95,
+            OutcomeVector(viability_delta={"level_1": outcome_delta}, uncertainty=1.0, risk_delta=1.0),
+        )
     if execution_status == "escalated":
-        return ("escalated", -0.75, "negative", 0.9)
+        outcome_delta = -0.75
+        return (
+            "escalated",
+            outcome_delta,
+            "negative",
+            0.9,
+            OutcomeVector(viability_delta={"level_1": outcome_delta}, uncertainty=0.9, risk_delta=0.75),
+        )
     if execution_status == "completed" and pressure_outcome == "relieved" and not followup_needed:
+        outcome_delta = 1.0
         confidence = 0.9 if uncertainty_after_action != "cannot_determine_safely" else 0.7
-        return ("relieved", 1.0, "positive", confidence)
+        return (
+            "relieved",
+            outcome_delta,
+            "positive",
+            confidence,
+            OutcomeVector(viability_delta={"level_1": outcome_delta}, uncertainty=0.2 if confidence >= 0.9 else 0.4, risk_delta=-1.0),
+        )
     if execution_status == "completed" and pressure_outcome == "relieved":
+        outcome_delta = 0.5
         confidence = 0.75 if uncertainty_after_action != "cannot_determine_safely" else 0.55
-        return ("partial_relief", 0.5, "positive", confidence)
+        return (
+            "partial_relief",
+            outcome_delta,
+            "positive",
+            confidence,
+            OutcomeVector(viability_delta={"level_1": outcome_delta}, uncertainty=0.35 if confidence >= 0.75 else 0.55, risk_delta=-0.5),
+        )
     if execution_status == "completed" and pressure_outcome == "unchanged":
-        return ("unchanged", -0.25 if followup_needed else 0.0, "negative" if followup_needed else "neutral", 0.75)
+        outcome_delta = -0.25 if followup_needed else 0.0
+        evaluation_label = "negative" if followup_needed else "neutral"
+        return (
+            "unchanged",
+            outcome_delta,
+            evaluation_label,
+            0.75,
+            OutcomeVector(viability_delta={"level_1": outcome_delta}, uncertainty=0.5, risk_delta=0.25 if followup_needed else 0.0),
+        )
     if execution_status == "completed" and pressure_outcome == "unknown":
-        return ("unknown", 0.0, "uncertain", 0.4)
-    return ("uncertain", 0.0, "uncertain", 0.3)
+        outcome_delta = 0.0
+        return (
+            "unknown",
+            outcome_delta,
+            "uncertain",
+            0.4,
+            OutcomeVector(viability_delta={"level_1": outcome_delta}, uncertainty=1.0),
+        )
+    outcome_delta = 0.0
+    return (
+        "uncertain",
+        outcome_delta,
+        "uncertain",
+        0.3,
+        OutcomeVector(viability_delta={"level_1": outcome_delta}, uncertainty=1.0),
+    )
 
 
 def build_learning_outcome_content(

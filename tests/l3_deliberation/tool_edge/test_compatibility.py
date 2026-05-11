@@ -7,20 +7,25 @@ from datetime import timedelta
 from eva.kernel import ActivePressure, ActivePressureTable, DriveState, DriveStateTable, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.l3_deliberation import ReleaseToken
 from eva.l3_deliberation.tool_edge import (
-    DEFAULT_RESPONSE_MODE,
-    ESCALATE_ACTION,
-    RECHECK_ACTION,
-    REPAIR_ACTION,
     build_integrity_response_candidates,
     build_response_selected_event_details,
     build_response_summary,
     filter_response_candidates,
+    get_default_response_mode,
     maybe_respond_after_patrol,
     respond_to_integrity_pressure,
     select_integrity_response,
     select_response_action,
 )
 from eva.l2_drive.broadcast import build_drive_broadcast
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import (
+    DEFAULT_RESPONSE_MODE,
+    ESCALATE_ACTION,
+    LINUX_RUNTIME_SCENARIO_BUNDLE,
+    RECHECK_ACTION,
+    REPAIR_ACTION,
+)
 
 
 class StubRuntime:
@@ -32,6 +37,9 @@ class StubRuntime:
 
 
 class ResponseTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def _drive_broadcast(self) -> dict[str, object]:
         now = utc_now()
         table = DriveStateTable(

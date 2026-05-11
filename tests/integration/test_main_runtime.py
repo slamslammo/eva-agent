@@ -711,7 +711,7 @@ class MainLoopTests(unittest.TestCase):
                 [
                     sys.executable,
                     "-m",
-                    "eva.kernel.main",
+                    "runners.run_linux",
                     "--runtime-dir",
                     temp_dir,
                     "--heartbeat-interval",
@@ -757,7 +757,7 @@ class MainLoopTests(unittest.TestCase):
                 [
                     sys.executable,
                     "-m",
-                    "eva.kernel.main",
+                    "runners.run_linux",
                     "--runtime-dir",
                     temp_dir,
                     "--heartbeat-interval",
@@ -816,7 +816,7 @@ class MainLoopTests(unittest.TestCase):
                 [
                     sys.executable,
                     "-m",
-                    "eva.kernel.main",
+                    "runners.run_linux",
                     "--runtime-dir",
                     temp_dir,
                     "--heartbeat-interval",
@@ -864,7 +864,7 @@ class MainLoopTests(unittest.TestCase):
                 [
                     sys.executable,
                     "-m",
-                    "eva.kernel.main",
+                    "runners.run_linux",
                     "--runtime-dir",
                     temp_dir,
                     "--heartbeat-interval",

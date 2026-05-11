@@ -6,7 +6,9 @@ import unittest
 from eva.kernel import ActivePressure, ActivePressureTable, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.l3_deliberation import ReleaseToken
 from eva.l3_deliberation.tool_edge.executors import execute_integrity_selection, execute_response_action
-from eva.l3_deliberation.tool_edge.tool_registry import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, ResponseSelection
+from eva.l3_deliberation.tool_edge.tool_registry import ResponseSelection
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import ESCALATE_ACTION, LINUX_RUNTIME_SCENARIO_BUNDLE, RECHECK_ACTION, REPAIR_ACTION
 
 
 class StubRuntime:
@@ -18,6 +20,9 @@ class StubRuntime:
 
 
 class ExecutorsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def _pressure(self, reason: str) -> ActivePressure:
         now = utc_now()
         return ActivePressure(

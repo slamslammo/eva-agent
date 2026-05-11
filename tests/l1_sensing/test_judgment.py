@@ -87,6 +87,7 @@ class JudgmentTests(unittest.TestCase):
 
         self.assertEqual(dimensions["runtime_integrity"].status, "critical")
         self.assertEqual(dimensions["runtime_integrity"].evidence["reason"], "runtime_files_missing")
+        self.assertEqual(dimensions["runtime_integrity"].evidence["persistence_hierarchy"]["failed_levels"], [4])
         self.assertEqual(determine_overall_status(dimensions), "critical")
         self.assertEqual(determine_primary_gap(dimensions), {"type": "runtime_integrity", "reason": "runtime_files_missing"})
 

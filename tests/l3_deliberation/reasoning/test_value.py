@@ -3,11 +3,16 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation import Candidate, apply_structural_anchors, build_action_domain, build_deliberation_input
-from eva.l3_deliberation.reasoning.candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, build_candidates
+from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import ESCALATE_FIRST_PROFILE, LINUX_RUNTIME_SCENARIO_BUNDLE, OBSERVE_FIRST_PROFILE
 
 
 class ValueJudgmentTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def test_integrity_top_drive_allows_compatibility_release(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={

@@ -6,9 +6,14 @@ from eva.l3_deliberation import CandidateAssessment, ReleaseToken, build_action_
 from eva.l3_deliberation.peer_circuit.mediator import decide_release, mint_reflex_release, validate_release_token
 from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class MediatorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def test_default_inhibition_withholds_without_release_pressure(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={

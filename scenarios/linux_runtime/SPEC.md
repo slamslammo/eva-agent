@@ -141,13 +141,27 @@ It owns:
 - habit-bias summarization from accumulated learning outcomes
 - habit-skill derivation under bounded evidence / stability / confidence thresholds
 - candidate-profile matching for the current scenario vocabulary
+- provenance metadata for scenario-owned prior skill records and experience-derived habit records
 
 Current matching profiles are:
 - `observe_first`
 - `stabilize_first`
 - `escalate_first`
 
-## 7. Startup and activation
+The current scenario is still bounded to one runtime. It does not implement inherited priors beyond the framework placeholder registry, and it does not claim ownership of any release authority.
+
+## 7. Persistence / stability alignment
+
+Stage G introduced an explicit framework `PersistenceHierarchy` and a separate `stability_metrics` trace-only module.
+
+For Linux runtime, the scenario currently aligns as follows:
+- Level 1 activation: host / instance continuity via heartbeat and instance validity
+- Level 4 activation: runtime artifact substrate via runtime path writability/readability constraints
+- `stability_metrics` consumes the scenario trace output rather than in-memory framework state
+
+The Linux scenario does not activate Levels 5-7.
+
+## 8. Startup and activation
 
 The canonical Linux startup path is:
 - `python -m runners.run_linux`
@@ -156,7 +170,18 @@ The canonical Linux startup path is:
 
 `eva.kernel.main` remains usable as a compatibility entry, but the scenario-owned canonical startup path is the runner.
 
-## 8. What this scenario does not own
+## 9. Alignment notes for Stage G
+
+This scenario is aligned with the Stage G framework contracts as follows:
+- **Outcome contract**: Linux outcome observers return the vector-aware learning record shape while preserving scalar `outcome_delta` semantics on `viability_delta.level_1`
+- **Skill contract**: prior and habit policy is split across framework registry surfaces with provenance metadata; scenario-owned policy remains read-side only
+- **Persistence contract**: Linux activates Level 1 continuity and Level 4 artifact substrate, while keeping Levels 5-7 inactive
+- **Stability contract**: trace output is consumable by `stability_metrics` without importing EVA internals
+- **Activation contract**: explicit runner activation remains the only canonical startup path
+
+The scenario remains narrow and does not claim broader task-handling capability.
+
+## 10. What this scenario does not own
 
 This scenario does not own:
 - heartbeat cadence authority
@@ -167,7 +192,7 @@ This scenario does not own:
 
 Those remain framework concerns under `eva/`.
 
-## 9. Current scope limit
+## 11. Current scope limit
 
 This scenario is still intentionally narrow.
 

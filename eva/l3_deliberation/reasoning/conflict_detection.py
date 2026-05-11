@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
+from .candidate_generation import current_anchor_profiles
 from ..contracts import Candidate
 
 DRIVE_CONFLICT_THRESHOLD = 0.5
@@ -42,8 +42,13 @@ def build_candidate_conflict_context(
             reasons=("unknown_candidate_action",),
         )
 
+    anchor_profiles = current_anchor_profiles()
     candidate_profile = str(candidate.parameter_domain.get("candidate_profile") or "unknown")
-    if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
+    if candidate_profile not in {
+        anchor_profiles.observe_first_profile,
+        anchor_profiles.stabilize_first_profile,
+        anchor_profiles.escalate_first_profile,
+    }:
         return CandidateConflictContext(
             candidate_profile=candidate_profile,
             disposition="withhold",
@@ -99,25 +104,25 @@ def build_candidate_conflict_context(
 
     pressure_reasons = [*reasons, "compatibility_projection_present"]
     score_delta = float(threat_count)
-    if candidate_profile == STABILIZE_FIRST_PROFILE:
+    if candidate_profile == anchor_profiles.stabilize_first_profile:
         if top_drive == "integrity":
             score_delta += 0.75
             pressure_reasons.append("integrity_projection_for_stabilize_first")
         if compatibility_pressure_count > 0:
             score_delta += 0.5
             pressure_reasons.append("pressure_projection_for_stabilize_first")
-    elif candidate_profile == OBSERVE_FIRST_PROFILE:
+    elif candidate_profile == anchor_profiles.observe_first_profile:
         if top_drive != "integrity":
             score_delta += 0.25
             pressure_reasons.append("non_integrity_projection_for_observe_first")
         if compatibility_pressure_count == 0:
             score_delta += 0.25
             pressure_reasons.append("low_pressure_projection_for_observe_first")
-    elif candidate_profile == ESCALATE_FIRST_PROFILE:
+    elif candidate_profile == anchor_profiles.escalate_first_profile:
         if top_drive == "integrity":
             score_delta += 1.0
             pressure_reasons.append("integrity_projection_for_escalate_first")
-        if primary_pressure_reason in {"runtime_files_missing", "runtime_not_writable", "recent_distress_detected"}:
+        if primary_pressure_reason in anchor_profiles.high_risk_escalation_reasons:
             score_delta += 1.0
             pressure_reasons.append("high_risk_projection_for_escalate_first")
         if compatibility_pressure_count > 0:

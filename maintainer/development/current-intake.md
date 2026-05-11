@@ -11,53 +11,64 @@
 
 ## Change intake
 
-- **Change title**: Phase A Slice A-8 documentation migration / archive / boundary sync
-- **Goal**: 在不改动 runtime behavior、schema、tests 与 release authority 的前提下，把公开与维护文档更新到 Phase A 已落地的 framework/scenario 边界：`docs/eva-framework-implementation.md` 反映 framework canonical owner，`docs/scenarios-SPEC.md` 反映 scenario contract，新增 `scenarios/linux_runtime/SPEC.md` 反映 Linux scenario canonical owner，`docs/current-status.md` 更新对外入口，`maintainer/development/module-organization-contract.md` 更新 maintainer canonical structure，同时将旧的混合实现文档归档。
-- **Change type**: docs
+- **Change title**: Stage G G-5 Linux scenario v0.6 alignment audit
+- **Goal**: 对当前 shipped Linux runtime scenario 做一次 v0.6 对齐收口审计：检查并修正 `scenarios/linux_runtime/` 的 prior skills、outcome observers、anchor policy 与 persistence hierarchy / trace-output 之间的语义一致性，使其与 G-1 ~ G-4 已落地的 framework structures 完全对齐。当前 slice 不扩 Linux runtime 的任务处理能力，不新增 drives/sensors/actions，不改变 release authority；重点是把现有 Linux content 重新表述为 v0.6-correct 的 scenario，补齐必要的 provenance / persistence declaration / trace compatibility 文档与最小测试校验。
+- **Change type**: realignment
 
 ## Ownership
 
-- **Layer**: cross-layer documentation / maintainer boundary contract
-- **Canonical owner**: public docs 反映已落地的 framework / scenario / runner boundary；maintainer docs 反映当前 canonical module organization；archive 保留旧混合文档作为历史参考，不再充当主线
-- **Touched current files**: `maintainer/development/current-intake.md`, `docs/eva-framework-implementation.md`, `docs/scenarios-SPEC.md`, `docs/current-status.md`, `docs/eva-agent-full-implementation.md`, `maintainer/development/module-organization-contract.md`, `maintainer/development/phase-a-refactor-progress.md`；预计新增 `scenarios/linux_runtime/SPEC.md` 与 `docs/archive/eva-agent-full-implementation-v0.5.md`
-- **Owner class**: stable docs sync
+- **Layer**: `scenarios/linux_runtime`
+- **Canonical owner**: `scenarios/linux_runtime/SPEC.md` 作为 Linux scenario canonical spec；`scenarios/linux_runtime/__init__.py` 作为 bundle assembly owner；`stability_metrics/` 作为 trace validation consumer（如果需要 smoke）
+- **Touched current files**: `scenarios/linux_runtime/SPEC.md`, `scenarios/linux_runtime/__init__.py`, `scenarios/linux_runtime/prior_skills/`, `scenarios/linux_runtime/outcome_observers/`, `scenarios/linux_runtime/anchors/`, tests under `tests/integration/`, `tests/l3_deliberation/`, `tests/stability_metrics/`（if needed）; 预计同步 `maintainer/development/current-intake.md` 与 `maintainer/development/stage-g-progress.md`
+- **Owner class**: stable scenario alignment
 
 ## Realignment stage
 
 - **Stage**: `other`
-- **If other, why**: 这是 `maintainer/development/v0.6-refactor-startup-instruction.md` 定义的 v0.6 Phase A Slice A-8，不属于既有 R1/R2/R3 realignment 收敛动作
+- **If other, why**: 这是 Stage G `G-5` alignment audit，属于已落地 scenario 的语义收口，不是既有 R1/R2/R3 realignment 分层收敛动作
 
 ## Boundary check
 
-- **Affected contracts**: framework/scenario 文档边界、runner canonical entry 描述、public status 入口、maintainer module organization canonical owner、archive path for old mixed doc
+- **Affected contracts**:
+  - Linux scenario SPEC canonicalization
+  - prior skill provenance / registry split semantics
+  - outcome observer vector semantics
+  - persistence hierarchy declaration in scenario docs
+  - trace compatibility for stability metrics
 - **Hard boundaries to preserve**:
-  - document landed code reality only
-  - no behavior change
-  - no persistent schema change
-  - no test logic change
-  - public docs remain English
-  - maintainer docs may remain Chinese
-  - archived mixed doc must not remain the canonical reference
-- **Why this change does not widen a transitional owner**: A-8 只同步文档到 A-1~A-7 已落地边界，不新增 capability、不回退到旧 mixed owner，也不把 Phase B 设计写成已实现事实
+  - heartbeat-first
+  - default inhibition
+  - anchor pre-generation
+  - drive read-only
+  - mediated release
+  - append-only artifact discipline
+- **Why this change does not widen a transitional owner**: G-5 只收紧并澄清 Linux scenario 语义，不接 Crafter，不引入 Linux task handling，不改变 framework owner 权限，只把现有内容与 G-1~G-4 的框架事实对齐
 
 ## Verification
 
-- **Freeze checks**: `docs/eva-framework-implementation.md`, `docs/scenarios-SPEC.md`, `scenarios/linux_runtime/SPEC.md`, `docs/current-status.md`, `maintainer/development/module-organization-contract.md`, `docs/archive/eva-agent-full-implementation-v0.5.md`, `docs/eva-agent-full-implementation.md`
-- **Additional checks**: path/reference consistency across public docs；archive file exists；current-status no longer points to the mixed doc as canonical
-- **Need full regression?** no
+- **Freeze tests**:
+  - `tests/integration/test_patrol_turn_flow.py`
+  - `tests/integration/test_lifecycle_patrol_learning.py`
+  - `tests/l3_deliberation/reasoning/test_value.py`
+  - `tests/l3_deliberation/memory/test_working_memory.py`（if naming differs, current working-memory tests)
+  - `tests/stability_metrics/test_metrics.py`
+- **Additional tests**:
+  - Linux scenario SPEC assertions for provenance and persistence declaration consistency
+  - trace smoke assertions against `stability_metrics`
+  - any minimal regression needed to prove no user-visible scope change
+- **Need full regression?** yes
 
 ## Docs sync
 
 - **Docs to update**:
   - `maintainer/development/current-intake.md`
-  - `maintainer/development/phase-a-refactor-progress.md`
-  - `docs/eva-framework-implementation.md`
-  - `docs/scenarios-SPEC.md`
+  - `maintainer/development/stage-g-progress.md`
   - `scenarios/linux_runtime/SPEC.md`
-  - `docs/current-status.md`
-  - `docs/eva-agent-full-implementation.md`
-  - `maintainer/development/module-organization-contract.md`
-- **Docs actually needed for this change**: all of the above
+  - `docs/scenarios-SPEC.md` only if cross-scenario contract wording needs an explicit G-5 note
+- **Docs actually needed for this change**:
+  - `maintainer/development/current-intake.md`
+  - `maintainer/development/stage-g-progress.md`
+  - `scenarios/linux_runtime/SPEC.md`
 
 ## Go / no-go
 
@@ -66,6 +77,6 @@
 
 ## Intake status
 
-- 当前检查点：**Phase A Slice A-8 已完成；文档 canonical owner、archive 与 public entry 已同步到已落地代码边界**
-- 已完成验证：**archive file 已创建；public docs reference consistency 已检查；`docs/current-status.md` 已切离 mixed doc canonical reference**
-- 下一 gate：**准备 Phase A A-1~A-8 完整 review 摘要**
+- 当前检查点：**G-5 Linux scenario v0.6 alignment audit 已完成实现与 full regression**
+- 已完成验证：**targeted G-5 subset 通过；Linux runtime trace smoke 通过；full regression `251 tests, OK`；Linux scenario SPEC 已补齐 Stage G 对齐事实与 persistence / outcome / provenance / stability 说明**
+- 下一 gate：**Stage G exit review**

@@ -340,6 +340,7 @@ class StateStoreTests(unittest.TestCase):
             self.assertEqual(entries[0]["content"]["situation_key"], "integrity|STABLE|recent_yield_detected")
             self.assertTrue(entries[0]["content"]["habit_skill_match"])
             self.assertTrue(entries[0]["content"]["habit_narrowed"])
+            self.assertIsNone(entries[0].get("outcome_vector"))
 
     def test_append_and_read_habit_bias(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

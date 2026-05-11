@@ -50,6 +50,7 @@
 | B-3 compatibility bridge demotion | 继续压薄 `compatibility.py`，把通用 response selection / execution closeout / summary assembly 下放到 canonical `tool_edge/` owners | 已完成 | `maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 进入 B-4 drive-native L3 shaping |
 | B-4 drive-native L3 shaping | 继续把 reasoning / selection 从 pressure-led 微调推向 drive-native shaping，让 pressure 留在 projection / fallback 语义 | 已完成 | `maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 进入 B-5 candidate / release vocabulary widening |
 | B-5 candidate / release vocabulary widening | 在保持 mediator-owned default inhibition、anchor pre-generation 与 bounded tool-edge 的前提下，受限扩展 internal candidate profile / release-policy vocabulary | 已完成 | `maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 评估下一项 mediated action-surface slice |
+| Stage G（planned） | 清理 Phase A residuals，并落地 v0.6 capability landing（outcome vector / skill-source split / persistence hierarchy / stability metrics / Linux scenario alignment audit） | 规划中，尚未启动 | `maintainer/development/phase-a-residuals.md`、`maintainer/development/stage-g-v0.6-capability-landing-startup-instruction.md` | 先完成 G-0 residual clearance intake |
 
 ## 3. 当前 v0.5 落地视图
 
@@ -161,7 +162,21 @@ L4 只有在下层已经积累出足够稳定的行为史、memory 史与 releas
 
 当前不提前展开实现细节，也不在 alignment gate 之前推进。
 
-## 10. 推进原则
+## 10. Stage G planning note
+
+当前 maintainer 规划中，另有一条 **Stage G** 轨道，用于承接：
+- Phase A closeout review 中识别出的 residual cleanup
+- v0.6 capability landing 的后续结构落地
+
+需要强调：
+- Stage G 的历史起点来自 **Phase A A-1 ~ A-8 完整 review**
+- 但它**不是**对历史 `Phase B` 的重命名，也**不是**对已完成 `Phase B / Phase C` 的回滚
+- 历史 `Phase A / Phase B / Phase C` 与后续 `Stage D / E / F` 文档保持原样保留
+- Stage G 的 maintainer source of truth 是：
+  - `maintainer/development/phase-a-residuals.md`
+  - `maintainer/development/stage-g-v0.6-capability-landing-startup-instruction.md`
+
+## 11. 推进原则
 
 - 先对齐架构与合同，再进入后续代码实现
 - 先把结构搭对，再扩高层能力
@@ -169,7 +184,7 @@ L4 只有在下层已经积累出足够稳定的行为史、memory 史与 releas
 - 当前文档性 alignment gate、Stage D 与 Stage E 已完成；下一步在 stable owner tree 上重新评估 retrieval/context deepening 与后续 lower-layer capability slice
 - 每个 phase 都应维持：目标、边界、进展三类文档的一致性
 
-## 11. 相关文档
+## 12. 相关文档
 
 - `docs/eva-agent-full-implementation.md`
 - `docs/current-status.md`

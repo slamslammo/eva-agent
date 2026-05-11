@@ -4,22 +4,22 @@ import unittest
 
 from eva.kernel import ActivePressure, RuntimeState, utc_now
 from eva.l3_deliberation.tool_edge.tool_registry import (
-    ACTION_TO_ALLOWED_STATES,
-    ACTION_TO_POSTURE,
-    ACTION_TO_STATE_MODE,
-    ESCALATE_ACTION,
-    RECHECK_ACTION,
-    REPAIR_ACTION,
     bridge_policy_from_release_context,
     build_integrity_response_candidates,
     filter_response_candidates,
+    get_action_constants,
     response_mode_from_release_context,
     select_integrity_response,
     select_response_action,
 )
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import ESCALATE_ACTION, LINUX_RUNTIME_SCENARIO_BUNDLE, RECHECK_ACTION, REPAIR_ACTION
 
 
 class ToolRegistryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def _pressure(self, reason: str, *, pressure_type: str = "integrity", **evidence: object) -> ActivePressure:
         now = utc_now()
         base_evidence = {"reason": reason}
@@ -63,9 +63,10 @@ class ToolRegistryTests(unittest.TestCase):
         self.assertEqual(response_mode_from_release_context(None), "pressure_led_compatibility")
 
     def test_tool_registry_exposes_static_action_metadata(self) -> None:
-        self.assertEqual(ACTION_TO_POSTURE[RECHECK_ACTION], "recheck_or_observe")
-        self.assertEqual(ACTION_TO_STATE_MODE[REPAIR_ACTION], "conservative")
-        self.assertEqual(ACTION_TO_ALLOWED_STATES[ESCALATE_ACTION], ("RECOVERING", "STABLE", "DEGRADED", "CRITICAL"))
+        action_constants = get_action_constants()
+        self.assertEqual(action_constants.action_to_posture[RECHECK_ACTION], "recheck_or_observe")
+        self.assertEqual(action_constants.action_to_state_mode[REPAIR_ACTION], "conservative")
+        self.assertEqual(action_constants.action_to_allowed_states[ESCALATE_ACTION], ("RECOVERING", "STABLE", "DEGRADED", "CRITICAL"))
 
     def test_tool_registry_select_integrity_response_consumes_release_context(self) -> None:
         pressure = self._pressure(

@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from ...scenario_bundle import get_active_runtime_scenario
+from ...skills import (
+    HabitSkillRecord,
+    HabitSkillRegistry,
+    InheritedPriorRegistry,
+    PriorSkillRecord,
+    PriorSkillRegistry,
+    SkillProvenance,
+)
 
 
 @dataclass(frozen=True)
@@ -22,6 +30,7 @@ class HabitSkillSummary:
     crystallized: bool = False
     crystallization_reasons: tuple[str, ...] = ()
     source: str = "habit_bias"
+    provenance: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize one habit-skill summary."""
@@ -39,6 +48,8 @@ class HabitSkillSummary:
         }
         if self.preferred_action is not None:
             payload["preferred_action"] = self.preferred_action
+        if self.provenance is not None:
+            payload["provenance"] = dict(self.provenance)
         return payload
 
 
@@ -109,24 +120,26 @@ def derive_habit_skills(
 ) -> list[HabitSkillSummary]:
     """Derive crystallized habit-skill summaries from current learning artifacts."""
 
+    habit_records = habit_skill_registry(
+        situation_key=situation_key,
+        habit_bias_entries=habit_bias_entries,
+        learning_outcomes=learning_outcomes,
+    ).records()
     return [
         HabitSkillSummary(
-            recorded_at=str(skill.get("recorded_at") or ""),
-            situation_key=str(skill.get("situation_key") or situation_key),
-            candidate_profile=str(skill.get("candidate_profile") or "unknown"),
-            preferred_action=(str(skill.get("preferred_action")) if skill.get("preferred_action") is not None else None),
-            evidence_count=int(skill.get("evidence_count", 0)),
-            stability_score=float(skill.get("stability_score", 0.0)),
-            confidence=float(skill.get("confidence", 0.0)),
-            crystallized=bool(skill.get("crystallized", False)),
-            crystallization_reasons=tuple(str(reason) for reason in skill.get("crystallization_reasons", [])),
-            source=str(skill.get("source") or "habit_bias"),
+            recorded_at=record.recorded_at,
+            situation_key=record.situation_key,
+            candidate_profile=record.candidate_profile,
+            preferred_action=record.preferred_action,
+            evidence_count=record.evidence_count,
+            stability_score=record.stability_score,
+            confidence=record.confidence,
+            crystallized=record.crystallized,
+            crystallization_reasons=record.crystallization_reasons,
+            source="habit_bias",
+            provenance=record.provenance.to_dict(),
         )
-        for skill in get_active_runtime_scenario().prior_skills.derive_habit_skills(
-            situation_key=situation_key,
-            habit_bias_entries=habit_bias_entries,
-            learning_outcomes=learning_outcomes,
-        )
+        for record in habit_records
     ]
 
 
@@ -139,6 +152,10 @@ def _situation_key_from_learning_outcome(record: dict[str, Any]) -> str:
 def summarize_habit_bias(learning_outcomes: list[dict[str, Any]], *, situation_key: str) -> list[HabitBiasSummary]:
     """Summarize recurring outcomes into evidence-weighted habit-bias entries."""
 
+    summaries = get_active_runtime_scenario().prior_skills.summarize_habit_bias(
+        learning_outcomes,
+        situation_key=situation_key,
+    )
     return [
         HabitBiasSummary(
             recorded_at=str(summary.get("recorded_at") or ""),
@@ -159,8 +176,104 @@ def summarize_habit_bias(learning_outcomes: list[dict[str, Any]], *, situation_k
             habit_eligible=bool(summary.get("habit_eligible", False)),
             habit_eligibility_reasons=tuple(str(reason) for reason in summary.get("habit_eligibility_reasons", [])),
         )
-        for summary in get_active_runtime_scenario().prior_skills.summarize_habit_bias(
-            learning_outcomes,
-            situation_key=situation_key,
-        )
+        for summary in summaries
     ]
+
+
+def habit_skill_registry(
+    *,
+    situation_key: str,
+    habit_bias_entries: list[dict[str, Any]] | None = None,
+    learning_outcomes: list[dict[str, Any]] | None = None,
+) -> HabitSkillRegistry:
+    """Return the current scenario habit-skill registry for one situation."""
+
+    skills = get_active_runtime_scenario().prior_skills.derive_habit_skills(
+        situation_key=situation_key,
+        habit_bias_entries=habit_bias_entries,
+        learning_outcomes=learning_outcomes,
+    )
+    records = [
+        HabitSkillRecord(
+            recorded_at=str(skill.get("recorded_at") or ""),
+            situation_key=str(skill.get("situation_key") or situation_key),
+            candidate_profile=str(skill.get("candidate_profile") or "unknown"),
+            preferred_action=(str(skill.get("preferred_action")) if skill.get("preferred_action") is not None else None),
+            evidence_count=int(skill.get("evidence_count", 0)),
+            stability_score=float(skill.get("stability_score", 0.0)),
+            confidence=float(skill.get("confidence", 0.0)),
+            crystallized=bool(skill.get("crystallized", False)),
+            crystallization_reasons=tuple(str(reason) for reason in skill.get("crystallization_reasons", [])),
+            provenance=SkillProvenance(
+                source="experience",
+                provenance_detail="linux_runtime_habit_bias_derivation",
+                confidence=float(skill.get("confidence", 0.0)),
+                scope={"situation_key": situation_key},
+                mutable=True,
+            ),
+        )
+        for skill in skills
+    ]
+    return HabitSkillRegistry(records)
+
+
+def _prior_skill_profiles() -> tuple[str, ...]:
+    return tuple(sorted({
+        profile
+        for profile in (
+            "observe_first",
+            "stabilize_first",
+            "escalate_first",
+        )
+        if get_active_runtime_scenario().prior_skills.habit_skill_match_for_candidate_profile(profile)
+    }))
+
+
+def _preferred_action_for_candidate_profile(candidate_profile: str) -> str | None:
+    if candidate_profile == "observe_first":
+        return "recheck_runtime_integrity"
+    if candidate_profile == "stabilize_first":
+        return "shrink_to_conservative_mode"
+    if candidate_profile == "escalate_first":
+        return "escalate_integrity_risk"
+    return None
+
+
+def prior_skill_registry(*, situation_key: str) -> PriorSkillRegistry:
+    """Return the current scenario prior-skill registry for one situation."""
+
+    records = [
+        PriorSkillRecord(
+            recorded_at="scenario_definition",
+            situation_key=situation_key,
+            candidate_profile=candidate_profile,
+            preferred_action=_preferred_action_for_candidate_profile(candidate_profile),
+            provenance=SkillProvenance(
+                source="scenario",
+                provenance_detail="linux_runtime_candidate_profile_policy",
+                confidence=1.0,
+                scope={"situation_key": situation_key},
+                mutable=False,
+            ),
+        )
+        for candidate_profile in _prior_skill_profiles()
+    ]
+    return PriorSkillRegistry(records)
+
+
+def inherited_prior_registry() -> InheritedPriorRegistry:
+    """Return the placeholder inherited-prior registry reserved for v0.7+."""
+
+    return InheritedPriorRegistry()
+
+
+__all__ = [
+    "HabitBiasSummary",
+    "HabitSkillSummary",
+    "build_situation_key_from_values",
+    "derive_habit_skills",
+    "habit_skill_registry",
+    "inherited_prior_registry",
+    "prior_skill_registry",
+    "summarize_habit_bias",
+]

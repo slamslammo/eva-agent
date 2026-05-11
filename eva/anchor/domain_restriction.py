@@ -10,13 +10,29 @@ from ..l3_deliberation.contracts import Candidate, DeliberationInput
 from .dynamic import apply_dynamic_anchor
 from .structural import apply_structural_anchor
 
-_ACTIVE_ANCHORS = get_active_runtime_scenario().anchors
 
-OBSERVE_FIRST_PROFILE = _ACTIVE_ANCHORS.observe_first_profile
-STABILIZE_FIRST_PROFILE = _ACTIVE_ANCHORS.stabilize_first_profile
-ESCALATE_FIRST_PROFILE = _ACTIVE_ANCHORS.escalate_first_profile
-HIGH_RISK_ESCALATION_REASONS = _ACTIVE_ANCHORS.high_risk_escalation_reasons
-COMPATIBILITY_RELEASE_IMPACT = _ACTIVE_ANCHORS.compatibility_release_impact
+@dataclass(frozen=True)
+class AnchorConstants:
+    """Read-only view of current scenario anchor vocabulary and impact defaults."""
+
+    observe_first_profile: str
+    stabilize_first_profile: str
+    escalate_first_profile: str
+    high_risk_escalation_reasons: frozenset[str]
+    compatibility_release_impact: dict[str, dict[str, float]]
+
+
+def get_anchor_constants() -> AnchorConstants:
+    """Return the current scenario-owned anchor vocabulary at point of use."""
+
+    anchors = get_active_runtime_scenario().anchors
+    return AnchorConstants(
+        observe_first_profile=anchors.observe_first_profile,
+        stabilize_first_profile=anchors.stabilize_first_profile,
+        escalate_first_profile=anchors.escalate_first_profile,
+        high_risk_escalation_reasons=anchors.high_risk_escalation_reasons,
+        compatibility_release_impact=dict(anchors.compatibility_release_impact),
+    )
 
 
 @dataclass(frozen=True)
@@ -231,15 +247,12 @@ def _seconds_to_heartbeat(runtime_gate_context: dict[str, Any]) -> float | None:
 __all__ = [
     "ActionDomain",
     "AgentState",
+    "AnchorConstants",
     "CandidateSchema",
-    "COMPATIBILITY_RELEASE_IMPACT",
-    "OBSERVE_FIRST_PROFILE",
-    "STABILIZE_FIRST_PROFILE",
-    "ESCALATE_FIRST_PROFILE",
-    "HIGH_RISK_ESCALATION_REASONS",
-    "build_action_domain",
     "apply_dynamic_anchor",
     "apply_structural_anchor",
     "apply_structural_anchors",
+    "build_action_domain",
+    "get_anchor_constants",
     "restrict_candidate_domain",
 ]

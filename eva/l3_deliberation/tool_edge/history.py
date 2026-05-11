@@ -10,7 +10,7 @@ from ...kernel import ActivePressure, RuntimeState, StateStore, to_iso8601
 if TYPE_CHECKING:
     from .tool_registry import ResponseSelection
 
-from .tool_registry import DEFAULT_RESPONSE_MODE
+from .tool_registry import get_action_constants
 
 __all__ = ["append_response_history", "build_response_selected_event_details", "build_response_summary"]
 
@@ -24,14 +24,14 @@ def append_response_history(
     now: datetime,
     drive_context: dict[str, Any] | None = None,
     release_context: dict[str, Any] | None = None,
-    response_mode: str = DEFAULT_RESPONSE_MODE,
+    response_mode: str | None = None,
 ) -> dict[str, Any]:
     """Append one complete Step 2 response record and return it."""
 
     payload = {
         "response_id": f"resp-{selection.pressure_id}-{int(now.timestamp())}",
         "recorded_at": to_iso8601(now),
-        "response_mode": response_mode,
+        "response_mode": response_mode or get_action_constants().default_response_mode,
         "pressure_id": pressure.pressure_id,
         "pressure_type": pressure.type,
         "pressure_severity": pressure.severity,
@@ -70,7 +70,7 @@ def build_response_summary(
     execution_result: dict[str, Any],
     *,
     drive_context: dict[str, Any] | None = None,
-    response_mode: str = DEFAULT_RESPONSE_MODE,
+    response_mode: str | None = None,
 ) -> dict[str, Any]:
     """Build the bounded response summary returned to lifecycle after execution."""
 
@@ -82,7 +82,7 @@ def build_response_summary(
         "execution_status": execution_result["execution_status"],
         "pressure_outcome": execution_result["pressure_outcome"],
         "followup_needed": execution_result["followup_needed"],
-        "response_mode": response_mode,
+        "response_mode": response_mode or get_action_constants().default_response_mode,
     }
     if drive_context is not None:
         payload["drive_context"] = drive_context

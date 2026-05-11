@@ -9,18 +9,12 @@ from ...kernel import ActivePressure, RuntimeState
 from ...scenario_bundle import get_active_runtime_scenario
 
 __all__ = [
-    "RECHECK_ACTION",
-    "REPAIR_ACTION",
-    "ESCALATE_ACTION",
-    "DEFAULT_RESPONSE_MODE",
-    "ACTION_TO_POSTURE",
-    "ACTION_TO_STATE_MODE",
-    "ALL_LIFE_STATES",
-    "ACTION_TO_ALLOWED_STATES",
+    "ActionConstants",
     "ResponseCandidate",
     "ResponseFilterDecision",
     "ResponseSelection",
     "bridge_policy_from_release_context",
+    "get_action_constants",
     "response_mode_from_release_context",
     "build_integrity_response_candidates",
     "filter_response_candidates",
@@ -28,16 +22,19 @@ __all__ = [
     "select_response_action",
 ]
 
-_ACTIVE_ACTIONS = get_active_runtime_scenario().actions
 
-RECHECK_ACTION = _ACTIVE_ACTIONS.recheck_action
-REPAIR_ACTION = _ACTIVE_ACTIONS.repair_action
-ESCALATE_ACTION = _ACTIVE_ACTIONS.escalate_action
-DEFAULT_RESPONSE_MODE = _ACTIVE_ACTIONS.default_response_mode
-ACTION_TO_POSTURE = _ACTIVE_ACTIONS.action_to_posture
-ACTION_TO_STATE_MODE = _ACTIVE_ACTIONS.action_to_state_mode
-ALL_LIFE_STATES = _ACTIVE_ACTIONS.all_life_states
-ACTION_TO_ALLOWED_STATES = _ACTIVE_ACTIONS.action_to_allowed_states
+@dataclass(frozen=True)
+class ActionConstants:
+    """Read-only view of current scenario action vocabulary and metadata."""
+
+    recheck_action: str
+    repair_action: str
+    escalate_action: str
+    default_response_mode: str
+    action_to_posture: dict[str, str]
+    action_to_state_mode: dict[str, str]
+    all_life_states: tuple[str, ...]
+    action_to_allowed_states: dict[str, tuple[str, ...]]
 
 
 @dataclass(frozen=True)
@@ -74,6 +71,22 @@ class ResponseSelection:
     state_mode: str
 
 
+def get_action_constants() -> ActionConstants:
+    """Return the current scenario-owned action vocabulary at point of use."""
+
+    actions = get_active_runtime_scenario().actions
+    return ActionConstants(
+        recheck_action=actions.recheck_action,
+        repair_action=actions.repair_action,
+        escalate_action=actions.escalate_action,
+        default_response_mode=actions.default_response_mode,
+        action_to_posture=dict(actions.action_to_posture),
+        action_to_state_mode=dict(actions.action_to_state_mode),
+        all_life_states=tuple(actions.all_life_states),
+        action_to_allowed_states=dict(actions.action_to_allowed_states),
+    )
+
+
 def bridge_policy_from_release_context(release_context: dict[str, Any] | None) -> dict[str, Any] | None:
     """Return the bridge-policy payload when one is present in release context."""
 
@@ -88,9 +101,10 @@ def bridge_policy_from_release_context(release_context: dict[str, Any] | None) -
 def response_mode_from_release_context(release_context: dict[str, Any] | None) -> str:
     """Return the bounded response mode carried by release context."""
 
+    default_response_mode = get_action_constants().default_response_mode
     if not isinstance(release_context, dict):
-        return DEFAULT_RESPONSE_MODE
-    return str(release_context.get("response_mode") or DEFAULT_RESPONSE_MODE)
+        return default_response_mode
+    return str(release_context.get("response_mode") or default_response_mode)
 
 
 def build_integrity_response_candidates(

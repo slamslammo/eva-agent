@@ -3,11 +3,53 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation import build_action_domain, build_deliberation_input
-from eva.l3_deliberation.reasoning.candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
+import eva.scenario_bundle as scenario_bundle
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import (
+    ESCALATE_FIRST_PROFILE,
+    LINUX_RUNTIME_SCENARIO_BUNDLE,
+    OBSERVE_FIRST_PROFILE,
+    STABILIZE_FIRST_PROFILE,
+)
 
 
 class ActionDomainTests(unittest.TestCase):
-    def test_action_domain_admits_both_candidate_schemas_by_default(self) -> None:
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
+    def test_build_action_domain_requires_explicit_scenario_activation(self) -> None:
+        original = scenario_bundle._ACTIVE_RUNTIME_SCENARIO
+        scenario_bundle._ACTIVE_RUNTIME_SCENARIO = None
+        try:
+            deliberation_input = build_deliberation_input(
+                signal_batch={
+                    "signals": [{"class": "status"}],
+                    "summary": {
+                        "signal_count": 1,
+                        "status_signal_count": 1,
+                        "threat_signal_count": 0,
+                        "background_signal_count": 0,
+                        "has_threat_signal": False,
+                    },
+                },
+                drive_broadcast={
+                    "top_drive": "curiosity",
+                    "drive_levels": {"curiosity": 0.8},
+                    "drive_trends": {"curiosity": "improving"},
+                },
+                runtime_gate_context={
+                    "instance_valid": True,
+                    "turn_allowed": True,
+                    "critical_blocked": False,
+                    "conservative_mode": False,
+                    "life_state": "STABLE",
+                    "seconds_to_heartbeat": 10.0,
+                },
+            )
+            with self.assertRaisesRegex(RuntimeError, "no scenario activated"):
+                build_action_domain(deliberation_input)
+        finally:
+            scenario_bundle._ACTIVE_RUNTIME_SCENARIO = original
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}],

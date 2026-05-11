@@ -3,11 +3,16 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation.peer_circuit import build_learning_outcome_record, evaluate_response_outcome
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class LearningCompatibilityTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def test_peer_circuit_learning_reexports_encoding_helpers(self) -> None:
-        observed_outcome, delta, label, confidence = evaluate_response_outcome(
+        observed_outcome, delta, label, confidence, outcome_vector = evaluate_response_outcome(
             {
                 "execution_status": "completed",
                 "pressure_outcome": "relieved",
@@ -25,6 +30,7 @@ class LearningCompatibilityTests(unittest.TestCase):
         self.assertEqual(delta, 1.0)
         self.assertEqual(label, "positive")
         self.assertGreaterEqual(confidence, 0.9)
+        self.assertEqual(outcome_vector.to_dict()["viability_delta"], {"level_1": 1.0})
         self.assertTrue(callable(build_learning_outcome_record))
 
 

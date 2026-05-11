@@ -1,4 +1,4 @@
-"""Active runtime scenario bundle and compatibility activation seam for Phase A."""
+"""Active runtime scenario bundle and explicit activation seam."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ class OutcomeObserverBundle:
     """Scenario-owned outcome interpretation bundle."""
 
     expected_outcome_for_release: Callable[[str, str | None], str]
-    evaluate_response_outcome: Callable[..., tuple[str, float, str, float]]
+    evaluate_response_outcome: Callable[..., tuple[Any, ...]]
     build_learning_outcome_content: Callable[..., dict[str, Any]]
 
 
@@ -97,13 +97,12 @@ def activate_runtime_scenario(bundle: RuntimeScenarioBundle) -> RuntimeScenarioB
 
 
 def get_active_runtime_scenario() -> RuntimeScenarioBundle:
-    """Return the active runtime scenario, defaulting to Linux compatibility."""
+    """Return the active runtime scenario, requiring explicit activation first."""
 
-    global _ACTIVE_RUNTIME_SCENARIO
     if _ACTIVE_RUNTIME_SCENARIO is None:
-        from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
-
-        _ACTIVE_RUNTIME_SCENARIO = LINUX_RUNTIME_SCENARIO_BUNDLE
+        raise RuntimeError(
+            "no scenario activated; call activate_runtime_scenario() before using framework features that depend on scenario content"
+        )
     return _ACTIVE_RUNTIME_SCENARIO
 
 

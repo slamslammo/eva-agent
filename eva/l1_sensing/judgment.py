@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from ..kernel import DimensionSnapshot, ExternalLifeConfig, ExternalLifeSnapshot
+from ..persistence_targets import get_default_persistence_hierarchy
 
 SEVERITY_ORDER = {"healthy": 0, "degraded": 1, "critical": 2}
 DIMENSION_PRIORITY = [
@@ -72,6 +73,36 @@ def _float_value(payload: dict[str, Any], key: str) -> float | None:
         return None
 
 
+def _runtime_integrity_persistence_projection(
+    *,
+    instance_valid: bool,
+    required_present: bool,
+    runtime_writable: bool,
+) -> dict[str, Any]:
+    """Return the runtime-integrity persistence projection from the registered hierarchy."""
+
+    try:
+        hierarchy = get_default_persistence_hierarchy()
+    except RuntimeError:
+        failed_levels = [1] if not instance_valid else ([4] if (not required_present or not runtime_writable) else [])
+        return {
+            "failed_levels": failed_levels,
+            "level_1_local_unrecoverable_forbidden": True,
+        }
+
+    context = {
+        "instance_valid": instance_valid,
+        "runtime_files_missing": not required_present,
+        "runtime_not_writable": not runtime_writable,
+        "runtime_path_missing": False,
+    }
+    failed = hierarchy.failed_targets(context)
+    return {
+        "failed_levels": [target.level for target in failed],
+        "level_1_local_unrecoverable_forbidden": hierarchy.local_unrecoverable_failure_forbidden(1),
+    }
+
+
 def _host_continuity_snapshot(inputs: dict[str, object], config: ExternalLifeConfig) -> DimensionSnapshot:
     """Judge whether host continuity still looks stable from restart signals."""
 
@@ -128,6 +159,11 @@ def _runtime_integrity_snapshot(inputs: dict[str, object]) -> DimensionSnapshot:
         reason = "heartbeat_miss_trend"
     evidence = dict(inputs)
     evidence["reason"] = reason
+    evidence["persistence_hierarchy"] = _runtime_integrity_persistence_projection(
+        instance_valid=instance_valid,
+        required_present=required_present,
+        runtime_writable=runtime_writable,
+    )
     return DimensionSnapshot(status=status, evidence=evidence)
 
 
@@ -260,33 +296,37 @@ def determine_overall_status(dimensions: dict[str, DimensionSnapshot]) -> str:
 
 
 def determine_primary_gap(dimensions: dict[str, DimensionSnapshot]) -> dict[str, str]:
-    """Pick the main survival gap using a fixed dimension priority order."""
+    """Return the most severe non-healthy dimension and its reason."""
 
-    for dimension_name in DIMENSION_PRIORITY:
-        snapshot = dimensions[dimension_name]
-        if snapshot.status == "healthy":
-            continue
-        reason = str(snapshot.evidence.get("reason") or dimension_name)
-        return {"type": dimension_name, "reason": reason}
+    ranked = sorted(
+        dimensions.items(),
+        key=lambda item: (
+            -_rank_for_status(item[1].status),
+            DIMENSION_PRIORITY.index(item[0]) if item[0] in DIMENSION_PRIORITY else len(DIMENSION_PRIORITY),
+        ),
+    )
+    for name, snapshot in ranked:
+        if snapshot.status != "healthy":
+            return {"type": name, "reason": str(snapshot.evidence.get("reason") or "unknown")}
     return {"type": "none", "reason": "none"}
 
 
 def determine_trend(
-    current_overall_status: str,
+    overall_status: str,
     previous_snapshot: ExternalLifeSnapshot | None,
     *,
     current_dimensions: dict[str, DimensionSnapshot] | None = None,
 ) -> str:
-    """Compare current status with the previous snapshot to derive trend."""
+    """Compare the current status with the previous snapshot."""
 
     if previous_snapshot is None:
         return "unknown"
-    current_rank = _rank_for_status(current_overall_status)
+    current_rank = _rank_for_status(overall_status)
     previous_rank = _rank_for_status(previous_snapshot.overall_status)
     if current_rank > previous_rank:
         return "worsening"
     if current_rank < previous_rank:
         return "improving"
-    if current_dimensions is None:
-        return "stable"
-    return _dimension_trend(current_dimensions, previous_snapshot)
+    if current_dimensions is not None:
+        return _dimension_trend(current_dimensions, previous_snapshot)
+    return "stable"

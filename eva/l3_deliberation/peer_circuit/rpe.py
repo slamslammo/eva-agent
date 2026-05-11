@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...scenario_bundle import get_active_runtime_scenario
-from ..contracts import DeliberationAuditRecord
+from ..contracts import DeliberationAuditRecord, OutcomeVector
 
 __all__ = [
     "LearningOutcomeRecord",
@@ -43,6 +43,7 @@ class LearningOutcomeRecord:
     evaluation_label: str = "uncertain"
     confidence: float = 0.0
     content: dict[str, Any] = field(default_factory=dict)
+    outcome_vector: OutcomeVector | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the learning outcome payload."""
@@ -58,6 +59,7 @@ class LearningOutcomeRecord:
             "evaluation_label": self.evaluation_label,
             "confidence": self.confidence,
             "content": dict(self.content),
+            "outcome_vector": self.outcome_vector.to_dict() if self.outcome_vector is not None else None,
         }
         if self.linked_response_id is not None:
             payload["linked_response_id"] = self.linked_response_id
@@ -101,7 +103,7 @@ def build_learning_outcome_record(
         str(release_decision.get("outcome") or "withhold"),
         candidate_profile,
     )
-    observed_outcome, outcome_delta, evaluation_label, confidence = evaluate_response_outcome(response_summary, history)
+    observed_outcome, outcome_delta, evaluation_label, confidence, outcome_vector = evaluate_response_outcome(response_summary, history)
     drive_context = dict(history.get("drive_context") or response_summary.get("drive_context") or {})
     top_drive = str(drive_context.get("top_drive") or "unknown")
     life_state = str(history.get("life_state") or "unknown")
@@ -161,13 +163,14 @@ def build_learning_outcome_record(
         evaluation_label=evaluation_label,
         confidence=confidence,
         content=content,
+        outcome_vector=outcome_vector,
     )
 
 
 def evaluate_response_outcome(
     response_summary: dict[str, Any],
     response_history_entry: dict[str, Any] | None = None,
-) -> tuple[str, float, str, float]:
+) -> tuple[str, float, str, float, OutcomeVector]:
     """Map the compatibility response result into a minimal outcome-delta signal."""
 
     return get_active_runtime_scenario().outcome_observers.evaluate_response_outcome(

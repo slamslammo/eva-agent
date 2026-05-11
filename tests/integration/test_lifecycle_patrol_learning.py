@@ -5,10 +5,13 @@ import unittest
 from datetime import timedelta
 from eva.kernel import EventRecord, ActiveInstanceRecord, InstanceGuard, LifecycleConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.kernel.lifecycle import LifeState, LifecycleRuntime, WorkSlice
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class LifecyclePatrolLearningTests(unittest.TestCase):
     def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = StateStore(build_runtime_paths(self.temp_dir.name))
         self.lifecycle = LifecycleConfig(
@@ -53,6 +56,7 @@ class LifecyclePatrolLearningTests(unittest.TestCase):
         self.assertIn(learning_outcomes[0]["evaluation_label"], {"positive", "negative", "neutral", "uncertain"})
         self.assertIn("situation_key", learning_outcomes[0]["content"])
         self.assertFalse(learning_outcomes[0]["content"]["habit_narrowed"])
+        self.assertEqual(learning_outcomes[0]["outcome_vector"]["viability_delta"], {"level_1": learning_outcomes[0]["outcome_delta"]})
         habit_bias = self.store.read_habit_bias()
         self.assertEqual(len(habit_bias), 1)
         self.assertIn("evidence_count", habit_bias[0])
@@ -247,6 +251,7 @@ class LifecyclePatrolLearningTests(unittest.TestCase):
         self.assertEqual(learning_outcomes[0]["candidate_profile"], "observe_first")
         self.assertEqual(learning_outcomes[0]["selected_action"], "recheck_runtime_integrity")
         self.assertEqual(learning_outcomes[0]["content"]["situation_key"], "integrity|STABLE|recent_yield_detected")
+        self.assertEqual(learning_outcomes[0]["outcome_vector"]["viability_delta"], {"level_1": learning_outcomes[0]["outcome_delta"]})
         response_events = [event for event in self.store.read_events() if event["event_type"] == "response_selected"]
         self.assertEqual(len(response_events), 1)
         self.assertEqual(response_events[0]["details"]["selected_candidate_id"], "candidate-compatibility-observe-first")

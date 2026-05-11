@@ -8,11 +8,16 @@ from eva.l3_deliberation.peer_circuit.rpe import (
     evaluate_response_outcome,
 )
 from eva.l3_deliberation import build_deliberation_input
+from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class RpeOwnerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+
     def test_rpe_owner_evaluates_positive_relief_without_followup(self) -> None:
-        observed_outcome, delta, label, confidence = evaluate_response_outcome(
+        observed_outcome, delta, label, confidence, outcome_vector = evaluate_response_outcome(
             {
                 "execution_status": "completed",
                 "pressure_outcome": "relieved",
@@ -30,6 +35,7 @@ class RpeOwnerTests(unittest.TestCase):
         self.assertEqual(delta, 1.0)
         self.assertEqual(label, "positive")
         self.assertGreaterEqual(confidence, 0.9)
+        self.assertEqual(outcome_vector.to_dict()["viability_delta"], {"level_1": 1.0})
 
     def test_rpe_owner_builds_learning_outcome_record_with_stable_payload(self) -> None:
         deliberation_input = build_deliberation_input(
@@ -115,6 +121,8 @@ class RpeOwnerTests(unittest.TestCase):
         self.assertEqual(payload["content"]["situation_key"], "integrity|STABLE|recent_yield_detected")
         self.assertTrue(payload["content"]["habit_skill_match"])
         self.assertFalse(payload["content"]["habit_narrowed"])
+        self.assertEqual(payload["outcome_vector"]["viability_delta"], {"level_1": 1.0})
+        self.assertEqual(payload["rpe_like_score"], payload["outcome_delta"])
 
 
     def test_rpe_owner_builds_learning_outcome_record_for_escalate_first(self) -> None:

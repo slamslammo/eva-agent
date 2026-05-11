@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .candidate_generation import ESCALATE_FIRST_PROFILE, OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE
+from .candidate_generation import current_anchor_profiles
 from .conflict_detection import build_candidate_conflict_context
 from ..contracts import Candidate, CandidateAssessment, DeliberationInput
 from ..peer_circuit.rpe import build_learned_impact_overlay
@@ -11,6 +11,7 @@ from ..peer_circuit.rpe import build_learned_impact_overlay
 def assess_candidates(candidates: list[Candidate], deliberation_input: DeliberationInput) -> list[CandidateAssessment]:
     """Assess candidates using drive-weighted scoring with bounded projection fallback."""
 
+    anchor_profiles = current_anchor_profiles()
     signal_summary = deliberation_input.signal_batch.get("summary", {})
     threat_count = int(signal_summary.get("threat_signal_count", 0))
     drive_broadcast = deliberation_input.drive_broadcast
@@ -34,7 +35,11 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         )
         if candidate.action == "compatibility_release":
             candidate_profile = conflict.candidate_profile
-            if candidate_profile in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
+            if candidate_profile in {
+                anchor_profiles.observe_first_profile,
+                anchor_profiles.stabilize_first_profile,
+                anchor_profiles.escalate_first_profile,
+            }:
                 habitual_trace = str(candidate.parameter_domain.get("habitual_trace") or "habitual_neutral")
                 if habitual_trace == "habitual_suppression":
                     reasons.append("habitual_suppression_trace")

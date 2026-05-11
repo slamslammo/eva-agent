@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from eva.kernel.state import from_iso8601
+
 MIN_SKILL_EVIDENCE = 3
 MIN_SKILL_STABILITY = 0.6
 MIN_SKILL_CONFIDENCE = 0.6
@@ -253,12 +255,8 @@ def _confidence_score(
 def _is_stale_record(recorded_at: str) -> bool:
     """Return whether a recorded-at timestamp is stale for current bias reinforcement."""
 
-    if not recorded_at:
-        return True
-    try:
-        normalized = recorded_at.replace("Z", "+00:00")
-        recorded = datetime.fromisoformat(normalized)
-    except ValueError:
+    recorded = from_iso8601(recorded_at)
+    if recorded is None:
         return True
     if recorded.tzinfo is None:
         recorded = recorded.replace(tzinfo=timezone.utc)
