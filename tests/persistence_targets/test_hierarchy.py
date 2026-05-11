@@ -6,7 +6,9 @@ from eva.persistence_targets import (
     PersistenceHierarchy,
     PersistenceTarget,
     build_linux_runtime_persistence_hierarchy,
+    get_default_persistence_hierarchy,
 )
+import eva.persistence_targets as persistence_targets
 
 
 class PersistenceHierarchyTests(unittest.TestCase):
@@ -39,6 +41,15 @@ class PersistenceHierarchyTests(unittest.TestCase):
         self.assertFalse(hierarchy.local_unrecoverable_failure_forbidden(2))
         self.assertFalse(hierarchy.can_locally_authorize_unrecoverable_failure(1))
         self.assertTrue(hierarchy.can_locally_authorize_unrecoverable_failure(2))
+
+    def test_default_hierarchy_lookup_requires_registration(self) -> None:
+        original = persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY
+        persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY = None
+        try:
+            with self.assertRaisesRegex(RuntimeError, "no persistence hierarchy registered"):
+                get_default_persistence_hierarchy()
+        finally:
+            persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY = original
 
 
 if __name__ == "__main__":

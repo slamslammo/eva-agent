@@ -4,9 +4,18 @@ import unittest
 
 from eva.kernel import DimensionSnapshot, ExternalLifeConfig, ExternalLifeSnapshot, utc_now
 from eva.l1_sensing import determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
+from eva.persistence_targets import build_linux_runtime_persistence_hierarchy, register_default_persistence_hierarchy
+import eva.persistence_targets as persistence_targets
 
 
 class JudgmentTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._original_hierarchy = persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY
+        register_default_persistence_hierarchy(build_linux_runtime_persistence_hierarchy())
+
+    def tearDown(self) -> None:
+        persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY = self._original_hierarchy
+
     def test_evaluate_dimensions_returns_healthy_snapshot_when_inputs_are_clean(self) -> None:
         config = ExternalLifeConfig()
         inputs = {
@@ -196,6 +205,45 @@ class JudgmentTests(unittest.TestCase):
         self.assertEqual(determine_trend("healthy", previous), "improving")
         self.assertEqual(determine_trend("degraded", previous), "stable")
         self.assertEqual(determine_trend("healthy", None), "unknown")
+
+    def test_runtime_integrity_requires_registered_persistence_hierarchy(self) -> None:
+        persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY = None
+        config = ExternalLifeConfig()
+        inputs = {
+            "host_continuity": {
+                "process_running": True,
+                "recent_restart_count": 1,
+                "schedule_drift_sec": 0.0,
+                "rate_context": {"direction": "stable"},
+            },
+            "runtime_integrity": {
+                "instance_valid": True,
+                "runtime_writable": True,
+                "active_instance_present": True,
+                "runtime_state_present": True,
+                "events_present": True,
+                "lock_present": True,
+                "recent_yield_count": 0,
+                "recent_distress_count": 0,
+                "rate_context": {"direction": "stable"},
+            },
+            "resource_state": {
+                "runtime_path_exists": True,
+                "runtime_writable": True,
+                "disk_free_bytes": config.disk_degraded_free_bytes + 1,
+                "rate_context": {"direction": "stable"},
+            },
+            "anomaly_accumulation": {
+                "recent_error_count": 0,
+                "recent_yield_count": 0,
+                "recent_distress_count": 0,
+                "recent_restart_count": 1,
+                "rate_context": {"direction": "stable"},
+            },
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "no persistence hierarchy registered"):
+            evaluate_dimensions(inputs, config)
 
 
 if __name__ == "__main__":

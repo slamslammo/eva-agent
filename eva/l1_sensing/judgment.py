@@ -81,14 +81,7 @@ def _runtime_integrity_persistence_projection(
 ) -> dict[str, Any]:
     """Return the runtime-integrity persistence projection from the registered hierarchy."""
 
-    try:
-        hierarchy = get_default_persistence_hierarchy()
-    except RuntimeError:
-        failed_levels = [1] if not instance_valid else ([4] if (not required_present or not runtime_writable) else [])
-        return {
-            "failed_levels": failed_levels,
-            "level_1_local_unrecoverable_forbidden": True,
-        }
+    hierarchy = get_default_persistence_hierarchy()
 
     context = {
         "instance_valid": instance_valid,

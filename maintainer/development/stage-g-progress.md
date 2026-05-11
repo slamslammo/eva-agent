@@ -103,6 +103,28 @@ Stage G 计划顺序为：
 - targeted G-3 subset：通过
 - full regression：`246 tests, OK`
 
+## 8. G-4 完成情况
+
+### 已完成内容
+- `stability_metrics/` 已从预留顶层位置收口为独立、architecture-neutral 的 trace metrics module
+- `stability_metrics/trace_io.py` 已自持 trace 读取与时间解析能力，不再依赖 `eva/` 或 `scenarios/` 内部实现
+- `stability_metrics/metrics.py` 已落地七类核心指标计算：
+  - constraint violation rate
+  - continuity preservation score
+  - useful progress under constraint
+  - recovery success rate
+  - mean time to recovery
+  - recovery path entropy
+  - cost ratio
+- CLI smoke 路径已验证可从 runtime trace 产出 `stability_profile.json`
+- Linux runtime trace 当前可被 `stability_metrics` 直接消费，不要求导入 framework runtime state
+
+### 验证结果
+- targeted G-4 subset：通过
+- CLI smoke：通过
+- framework/scenario import grep：`stability_metrics/` 无 `import eva` / `from eva` / `import scenarios` / `from scenarios`
+- full regression：`251 tests, OK`
+
 ## 9. G-5 完成情况
 
 ### 已完成内容

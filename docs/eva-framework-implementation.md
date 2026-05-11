@@ -1,6 +1,6 @@
 # EVA Framework Implementation
 
-**Status**: Landed framework boundary after the Phase A refactor  
+**Status**: Landed framework boundary after Stage G capability landing  
 **Scope**: Framework code under `eva/`  
 **Companion documents**: `docs/scenarios-SPEC.md`, `scenarios/linux_runtime/SPEC.md`  
 **Historical reference**: `docs/archive/eva-agent-full-implementation-v0.5.md`
@@ -70,9 +70,12 @@ The framework owns the structure of:
 - response candidate / filter / selection dataclasses in `eva/l3_deliberation/tool_edge/tool_registry.py`
 - mediated execution path in `eva/l3_deliberation/tool_edge/executors.py`
 - learning outcome records and learned-impact overlay in `eva/l3_deliberation/peer_circuit/rpe.py`
+- the canonical multi-dimensional `OutcomeVector` contract in `eva/l3_deliberation/contracts.py`
+- skill provenance and registry types in `eva/skills/__init__.py`
+- the persistence-target hierarchy contract in `eva/persistence_targets/__init__.py`
 - habit-bias and habit-skill summary dataclasses in `eva/l3_deliberation/memory/skill_library.py`
 
-The framework therefore owns the structure of deliberation, mediated release, append-only learning records, and read-side learning overlays. Concrete policy inside those structures comes from the active scenario.
+The framework therefore owns the structure of deliberation, mediated release, append-only learning records, read-side learning overlays, explicit persistence-target lookup, and skill provenance. Concrete policy inside those structures comes from the active scenario.
 
 ### 6. Append-only and authority boundaries
 
@@ -98,7 +101,7 @@ Those belong in `scenarios/<name>/` and `runners/run_<name>.py`.
 
 ## Current compatibility surfaces
 
-Phase A intentionally keeps a small set of framework-owned compatibility wrappers that delegate scenario policy through the active bundle:
+Stage G intentionally keeps a small set of framework-owned compatibility wrappers that delegate scenario policy through the active bundle:
 - `eva/l1_sensing/state_sensors.py`
 - `eva/l2_drive/drive_registry.py`
 - `eva/anchor/domain_restriction.py`
@@ -114,20 +117,17 @@ These files are part of the framework boundary. Their job is to preserve structu
 A runner activates a scenario bundle before calling the generic framework loop.
 
 Current shipped example:
-- `runners/run_linux.py` activates `scenarios/linux_runtime` and then calls `eva.kernel.main.run_runtime()`
+- `runners/run_linux.py` activates `scenarios/linux_runtime`, registers the Linux persistence hierarchy, and then calls `eva.kernel.main.run_runtime()`
 
-`eva/kernel/main.py` remains usable as a compatibility entry. In the current Phase A implementation, `eva/scenario_bundle.py` falls back to the Linux runtime bundle when no runner has activated another scenario. That fallback is a compatibility convenience, not a broader scenario-loader system.
+A running runtime must explicitly activate a scenario bundle before using scenario-dependent framework features, and scenario-owned startup assembly is responsible for registering the matching persistence hierarchy. `eva/kernel/main.py` remains a compatibility entry, but there is no silent fallback when no scenario has been activated.
 
 ## Not yet landed as framework features
 
 The following concepts are not documented here as implemented framework features:
 - a generic scenario loader / validator
-- a standalone cross-scenario metrics module
-- a full persistence-target abstraction
-- a full multi-dimensional outcome vector
 - concrete L4 self-model or L5 social-layer runtime implementations
 
-The codebase reserves room for those directions, but this document only describes what is already real in the repository.
+The top-level `stability_metrics/` package is a landed companion module, and `eva/l3_deliberation/contracts.py`, `eva/persistence_targets/`, and `eva/skills/` already contain implemented framework seams. This document keeps those surfaces in the current-boundary sections above rather than listing them as future work.
 
 ## Boundary rule
 
