@@ -6,11 +6,12 @@ import argparse
 import time
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Callable, Any
 from uuid import uuid4
 
 from .config import AppendOnlyArtifactsConfig, ExternalLifeConfig, LifecycleConfig, LoopControl, RuntimeConfig, build_runtime_config
 from .instance import InstanceGuard
-from .lifecycle import LifecycleRuntime
+from .lifecycle import ExternalActionRuntime, LifecycleRuntime
 from .state import EventRecord, StateStore, emit_log_line, utc_now
 from ..l1_sensing.sensor_registry import SensorRegistry
 from ..l3_deliberation import (
@@ -29,7 +30,14 @@ from ..l3_deliberation import (
     build_builtin_working_memory_adapter,
 )
 
-__all__ = ["RunSummary", "run_runtime", "parse_args", "main"]
+__all__ = [
+    "RunSummary",
+    "run_runtime",
+    "parse_args",
+    "build_runtime_config_from_args",
+    "print_run_summary",
+    "main",
+]
 
 
 @dataclass
@@ -48,6 +56,8 @@ def run_runtime(
     *,
     working_memory_adapter: WorkingMemoryAdapter | None = None,
     sensor_registry: SensorRegistry | None = None,
+    extra_shared_facts_provider: Callable[[], dict[str, Any] | None] | None = None,
+    action_runtime: ExternalActionRuntime | None = None,
 ) -> RunSummary:
     """Run the lifecycle loop until one of the configured bounds is reached."""
 
@@ -84,6 +94,8 @@ def run_runtime(
         resolved_adapter,
         working_memory_advisory_source,
         sensor_registry,
+        extra_shared_facts_provider,
+        action_runtime,
     )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()
@@ -223,10 +235,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    """Build runtime config from CLI arguments and print a short summary."""
+def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
+    """Build one RuntimeConfig from parsed CLI arguments."""
 
-    args = parse_args()
     lifecycle = LifecycleConfig(
         heartbeat_interval_sec=args.heartbeat_interval,
         lease_duration_sec=args.lease_duration,
@@ -249,7 +260,7 @@ def main() -> None:
         rotation_max_bytes=args.append_only_rotation_max_bytes,
         archive_dir_name=args.append_only_archive_dir_name,
     )
-    config = build_runtime_config(
+    return build_runtime_config(
         args.runtime_dir,
         lifecycle=lifecycle,
         external_life=external_life,
@@ -264,12 +275,27 @@ def main() -> None:
             request_timeout_sec=args.working_memory_model_client_timeout_sec,
         ),
     )
-    summary = run_runtime(config)
+
+
+
+def print_run_summary(summary: RunSummary) -> None:
+    """Print the compact runtime summary for CLI callers."""
+
     print(f"runtime_dir={summary.runtime_dir}")
     print(f"ticks={summary.ticks}")
     print(f"turns={summary.turns}")
     print(f"final_life_state={summary.final_life_state}")
     print(f"instance_valid={summary.instance_valid}")
+
+
+
+def main() -> None:
+    """Build runtime config from CLI arguments and print a short summary."""
+
+    args = parse_args()
+    config = build_runtime_config_from_args(args)
+    summary = run_runtime(config)
+    print_run_summary(summary)
 
 
 if __name__ == "__main__":

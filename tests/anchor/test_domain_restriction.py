@@ -7,15 +7,15 @@ import eva.scenario_bundle as scenario_bundle
 from eva.scenario_bundle import activate_runtime_scenario
 from scenarios.linux_runtime import (
     ESCALATE_FIRST_PROFILE,
-    LINUX_RUNTIME_SCENARIO_BUNDLE,
     OBSERVE_FIRST_PROFILE,
     STABILIZE_FIRST_PROFILE,
+    activate_linux_runtime_scenario,
 )
 
 
 class ActionDomainTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def test_build_action_domain_requires_explicit_scenario_activation(self) -> None:
         original = scenario_bundle._ACTIVE_RUNTIME_SCENARIO

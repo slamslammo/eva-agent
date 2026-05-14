@@ -14,6 +14,23 @@ from .state_sensors import built_in_sensor_providers
 
 SensorProvider = Callable[[], Sequence[SensorSpec]]
 
+_RESERVED_SHARED_FACT_KEYS = frozenset(
+    {
+        "recent_events",
+        "runtime_exists",
+        "runtime_writable",
+        "disk_usage",
+        "recent_restart_count",
+        "recent_yield_count",
+        "recent_distress_count",
+        "recent_error_count",
+        "anomaly_count",
+        "schedule_drift_sec",
+        "elapsed_sec",
+        "rate_available",
+    }
+)
+
 
 def _recent_events(store: StateStore, now: datetime, window_sec: float) -> list[dict[str, Any]]:
     """Return events whose timestamps fall inside the configured recent window."""
@@ -43,6 +60,7 @@ def _build_shared_facts(
     *,
     due_at: datetime | None,
     previous_snapshot: ExternalLifeSnapshot | None,
+    extra_shared_facts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Sample shared facts once so individual sensors stay narrow."""
 
@@ -62,7 +80,7 @@ def _build_shared_facts(
     elapsed_sec = elapsed_since_previous(previous_snapshot, now)
     rate_available = elapsed_sec is not None and elapsed_sec > 0
 
-    return {
+    shared_facts = {
         "recent_events": recent_events,
         "runtime_exists": runtime_exists,
         "runtime_writable": runtime_writable,
@@ -76,6 +94,15 @@ def _build_shared_facts(
         "elapsed_sec": elapsed_sec,
         "rate_available": rate_available,
     }
+    if extra_shared_facts:
+        collisions = _RESERVED_SHARED_FACT_KEYS.intersection(extra_shared_facts)
+        if collisions:
+            raise ValueError(
+                "extra_shared_facts attempted to overwrite reserved sensing keys: "
+                + ", ".join(sorted(collisions))
+            )
+        shared_facts.update(extra_shared_facts)
+    return shared_facts
 
 
 def _sensor_specs_from_providers(sensor_providers: Sequence[SensorProvider]) -> tuple[SensorSpec, ...]:
@@ -103,6 +130,7 @@ def collect_external_life_inputs(
     due_at: datetime | None = None,
     previous_snapshot: ExternalLifeSnapshot | None = None,
     sensor_registry: SensorRegistry | None = None,
+    extra_shared_facts: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Collect the raw signals used by Step 1 judgment and pressure generation."""
 
@@ -120,6 +148,7 @@ def collect_external_life_inputs(
             now,
             due_at=due_at,
             previous_snapshot=previous_snapshot,
+            extra_shared_facts=extra_shared_facts,
         ),
     )
     outputs = (sensor_registry or default_sensor_registry()).collect_all(context)

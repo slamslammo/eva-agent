@@ -22,13 +22,13 @@ from eva.l3_deliberation.memory import (
     WorkingMemoryModelClientResponse,
     build_builtin_working_memory_model_client,
 )
-from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class SkillLibraryTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def test_derive_habit_skills_requires_repeated_hit_counts_for_crystallization(self) -> None:
         skills = derive_habit_skills(

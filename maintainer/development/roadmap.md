@@ -24,7 +24,7 @@
 - 稳定的 L3 deliberation / learning / mediator boundary
 - 真实但 advisory-only 的 Anthropic-backed working-memory path，带 local fallback 与独立 LLM advisory audit
 
-当前判断：**Phase C 已完成并完成 closeout；Stage D（reflex fast path、sensor registry composition、drive update semantics）已完成；Stage E working-memory Anthropic advisory integration 也已完成。Stage F 已进入 long-running infrastructure 入口，且 append-only size-management baseline 与 restart-matrix hardening 已完成首轮收口：kernel persistence seam 已具备 rotation / archive contract、segment-aware logical-history reads，以及 mixed-track + preexisting-archive restart coverage；当前仍保持 advisory-only / mediated-release 边界，不进入 24h soak 或 L4 contract。全量回归当前为 `243 tests` 通过。后续开发应继续以 `development-standards.md`、`module-organization-contract.md` 与 `codebase-realignment-plan.md` 作为 maintainer source of truth，并在不触碰 release authority 的前提下推进更强的 endurance / restart 组合验证。**
+当前判断：**历史 Phase C 已完成并完成 closeout；Stage D（reflex fast path、sensor registry composition、drive update semantics）已完成；Stage E working-memory Anthropic advisory integration 已完成；Stage F long-running infrastructure baseline 已完成首轮收口；Stage G 已完成 G-0 ~ G-5 实现、本地 full regression（`251 tests, OK`）并按当前 maintainer 口径完成 exit review closeout；Stage H 已完成 H-0 ~ H-5 与 closeout，并以 Crafter 作为第二 scenario 在不修改 release authority 与 framework ownership 的前提下完成 bounded scenario landing，本地 full regression 结果为 `285 tests, OK, skipped=2`。后续开发应继续以 `development-standards.md`、`module-organization-contract.md` 与 `codebase-realignment-plan.md` 作为 maintainer source of truth，并回到 intake-first 纪律下评估 post-Stage-H 下一 slice。**
 
 本轮 gate 已完成并完成落账，核心是把以下四层链条重新梳理并对齐：
 
@@ -50,7 +50,8 @@
 | B-3 compatibility bridge demotion | 继续压薄 `compatibility.py`，把通用 response selection / execution closeout / summary assembly 下放到 canonical `tool_edge/` owners | 已完成 | `maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 进入 B-4 drive-native L3 shaping |
 | B-4 drive-native L3 shaping | 继续把 reasoning / selection 从 pressure-led 微调推向 drive-native shaping，让 pressure 留在 projection / fallback 语义 | 已完成 | `maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 进入 B-5 candidate / release vocabulary widening |
 | B-5 candidate / release vocabulary widening | 在保持 mediator-owned default inhibition、anchor pre-generation 与 bounded tool-edge 的前提下，受限扩展 internal candidate profile / release-policy vocabulary | 已完成 | `maintainer/development/phase-c-progress.md`、`docs/current-status.md` | 评估下一项 mediated action-surface slice |
-| Stage G（planned） | 清理 Phase A residuals，并落地 v0.6 capability landing（outcome vector / skill-source split / persistence hierarchy / stability metrics / Linux scenario alignment audit） | 规划中，尚未启动 | `maintainer/development/phase-a-residuals.md`、`maintainer/development/stage-g-v0.6-capability-landing-startup-instruction.md` | 先完成 G-0 residual clearance intake |
+| Stage G | 清理 Phase A residuals，并落地 v0.6 capability landing（outcome vector / skill-source split / persistence hierarchy / stability metrics / Linux scenario alignment audit） | 已完成 G-0 ~ G-5 实现、本地回归与 exit review closeout | `maintainer/development/stage-g-progress.md`、`maintainer/development/current-intake.md`、`docs/current-status.md` | 进入 Stage H |
+| Stage H | 以 Crafter 作为第二 scenario 验证 Stage G framework abstractions 的 sufficiency，并在不修改 `eva/` 的前提下完成 Crafter scenario landing | 已完成 H-0 ~ H-5 与 closeout | `maintainer/development/stage-h-progress.md`、`scenarios/crafter/SPEC.md`、`docs/current-status.md`、`maintainer/development/current-intake.md` | 回到 intake-first 纪律下评估 post-Stage-H 下一 slice |
 
 ## 3. 当前 v0.5 落地视图
 
@@ -162,9 +163,9 @@ L4 只有在下层已经积累出足够稳定的行为史、memory 史与 releas
 
 当前不提前展开实现细节，也不在 alignment gate 之前推进。
 
-## 10. Stage G planning note
+## 10. Stage G status note
 
-当前 maintainer 规划中，另有一条 **Stage G** 轨道，用于承接：
+Stage G 是一条独立于历史 `Phase A / Phase B / Phase C` 叙事之外的 v0.6 capability landing 轨道，用于承接：
 - Phase A closeout review 中识别出的 residual cleanup
 - v0.6 capability landing 的后续结构落地
 
@@ -172,16 +173,25 @@ L4 只有在下层已经积累出足够稳定的行为史、memory 史与 releas
 - Stage G 的历史起点来自 **Phase A A-1 ~ A-8 完整 review**
 - 但它**不是**对历史 `Phase B` 的重命名，也**不是**对已完成 `Phase B / Phase C` 的回滚
 - 历史 `Phase A / Phase B / Phase C` 与后续 `Stage D / E / F` 文档保持原样保留
+- 当前 Stage G 已完成 **G-0 ~ G-5** 全部 slices，并已完成本地 full regression
+- 当前 Stage G 已建立：
+  - OutcomeVector 多维 outcome 语义
+  - prior / habit / inherited 三类 skill-source registry surface
+  - explicit persistence hierarchy
+  - architecture-neutral `stability_metrics/` 模块
+  - Linux scenario v0.6 alignment audit
+- 当前阶段出口状态：**已完成 maintainer exit review closeout；后续工作转入 Stage H，且 Stage H 现也已完成 closeout**
 - Stage G 的 maintainer source of truth 是：
   - `maintainer/development/phase-a-residuals.md`
   - `maintainer/development/stage-g-v0.6-capability-landing-startup-instruction.md`
+  - `maintainer/development/stage-g-progress.md`
 
 ## 11. 推进原则
 
 - 先对齐架构与合同，再进入后续代码实现
 - 先把结构搭对，再扩高层能力
 - 过渡结构可以短期保留，但不再作为未来主路线继续长大
-- 当前文档性 alignment gate、Stage D 与 Stage E 已完成；下一步在 stable owner tree 上重新评估 retrieval/context deepening 与后续 lower-layer capability slice
+- 当前文档性 alignment gate、Stage D、Stage E、Stage F、Stage G 与 Stage H 已完成；下一步在 stable owner tree 上重新评估 post-Stage-H 的下一个 intake slice
 - 每个 phase 都应维持：目标、边界、进展三类文档的一致性
 
 ## 12. 相关文档

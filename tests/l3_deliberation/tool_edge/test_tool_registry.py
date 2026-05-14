@@ -13,12 +13,12 @@ from eva.l3_deliberation.tool_edge.tool_registry import (
     select_response_action,
 )
 from eva.scenario_bundle import activate_runtime_scenario
-from scenarios.linux_runtime import ESCALATE_ACTION, LINUX_RUNTIME_SCENARIO_BUNDLE, RECHECK_ACTION, REPAIR_ACTION
+from scenarios.linux_runtime import ESCALATE_ACTION, RECHECK_ACTION, REPAIR_ACTION, activate_linux_runtime_scenario
 
 
 class ToolRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def _pressure(self, reason: str, *, pressure_type: str = "integrity", **evidence: object) -> ActivePressure:
         now = utc_now()

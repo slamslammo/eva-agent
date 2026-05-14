@@ -11,30 +11,30 @@
 
 ## Change intake
 
-- **Change title**: Stage G G-5 Linux scenario v0.6 alignment audit
-- **Goal**: 对当前 shipped Linux runtime scenario 做一次 v0.6 对齐收口审计：检查并修正 `scenarios/linux_runtime/` 的 prior skills、outcome observers、anchor policy 与 persistence hierarchy / trace-output 之间的语义一致性，使其与 G-1 ~ G-4 已落地的 framework structures 完全对齐。当前 slice 不扩 Linux runtime 的任务处理能力，不新增 drives/sensors/actions，不改变 release authority；重点是把现有 Linux content 重新表述为 v0.6-correct 的 scenario，补齐必要的 provenance / persistence declaration / trace compatibility 文档与最小测试校验。
-- **Change type**: realignment
+- **Change title**: Stage H H-5 Crafter runner / end-to-end validation / closeout
+- **Goal**: 在保持 release authority、framework ownership 与 bounded compatibility release surface 不变的前提下，完成 `runners/run_crafter.py`、runner-owned shared-facts 注入 seam、wrapper-backed Crafter action execution、bounded episode reset、install-independent end-to-end validation，以及 Stage H closeout 文档同步。
+- **Change type**: feature
 
 ## Ownership
 
-- **Layer**: `scenarios/linux_runtime`
-- **Canonical owner**: `scenarios/linux_runtime/SPEC.md` 作为 Linux scenario canonical spec；`scenarios/linux_runtime/__init__.py` 作为 bundle assembly owner；`stability_metrics/` 作为 trace validation consumer（如果需要 smoke）
-- **Touched current files**: `scenarios/linux_runtime/SPEC.md`, `scenarios/linux_runtime/__init__.py`, `scenarios/linux_runtime/prior_skills/`, `scenarios/linux_runtime/outcome_observers/`, `scenarios/linux_runtime/anchors/`, tests under `tests/integration/`, `tests/l3_deliberation/`, `tests/stability_metrics/`（if needed）; 预计同步 `maintainer/development/current-intake.md` 与 `maintainer/development/stage-g-progress.md`
-- **Owner class**: stable scenario alignment
+- **Layer**: `kernel`, `l1_sensing`, `l3_deliberation`, `scenarios`
+- **Canonical owner**: `eva/kernel/main.py` 与 `eva/kernel/lifecycle.py` 作为 generic runtime hook owner；`eva/l1_sensing/sensing.py` 与 `eva/l1_sensing/patrol.py` 作为 sensing shared-facts seam owner；`eva/l3_deliberation/tool_edge/history.py` 作为 bounded response-history payload owner；`scenarios/crafter/actions/compatibility.py` 与 `runners/run_crafter.py` 作为 Crafter runtime integration owner；`scenarios/crafter/wrapper/` 继续作为 env wrapper owner；`maintainer/development/stage-h-progress.md` 与 `scenarios/crafter/SPEC.md` 作为 H-5 closeout record owner
+- **Touched current files**: `eva/l1_sensing/sensing.py`, `eva/l1_sensing/patrol.py`, `eva/kernel/main.py`, `eva/kernel/lifecycle.py`, `eva/l3_deliberation/tool_edge/history.py`, `scenarios/crafter/actions/compatibility.py`, `runners/run_crafter.py`, `tests/scenarios/crafter/test_actions.py`, `tests/scenarios/crafter/test_sensors.py`, `tests/integration/test_crafter_runtime.py`, `tests/stability_metrics/test_cli_smoke.py`, `docs/current-status.md`, `docs/scenarios-SPEC.md`, `scenarios/crafter/SPEC.md`, `maintainer/development/current-intake.md`, `maintainer/development/stage-h-progress.md`, `maintainer/development/roadmap.md`
+- **Owner class**: stable framework follow-up
 
 ## Realignment stage
 
 - **Stage**: `other`
-- **If other, why**: 这是 Stage G `G-5` alignment audit，属于已落地 scenario 的语义收口，不是既有 R1/R2/R3 realignment 分层收敛动作
+- **If other, why**: 这是 Stage H 的 runner / validation / closeout slice，不属于既有 R1 / R2 / R3 realignment，也不是新的 framework capability stage
 
 ## Boundary check
 
 - **Affected contracts**:
-  - Linux scenario SPEC canonicalization
-  - prior skill provenance / registry split semantics
-  - outcome observer vector semantics
-  - persistence hierarchy declaration in scenario docs
-  - trace compatibility for stability metrics
+  - runner -> runtime extra shared facts injection contract
+  - patrol sensing shared-facts merge contract
+  - scenario-owned Crafter execution payload contract
+  - response history / learning outcome Crafter delta propagation contract
+  - Crafter runner / stability-metrics end-to-end validation contract
 - **Hard boundaries to preserve**:
   - heartbeat-first
   - default inhibition
@@ -42,41 +42,43 @@
   - drive read-only
   - mediated release
   - append-only artifact discipline
-- **Why this change does not widen a transitional owner**: G-5 只收紧并澄清 Linux scenario 语义，不接 Crafter，不引入 Linux task handling，不改变 framework owner 权限，只把现有内容与 G-1~G-4 的框架事实对齐
+- **Why this change does not widen a transitional owner**: H-5 只增加一个 generic runner-owned shared-facts seam，并把 Crafter action execution 接到既有 wrapper 与 response-history contract；没有放松 mediator / release-token / compatibility bridge 边界，也没有把 Crafter-specific scheduling、release authority 或 direct side-effect control 推回 `eva/`
 
 ## Verification
 
 - **Freeze tests**:
+  - `tests/integration/test_main_runtime.py`
+  - `tests/integration/test_linux_alignment.py`
   - `tests/integration/test_patrol_turn_flow.py`
   - `tests/integration/test_lifecycle_patrol_learning.py`
-  - `tests/l3_deliberation/reasoning/test_value.py`
-  - `tests/l3_deliberation/memory/test_working_memory.py`（if naming differs, current working-memory tests)
-  - `tests/stability_metrics/test_metrics.py`
+  - `tests/stability_metrics/test_cli_smoke.py`
+  - all landed Crafter tests under `tests/scenarios/crafter/`
 - **Additional tests**:
-  - Linux scenario SPEC assertions for provenance and persistence declaration consistency
-  - trace smoke assertions against `stability_metrics`
-  - any minimal regression needed to prove no user-visible scope change
+  - `tests.integration.test_crafter_runtime`
+  - `tests.scenarios.crafter.test_actions`
+  - `tests.scenarios.crafter.test_sensors`
 - **Need full regression?** yes
+- **Regression note**: targeted suites passed；标准全量回归 `python -m unittest discover -s tests -t .` 已通过，结果为 `285 tests`, `OK`, `skipped=2`。其中可选 live Crafter smoke 继续保持 skip-based 行为，在本机未安装 `crafter` 时不会伪造通过。
 
 ## Docs sync
 
 - **Docs to update**:
+  - `docs/current-status.md`
+  - `docs/scenarios-SPEC.md`
+  - `scenarios/crafter/SPEC.md`
   - `maintainer/development/current-intake.md`
-  - `maintainer/development/stage-g-progress.md`
-  - `scenarios/linux_runtime/SPEC.md`
-  - `docs/scenarios-SPEC.md` only if cross-scenario contract wording needs an explicit G-5 note
+  - `maintainer/development/stage-h-progress.md`
+  - `maintainer/development/roadmap.md`
 - **Docs actually needed for this change**:
+  - `docs/current-status.md`
+  - `docs/scenarios-SPEC.md`
+  - `scenarios/crafter/SPEC.md`
   - `maintainer/development/current-intake.md`
-  - `maintainer/development/stage-g-progress.md`
-  - `scenarios/linux_runtime/SPEC.md`
-
-## Go / no-go
-
-- **Can implementation start now?** yes
-- **If no, what must be clarified first?**:
+  - `maintainer/development/stage-h-progress.md`
+  - `maintainer/development/roadmap.md`
 
 ## Intake status
 
-- 当前检查点：**G-5 Linux scenario v0.6 alignment audit 已完成实现与 full regression**
-- 已完成验证：**targeted G-5 subset 通过；Linux runtime trace smoke 通过；full regression `251 tests, OK`；Linux scenario SPEC 已补齐 Stage G 对齐事实与 persistence / outcome / provenance / stability 说明**
-- 下一 gate：**Stage G exit review**
+- 当前检查点：**H-5 已完成；Stage H closeout complete**
+- blocker 文档：`maintainer/development/stage-h-blockers.md`
+- 下一 gate：**回到 intake-first 纪律下评估 post-Stage-H 下一 slice**

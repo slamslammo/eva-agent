@@ -3,13 +3,13 @@ from __future__ import annotations
 import unittest
 
 from eva.l3_deliberation.peer_circuit import build_learning_outcome_record, evaluate_response_outcome
-from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class LearningCompatibilityTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def test_peer_circuit_learning_reexports_encoding_helpers(self) -> None:
         observed_outcome, delta, label, confidence, outcome_vector = evaluate_response_outcome(

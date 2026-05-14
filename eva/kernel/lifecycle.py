@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any
+from typing import Any, Callable, Protocol
 
 from .config import ExternalLifeConfig, LifecycleConfig
 from .instance import InstanceGuard, InstanceSnapshot
@@ -102,6 +102,12 @@ class TurnResult:
     details: dict[str, Any] = field(default_factory=dict)
 
 
+class ExternalActionRuntime(Protocol):
+    """Scenario-owned bounded action stepping surface used by lifecycle."""
+
+    def step_action(self, action_name: str) -> Any: ...
+
+
 class LifecycleRuntime:
     """Run the heartbeat loop while preserving heartbeat priority over turn work."""
 
@@ -115,6 +121,8 @@ class LifecycleRuntime:
         working_memory_adapter: WorkingMemoryAdapter | None = None,
         working_memory_advisory_source: str | None = None,
         sensor_registry: SensorRegistry | None = None,
+        extra_shared_facts_provider: Callable[[], dict[str, Any] | None] | None = None,
+        action_runtime: ExternalActionRuntime | None = None,
     ) -> None:
         self.store = store
         self.instance_guard = instance_guard
@@ -124,6 +132,8 @@ class LifecycleRuntime:
         self.working_memory_adapter = working_memory_adapter
         self.working_memory_advisory_source = working_memory_advisory_source
         self.sensor_registry = sensor_registry
+        self.extra_shared_facts_provider = extra_shared_facts_provider
+        self.action_runtime = action_runtime
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -137,6 +147,13 @@ class LifecycleRuntime:
         """Pause ordinary turn work until one later patrol finishes."""
 
         self._conservative_until_next_patrol = True
+
+    def step_external_action(self, action_name: str) -> Any | None:
+        """Delegate one bounded external action step to the scenario-owned runtime session."""
+
+        if self.action_runtime is None or not hasattr(self.action_runtime, "step_action"):
+            return None
+        return self.action_runtime.step_action(action_name)
 
     def has_pending_work(self) -> bool:
         """Return whether the runtime has turn work waiting to execute."""
@@ -467,6 +484,9 @@ class LifecycleRuntime:
                 now,
                 due_at=work_slice.due_at,
                 sensor_registry=self.sensor_registry,
+                extra_shared_facts=(self.extra_shared_facts_provider() or None)
+                if self.extra_shared_facts_provider is not None
+                else None,
             )
             details.update(
                 {

@@ -4,9 +4,9 @@
 
 ## 1. 当前状态
 
-- 日期：2026-05-11
-- 阶段状态：**Stage G 全部 G-0 ~ G-5 slices 已完成实现与本地回归；等待架构师 exit review**
-- 判断：Stage G 已完成 residual clearance、OutcomeVector 追加字段、三类 skill-source owner、explicit persistence hierarchy、独立 stability metrics 模块，以及 Linux scenario v0.6 alignment audit。Linux scenario SPEC 已收口为 G-5 对齐事实，trace smoke 与 full regression 已通过，当前 full regression 为 `251 tests, OK`
+- 日期：2026-05-13
+- 阶段状态：**Stage G 全部 G-0 ~ G-5 slices 已完成实现与本地回归；已按当前 maintainer 判断视为 exit review 通过并完成签收**
+- 判断：Stage G 已完成 residual clearance、OutcomeVector 追加字段、三类 skill-source owner、explicit persistence hierarchy、独立 stability metrics 模块，以及 Linux scenario v0.6 alignment audit。Linux scenario SPEC 已收口为 G-5 对齐事实，trace smoke 与 full regression 已通过，当前 full regression 为 `251 tests, OK`。按当前用户确认，Stage G exit review 现作为已通过处理；后续 Crafter 相关工作转入 Stage H。
 
 ## 2. 当前已建立的前置条件
 
@@ -143,7 +143,7 @@ Stage G 计划顺序为：
 
 ## 10. 阶段出口状态
 
-Stage G 当前已全部完成实现与本地回归，等待架构师 exit review。
+Stage G 当前已全部完成实现、本地回归与 maintainer exit review closeout，可视为已签收完成；后续工作转入 Stage H planning / implementation track。
 
 ## 11. 当前文档入口
 

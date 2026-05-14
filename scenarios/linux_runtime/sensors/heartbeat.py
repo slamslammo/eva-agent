@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 def _host_continuity_sensor(context: SensingContext) -> SensorOutput:
     """Collect host-continuity evidence from shared patrol sampling facts."""
 
-    from eva.l1_sensing.rate_sensors import host_continuity_rate_context
+    from .rate_context import host_continuity_rate_context
     from eva.l1_sensing.sensor_registry import SensorOutput
 
     facts = context.shared_facts

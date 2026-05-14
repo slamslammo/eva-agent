@@ -3,18 +3,30 @@ from __future__ import annotations
 import unittest
 
 from eva.kernel import DimensionSnapshot, ExternalLifeConfig, ExternalLifeSnapshot, utc_now
-from eva.l1_sensing import determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
+from eva.l1_sensing import (
+    DimensionSpec,
+    determine_overall_status,
+    determine_primary_gap,
+    determine_trend,
+    evaluate_dimensions,
+    register_default_dimension_specs,
+)
 from eva.persistence_targets import build_linux_runtime_persistence_hierarchy, register_default_persistence_hierarchy
 import eva.persistence_targets as persistence_targets
+from eva.l1_sensing import dimension_specs as dimension_specs_module
+from scenarios.linux_runtime.dimensions import LINUX_RUNTIME_DIMENSION_SPECS
 
 
 class JudgmentTests(unittest.TestCase):
     def setUp(self) -> None:
         self._original_hierarchy = persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY
+        self._original_dimension_specs = dimension_specs_module._DEFAULT_DIMENSION_SPECS
         register_default_persistence_hierarchy(build_linux_runtime_persistence_hierarchy())
+        register_default_dimension_specs(LINUX_RUNTIME_DIMENSION_SPECS)
 
     def tearDown(self) -> None:
         persistence_targets._DEFAULT_PERSISTENCE_HIERARCHY = self._original_hierarchy
+        dimension_specs_module._DEFAULT_DIMENSION_SPECS = self._original_dimension_specs
 
     def test_evaluate_dimensions_returns_healthy_snapshot_when_inputs_are_clean(self) -> None:
         config = ExternalLifeConfig()
@@ -244,6 +256,34 @@ class JudgmentTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "no persistence hierarchy registered"):
             evaluate_dimensions(inputs, config)
+
+    def test_evaluate_dimensions_requires_registered_dimension_specs(self) -> None:
+        dimension_specs_module._DEFAULT_DIMENSION_SPECS = ()
+        with self.assertRaisesRegex(RuntimeError, "no dimension specs registered"):
+            evaluate_dimensions({}, ExternalLifeConfig())
+
+    def test_evaluate_dimensions_accepts_synthetic_non_linux_dimension_specs(self) -> None:
+        def synthetic_snapshot(inputs: dict[str, object], config: ExternalLifeConfig) -> DimensionSnapshot:
+            del config
+            status = "critical" if bool(inputs.get("trip", False)) else "healthy"
+            return DimensionSnapshot(status=status, evidence={"reason": "trip_detected" if status == "critical" else "synthetic_ok"})
+
+        register_default_dimension_specs(
+            (
+                DimensionSpec(name="synthetic_alpha", priority=1, pressure_type="integrity", snapshot_fn=synthetic_snapshot),
+                DimensionSpec(name="synthetic_beta", priority=0, pressure_type="integrity", snapshot_fn=synthetic_snapshot),
+            )
+        )
+        dimensions = evaluate_dimensions(
+            {
+                "synthetic_alpha": {"trip": False},
+                "synthetic_beta": {"trip": True},
+            },
+            ExternalLifeConfig(),
+        )
+
+        self.assertEqual(set(dimensions.keys()), {"synthetic_alpha", "synthetic_beta"})
+        self.assertEqual(determine_primary_gap(dimensions), {"type": "synthetic_beta", "reason": "trip_detected"})
 
 
 if __name__ == "__main__":

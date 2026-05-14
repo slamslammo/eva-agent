@@ -1,8 +1,8 @@
 # Scenario Contract Specification
 
-**Status**: Landed scenario contract after the Phase A refactor  
+**Status**: Landed scenario contract after the Stage G capability landing and Stage H second-scenario validation  
 **Scope**: Scenario packages under `scenarios/`  
-**Companion documents**: `docs/eva-framework-implementation.md`, `scenarios/linux_runtime/SPEC.md`
+**Companion documents**: `docs/eva-framework-implementation.md`, `scenarios/linux_runtime/SPEC.md`, `scenarios/crafter/SPEC.md`
 
 ---
 
@@ -10,7 +10,7 @@
 
 This document describes the scenario contract that is actually used by the current codebase. A scenario provides the concrete world-specific content that the EVA framework operates over. The framework keeps runtime authority and structural invariants; the scenario supplies the content those structures read.
 
-The current repository ships one concrete scenario, `scenarios/linux_runtime/`, but the contract is written at the cross-scenario level.
+The current repository contains a primary Linux runtime scenario and a bounded Crafter validation scenario. The contract below is written at the cross-scenario level.
 
 ## Required scenario assembly
 
@@ -45,6 +45,7 @@ The scenario must provide sensor builders that return ordered L1 sensor specs.
 In the current codebase this includes:
 - concrete sensor-spec builders
 - an ordered sensor-provider factory used by the framework registry
+- scenario-owned dimension specs when judgment / pressure projection depend on scenario-shaped dimensions
 
 The framework owns `SensorRegistry`, `SensingContext`, and normalized `SensorOutput`. The scenario owns what gets sensed.
 
@@ -87,8 +88,9 @@ The scenario must provide:
 - habit-bias summarization
 - habit-skill derivation
 - read-side mapping from learning outcomes back into the current scenario vocabulary
+- scenario-owned prior records or prior-skill policy that can participate in the framework skill registries with provenance metadata
 
-The framework owns the dataclasses and append-only learning tracks. The scenario owns the concrete policy for summarizing and reusing experience.
+The framework owns the dataclasses, skill registries, and append-only learning tracks. The scenario owns the concrete policy for summarizing and reusing experience, plus the scenario-local prior content that populates those framework-owned registry surfaces.
 
 ## Activation model
 
@@ -97,11 +99,15 @@ One scenario is active for one runtime.
 The typical startup pattern is:
 1. a runner imports the chosen scenario
 2. the runner activates the scenario bundle
-3. the runner calls the generic framework loop in `eva.kernel.main.run_runtime()`
+3. the runner registers the matching persistence hierarchy
+4. if the scenario needs runner-owned observations or env-backed state, the runner provides those facts through the generic runtime hook
+5. the runner calls the generic framework loop in `eva.kernel.main.run_runtime()`
 
-The current repository uses `runners/run_linux.py` for this role.
+The current repository uses `runners/run_linux.py` and `runners/run_crafter.py` as canonical examples.
 
-`eva/scenario_bundle.py` currently falls back to the Linux bundle when nothing else has been activated. That fallback exists for Phase A compatibility and should not be read as a complete loader system.
+`eva/scenario_bundle.py` requires explicit activation first. There is no silent fallback when no scenario has been activated, and scenario-owned startup assembly is also responsible for registering the matching persistence hierarchy.
+
+When a scenario needs runner-owned observations instead of filesystem-only sensing, the framework still owns cadence and patrol execution; the runner only supplies extra shared facts to the existing sensing seam.
 
 ## What a scenario may own
 
@@ -113,6 +119,7 @@ A scenario may own:
 - concrete expected-outcome labels
 - concrete prior-skill and habit heuristics
 - scenario-local helper modules and documentation
+- scenario-local wrapper/runtime adapters that feed bounded observations into the framework loop
 
 ## What a scenario must not own
 
@@ -129,17 +136,27 @@ Those remain framework responsibilities even when the scenario provides most of 
 
 Each scenario should document its concrete content in `scenarios/<name>/SPEC.md`.
 
-That per-scenario specification should describe the actual drive set, sensors, actions, anchors, outcome observers, and prior-skill policy shipped for that world.
+That per-scenario specification should describe the actual drive set, sensors, actions, anchors, outcome observers, prior-skill policy, and runner/runtime shape shipped for that world.
+
+## Current landed contract surfaces
+
+Beyond the original Phase A assembly seam, the current repository already treats the following as landed cross-scenario contract surfaces:
+- explicit scenario activation through `eva/scenario_bundle.py`
+- scenario-owned persistence-hierarchy registration paired with activation
+- scenario-owned dimension specs for generic judgment / pressure projection
+- runner-owned shared-facts injection into the existing sensing seam when required by a scenario
+- canonical multi-dimensional outcome records through `eva/l3_deliberation/contracts.py::OutcomeVector`
+- framework-owned skill registries with scenario-owned provenance-bearing prior / habit inputs
+
+These are not future placeholders anymore; they are part of the current framework/scenario boundary.
 
 ## Current limits of the contract
 
-The current Phase A contract is intentionally smaller than the longer-term EVA design space.
+The current contract is still intentionally smaller than the longer-term EVA design space.
 
 It does not yet provide:
 - a general scenario validator
 - a separate scenario manifest format
-- per-scenario persistence-target activation contracts
 - multi-scenario runtime switching
-- a richer multi-dimensional outcome schema
 
 Those can be added later, but they are not described here as already landed features.

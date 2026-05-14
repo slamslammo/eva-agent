@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 def _runtime_integrity_sensor(context: SensingContext) -> SensorOutput:
     """Collect runtime-integrity evidence from runtime state and shared facts."""
 
-    from eva.l1_sensing.rate_sensors import runtime_integrity_rate_context
+    from .rate_context import runtime_integrity_rate_context
     from eva.l1_sensing.sensor_registry import SensorOutput
 
     facts = context.shared_facts

@@ -7,15 +7,15 @@ from eva.l3_deliberation.reasoning import build_candidate_conflict_context
 from eva.scenario_bundle import activate_runtime_scenario
 from scenarios.linux_runtime import (
     ESCALATE_FIRST_PROFILE,
-    LINUX_RUNTIME_SCENARIO_BUNDLE,
     OBSERVE_FIRST_PROFILE,
     STABILIZE_FIRST_PROFILE,
+    activate_linux_runtime_scenario,
 )
 
 
 class ConflictDetectionTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def test_unknown_candidate_action_is_withheld(self) -> None:
         conflict = build_candidate_conflict_context(

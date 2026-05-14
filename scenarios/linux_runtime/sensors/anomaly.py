@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 def _anomaly_accumulation_sensor(context: SensingContext) -> SensorOutput:
     """Collect anomaly accumulation evidence from recent event history."""
 
-    from eva.l1_sensing.rate_sensors import anomaly_accumulation_rate_context
+    from .rate_context import anomaly_accumulation_rate_context
     from eva.l1_sensing.sensor_registry import SensorOutput
 
     facts = context.shared_facts

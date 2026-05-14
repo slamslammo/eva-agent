@@ -12,6 +12,7 @@ from eva.kernel import AppendOnlyArtifactsConfig, ExternalLifeConfig, LifecycleC
 from eva.l1_sensing import SensorOutput, SensorSpec, build_sensor_registry
 from eva.l3_deliberation.memory import WorkingMemoryAdapterRequest, WorkingMemoryAdapterResponse, WorkingMemoryModelClientConfig
 from eva.kernel.main import run_runtime
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 
 
 class CapturingRuntimeWorkingMemoryAdapter:
@@ -37,6 +38,9 @@ class FailingRuntimeWorkingMemoryAdapter:
 
 
 class MainLoopTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_linux_runtime_scenario()
+
     def test_runtime_config_carries_working_memory_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = build_runtime_config(temp_dir, working_memory_backend="auto")

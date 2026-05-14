@@ -14,22 +14,6 @@ def _active_sensors():
     return get_active_runtime_scenario().sensors
 
 
-def build_host_continuity_sensor_specs() -> tuple[SensorSpec, ...]:
-    return _active_sensors().build_host_continuity_sensor_specs()
-
-
-def build_runtime_integrity_sensor_specs() -> tuple[SensorSpec, ...]:
-    return _active_sensors().build_runtime_integrity_sensor_specs()
-
-
-def build_resource_state_sensor_specs() -> tuple[SensorSpec, ...]:
-    return _active_sensors().build_resource_state_sensor_specs()
-
-
-def build_anomaly_accumulation_sensor_specs() -> tuple[SensorSpec, ...]:
-    return _active_sensors().build_anomaly_accumulation_sensor_specs()
-
-
 def built_in_sensor_providers() -> tuple[BuiltInSensorProvider, ...]:
     """Return the ordered built-in sensor providers for baseline L1 sensing."""
 
@@ -47,10 +31,6 @@ def build_state_sensor_specs() -> tuple[SensorSpec, ...]:
 
 __all__ = [
     "BuiltInSensorProvider",
-    "build_anomaly_accumulation_sensor_specs",
-    "build_host_continuity_sensor_specs",
-    "build_resource_state_sensor_specs",
-    "build_runtime_integrity_sensor_specs",
     "build_state_sensor_specs",
     "built_in_sensor_providers",
 ]

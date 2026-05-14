@@ -11,6 +11,7 @@ from eva.scenario_bundle import (
     SensorPolicyBundle,
     activate_runtime_scenario,
 )
+from eva.l2_drive.drive_registry import register_default_drive_preset
 from eva.persistence_targets import build_linux_runtime_persistence_hierarchy, register_default_persistence_hierarchy
 
 from .actions import (
@@ -37,6 +38,7 @@ from .anchors import (
     admit_linux_runtime_candidates,
     restriction_reasons_for_linux_runtime_candidates,
 )
+from .dimensions import LINUX_RUNTIME_DIMENSION_SPECS
 from .drive_preset import DEFAULT_DRIVE_UPDATE_POLICY, DRIVE_TYPES, DRIVE_TYPE_BY_DIMENSION, LINUX_RUNTIME_DRIVE_PRESET
 from .outcome_observers import build_learning_outcome_content, evaluate_response_outcome, expected_outcome_for_release
 from .prior_skills import (
@@ -46,23 +48,14 @@ from .prior_skills import (
     situation_key_from_learning_outcome,
     summarize_habit_bias,
 )
-from .sensors import (
-    build_anomaly_accumulation_sensor_specs,
-    build_host_continuity_sensor_specs,
-    build_resource_state_sensor_specs,
-    build_runtime_integrity_sensor_specs,
-    linux_runtime_sensor_providers,
-)
+from .sensors import linux_runtime_sensor_providers
 
 LINUX_RUNTIME_SCENARIO_BUNDLE = RuntimeScenarioBundle(
     name="linux_runtime",
     drive_preset=LINUX_RUNTIME_DRIVE_PRESET,
     sensors=SensorPolicyBundle(
-        build_host_continuity_sensor_specs=build_host_continuity_sensor_specs,
-        build_runtime_integrity_sensor_specs=build_runtime_integrity_sensor_specs,
-        build_resource_state_sensor_specs=build_resource_state_sensor_specs,
-        build_anomaly_accumulation_sensor_specs=build_anomaly_accumulation_sensor_specs,
         sensor_providers=linux_runtime_sensor_providers,
+        dimension_specs=LINUX_RUNTIME_DIMENSION_SPECS,
     ),
     actions=ActionPolicyBundle(
         recheck_action=RECHECK_ACTION,
@@ -107,6 +100,7 @@ def activate_linux_runtime_scenario() -> RuntimeScenarioBundle:
     """Activate the Linux runtime bundle for framework compatibility lookups."""
 
     bundle = activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+    register_default_drive_preset(LINUX_RUNTIME_DRIVE_PRESET)
     register_default_persistence_hierarchy(build_linux_runtime_persistence_hierarchy())
     return bundle
 

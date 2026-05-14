@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 def _resource_state_sensor(context: SensingContext) -> SensorOutput:
     """Collect runtime-path and disk-state evidence."""
 
-    from eva.l1_sensing.rate_sensors import resource_state_rate_context
+    from .rate_context import resource_state_rate_context
     from eva.l1_sensing.sensor_registry import SensorOutput
 
     facts = context.shared_facts

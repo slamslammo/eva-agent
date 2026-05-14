@@ -5,9 +5,13 @@ from datetime import timedelta
 
 from eva.kernel import ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot, utc_now
 from eva.l2_drive.pressure_to_drive import build_active_pressure_table
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 
 
 class PressureTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_linux_runtime_scenario()
+
     def test_build_active_pressure_table_tracks_open_worsening_and_resolved_pressures(self) -> None:
         now = utc_now()
         empty_previous = ActivePressureTable(captured_at=now - timedelta(seconds=5))

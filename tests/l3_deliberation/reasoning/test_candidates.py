@@ -9,15 +9,15 @@ from eva.l3_deliberation.contracts import Candidate, DeliberationInput
 from eva.scenario_bundle import activate_runtime_scenario
 from scenarios.linux_runtime import (
     ESCALATE_FIRST_PROFILE,
-    LINUX_RUNTIME_SCENARIO_BUNDLE,
     OBSERVE_FIRST_PROFILE,
     STABILIZE_FIRST_PROFILE,
+    activate_linux_runtime_scenario,
 )
 
 
 class CandidateGenerationTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def test_build_candidates_uses_b0_input_contract(self) -> None:
         deliberation_input = build_deliberation_input(

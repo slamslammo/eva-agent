@@ -22,9 +22,9 @@ from eva.scenario_bundle import activate_runtime_scenario
 from scenarios.linux_runtime import (
     DEFAULT_RESPONSE_MODE,
     ESCALATE_ACTION,
-    LINUX_RUNTIME_SCENARIO_BUNDLE,
     RECHECK_ACTION,
     REPAIR_ACTION,
+    activate_linux_runtime_scenario,
 )
 
 
@@ -38,7 +38,7 @@ class StubRuntime:
 
 class ResponseTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def _drive_broadcast(self) -> dict[str, object]:
         now = utc_now()

@@ -12,6 +12,21 @@ if TYPE_CHECKING:
 
 from .tool_registry import get_action_constants
 
+OPTIONAL_EXECUTION_FIELDS = (
+    "achievement_delta",
+    "inventory_delta",
+    "life_delta",
+    "visible_threat_count",
+)
+
+
+def _optional_execution_fields(execution_result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field_name: execution_result[field_name]
+        for field_name in OPTIONAL_EXECUTION_FIELDS
+        if field_name in execution_result
+    }
+
 __all__ = ["append_response_history", "build_response_selected_event_details", "build_response_summary"]
 
 
@@ -59,6 +74,7 @@ def append_response_history(
         payload["drive_context"] = drive_context
     if release_context is not None:
         payload["release_context"] = dict(release_context)
+    payload.update(_optional_execution_fields(execution_result))
     store.append_response_history(payload)
     return payload
 
@@ -86,6 +102,7 @@ def build_response_summary(
     }
     if drive_context is not None:
         payload["drive_context"] = drive_context
+    payload.update(_optional_execution_fields(execution_result))
     return payload
 
 

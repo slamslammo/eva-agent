@@ -4,9 +4,9 @@ import unittest
 from datetime import timedelta
 
 from eva.kernel import DimensionSnapshot, ExternalLifeSnapshot, RuntimeState, utc_now
-from eva.l1_sensing.rate_sensors import (
+from eva.l1_sensing.rate_sensors import elapsed_since_previous
+from scenarios.linux_runtime.sensors.rate_context import (
     anomaly_accumulation_rate_context,
-    elapsed_since_previous,
     host_continuity_rate_context,
     resource_state_rate_context,
     runtime_integrity_rate_context,

@@ -1,0 +1,46 @@
+"""Crafter H-2 action surfaces."""
+
+from .compatibility import (
+    ACTION_TO_ALLOWED_STATES,
+    ACTION_TO_POSTURE,
+    ACTION_TO_STATE_MODE,
+    ALL_ACTIONS,
+    ALL_LIFE_STATES,
+    DEFAULT_RESPONSE_MODE,
+    DO_ACTION,
+    ESCALATE_ACTION,
+    NOOP_ACTION,
+    RECHECK_ACTION,
+    REPAIR_ACTION,
+    SLEEP_ACTION,
+    build_integrity_response_candidates,
+    execute_crafter_action,
+    filter_response_candidates,
+    select_integrity_response,
+    select_response_action,
+)
+from .registry import ACTION_METADATA, CRAFTER_ACTIONS, ActionAdapter, action_names
+
+__all__ = [
+    "ACTION_METADATA",
+    "ACTION_TO_ALLOWED_STATES",
+    "ACTION_TO_POSTURE",
+    "ACTION_TO_STATE_MODE",
+    "ALL_ACTIONS",
+    "ALL_LIFE_STATES",
+    "CRAFTER_ACTIONS",
+    "DEFAULT_RESPONSE_MODE",
+    "DO_ACTION",
+    "ESCALATE_ACTION",
+    "NOOP_ACTION",
+    "RECHECK_ACTION",
+    "REPAIR_ACTION",
+    "SLEEP_ACTION",
+    "ActionAdapter",
+    "action_names",
+    "build_integrity_response_candidates",
+    "execute_crafter_action",
+    "filter_response_candidates",
+    "select_integrity_response",
+    "select_response_action",
+]

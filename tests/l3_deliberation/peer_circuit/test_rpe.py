@@ -8,13 +8,13 @@ from eva.l3_deliberation.peer_circuit.rpe import (
     evaluate_response_outcome,
 )
 from eva.l3_deliberation import build_deliberation_input
-from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class RpeOwnerTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def test_rpe_owner_evaluates_positive_relief_without_followup(self) -> None:
         observed_outcome, delta, label, confidence, outcome_vector = evaluate_response_outcome(

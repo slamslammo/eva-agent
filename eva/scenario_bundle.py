@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .l1_sensing.dimension_specs import DimensionSpec
 
 SensorSpecBuilder = Callable[[], tuple[Any, ...]]
 SensorProviderFactory = Callable[[], tuple[SensorSpecBuilder, ...]]
@@ -13,11 +16,8 @@ SensorProviderFactory = Callable[[], tuple[SensorSpecBuilder, ...]]
 class SensorPolicyBundle:
     """Scenario-owned concrete sensor provider bundle."""
 
-    build_host_continuity_sensor_specs: SensorSpecBuilder
-    build_runtime_integrity_sensor_specs: SensorSpecBuilder
-    build_resource_state_sensor_specs: SensorSpecBuilder
-    build_anomaly_accumulation_sensor_specs: SensorSpecBuilder
     sensor_providers: SensorProviderFactory
+    dimension_specs: tuple["DimensionSpec", ...]
 
 
 @dataclass(frozen=True)
@@ -91,8 +91,11 @@ _ACTIVE_RUNTIME_SCENARIO: RuntimeScenarioBundle | None = None
 def activate_runtime_scenario(bundle: RuntimeScenarioBundle) -> RuntimeScenarioBundle:
     """Activate one scenario bundle for subsequent framework compatibility lookups."""
 
+    from .l1_sensing.dimension_specs import register_default_dimension_specs
+
     global _ACTIVE_RUNTIME_SCENARIO
     _ACTIVE_RUNTIME_SCENARIO = bundle
+    register_default_dimension_specs(tuple(bundle.sensors.dimension_specs))
     return bundle
 
 

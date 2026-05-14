@@ -9,13 +9,13 @@ from eva.l3_deliberation.peer_circuit.habit_track import (
     habitual_candidate_explanations,
     shape_candidates_with_habit_track,
 )
-from eva.scenario_bundle import activate_runtime_scenario
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class HabitTrackOwnerTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
 
     def test_habit_track_selects_strongest_crystallized_hint_per_profile(self) -> None:
         deliberation_input = build_deliberation_input(

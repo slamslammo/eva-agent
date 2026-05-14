@@ -5,12 +5,16 @@ import unittest
 from datetime import timedelta
 
 from eva.kernel import ActiveInstanceRecord, DimensionSnapshot, EventRecord, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, build_runtime_paths, utc_now
-from eva.l1_sensing.rate_sensors import host_continuity_rate_context
 from eva.l1_sensing.sensor_registry import SensingContext
 from eva.l1_sensing.state_sensors import build_state_sensor_specs, built_in_sensor_providers
+from scenarios.linux_runtime import activate_linux_runtime_scenario
+from scenarios.linux_runtime.sensors.rate_context import host_continuity_rate_context
 
 
 class StateSensorsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_linux_runtime_scenario()
+
     def test_build_state_sensor_specs_preserves_order_and_names(self) -> None:
         specs = build_state_sensor_specs()
 

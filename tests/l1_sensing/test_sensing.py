@@ -8,9 +8,13 @@ from eva.kernel import ActiveInstanceRecord, DimensionSnapshot, EventRecord, Ext
 from eva.l1_sensing import SensorOutput, SensorSpec, build_sensor_registry, collect_external_life_inputs, default_sensor_registry
 from eva.l1_sensing.rate_sensors import elapsed_since_previous
 from eva.l1_sensing.state_sensors import build_state_sensor_specs
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 
 
 class SensingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        activate_linux_runtime_scenario()
+
     def test_collect_external_life_inputs_reads_runtime_and_recent_events(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -163,7 +167,23 @@ class SensingTests(unittest.TestCase):
                 },
             )
 
-    def test_collect_external_life_inputs_adds_rate_context_from_previous_snapshot(self) -> None:
+    def test_collect_external_life_inputs_rejects_extra_shared_facts_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.ensure_runtime_dir()
+            now = utc_now()
+            runtime_state = RuntimeState(instance_valid=True, heartbeat_ok=True, tick_ok=True, updated_at=now)
+            store.write_runtime_state(runtime_state)
+
+            with self.assertRaisesRegex(ValueError, "reserved sensing keys"):
+                collect_external_life_inputs(
+                    store,
+                    runtime_state,
+                    ExternalLifeConfig(recent_event_window_sec=60.0),
+                    now,
+                    extra_shared_facts={"elapsed_sec": 1.0},
+                )
+
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
             store.ensure_runtime_dir()

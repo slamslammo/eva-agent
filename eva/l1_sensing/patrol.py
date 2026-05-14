@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
 from ..kernel import ActivePressureTable, DriveStateTable, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore
 from ..l2_drive.broadcast import DriveBroadcast, build_drive_broadcast
@@ -93,6 +94,7 @@ def execute_patrol(
     *,
     due_at: datetime | None = None,
     sensor_registry: SensorRegistry | None = None,
+    extra_shared_facts: dict[str, Any] | None = None,
 ) -> PatrolResult:
     """Run one patrol from sensing through persistence and history writing."""
 
@@ -105,6 +107,7 @@ def execute_patrol(
         due_at=due_at,
         previous_snapshot=previous_snapshot,
         sensor_registry=sensor_registry,
+        extra_shared_facts=extra_shared_facts,
     )
     snapshot = build_external_life_snapshot(
         cadence,

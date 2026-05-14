@@ -4,13 +4,13 @@ import unittest
 from datetime import timedelta
 from eva.kernel import DriveStateTable, EventRecord, ExternalLifeConfig, InstanceGuard, LifecycleConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.kernel.lifecycle import LifeState, LifecycleRuntime, WorkSlice
-from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE, RECHECK_ACTION, REPAIR_ACTION
+from scenarios.linux_runtime import RECHECK_ACTION, REPAIR_ACTION, activate_linux_runtime_scenario
 from eva.scenario_bundle import activate_runtime_scenario
 
 
 class PatrolTurnFlowTests(unittest.TestCase):
     def setUp(self) -> None:
-        activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+        activate_linux_runtime_scenario()
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = StateStore(build_runtime_paths(self.temp_dir.name))
         self.lifecycle = LifecycleConfig(
