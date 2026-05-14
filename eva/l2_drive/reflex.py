@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..kernel import ActivePressure, ActivePressureTable, RuntimeState
+from ..scenario_bundle import get_active_runtime_scenario
 from ..l1_sensing.routing import RoutingDecision
 from ..l3_deliberation.peer_circuit.mediator import mint_reflex_release
 
@@ -55,9 +56,12 @@ def _pressure_reason(pressure: ActivePressure) -> str:
 
 
 def _first_integrity_pressure(pressure_table: ActivePressureTable) -> ActivePressure | None:
-    """Return the first active integrity pressure from the current patrol result."""
+    """Return the first active pressure compatible with the current reflex path."""
 
+    scenario_name = get_active_runtime_scenario().name
     for pressure in pressure_table.pressures:
+        if scenario_name == "crafter":
+            return pressure
         if pressure.type == "integrity":
             return pressure
     return None

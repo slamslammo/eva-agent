@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from ...kernel import RuntimeState, StateStore
+from ...scenario_bundle import get_active_runtime_scenario
 from ..contracts import ReleaseToken
 from .executors import ConservativeRuntime, execute_integrity_selection
 from .history import append_response_history, build_response_summary
@@ -113,21 +114,33 @@ def maybe_respond_after_patrol(
     release_token: ReleaseToken | None = None,
     selected_candidate_id: str | None = None,
 ) -> dict[str, object] | None:
-    """Run the compatibility-only post-patrol response when an integrity pressure exists."""
+    """Run the compatibility-only post-patrol response when a compatible pressure exists."""
+
+    pressure = _pressure_for_active_scenario(store)
+    if pressure is None:
+        return None
+    return respond_to_integrity_pressure(
+        store,
+        pressure,
+        runtime_state,
+        now,
+        runtime=runtime,
+        allow_repair_side_effects=allow_repair_side_effects,
+        drive_context=drive_context,
+        release_context=release_context,
+        release_token=release_token,
+        selected_candidate_id=selected_candidate_id,
+    )
+
+
+def _pressure_for_active_scenario(store: StateStore) -> ActivePressure | None:
+    """Return the active pressure currently eligible for the bounded compatibility path."""
 
     pressure_table = store.read_active_pressures()
+    scenario_name = get_active_runtime_scenario().name
+    if scenario_name == "crafter":
+        return pressure_table.pressures[0] if pressure_table.pressures else None
     for pressure in pressure_table.pressures:
         if pressure.type == "integrity":
-            return respond_to_integrity_pressure(
-                store,
-                pressure,
-                runtime_state,
-                now,
-                runtime=runtime,
-                allow_repair_side_effects=allow_repair_side_effects,
-                drive_context=drive_context,
-                release_context=release_context,
-                release_token=release_token,
-                selected_candidate_id=selected_candidate_id,
-            )
+            return pressure
     return None

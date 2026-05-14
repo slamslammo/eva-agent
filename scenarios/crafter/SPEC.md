@@ -79,6 +79,16 @@ Current dimension mapping is intentionally scenario-shaped rather than Linux-sha
 - `inventory_capability -> capability`
 - `local_view_state -> safety`
 
+Current pressure-type mapping is aligned to the Crafter drive families rather than flattened into one generic bucket:
+- `avatar_metabolic -> metabolic`
+- `avatar_safety -> safety`
+- `avatar_recovery -> recovery`
+- `inventory_acquisition -> acquisition`
+- `inventory_capability -> capability`
+- `local_view_state -> safety`
+
+`local_view_state -> safety` remains a bounded simplification for the current Stage-H validation shape. The same local-view payload can carry threat, resource, and utility cues, but the landed runtime currently routes that dimension through the safety side first rather than modeling it as a multi-drive projection surface.
+
 The sensors read the bounded `agent_observation` surface and do not consume evaluator-only or hidden payloads directly.
 
 ### H-2 actions, anchors, and outcome observers
@@ -127,6 +137,8 @@ The current Crafter hierarchy is:
 - Level 2: `crafter_avatar_instance`
 - Level 3: `crafter_capability_structure`
 - Level 4: `crafter_resource_system`
+
+Level 2 is currently interpreted as the bounded avatar-in-world continuity target for one Crafter episode, not as EVA termination. In the landed H-5 runtime, avatar death or env `done=True` triggers a bounded wrapper reset so the next patrol sees a fresh episode; that reset preserves the Stage-H validation intent without treating one Crafter episode boundary as substrate-level death.
 
 Crafter learning integration now preserves multi-dimensional outcome fields through the same append-only learning record path used by the framework.
 

@@ -8,6 +8,13 @@ from eva.l3_deliberation.contracts import OutcomeVector
 
 from ..prior_skills import habit_skill_match_for_candidate_profile
 
+OUTCOME_DELTA_WEIGHTS = {
+    "viability": 1.0,
+    "resource": 0.2,
+    "capability": 0.3,
+    "risk": -1.0,
+}
+
 
 def expected_outcome_for_release(outcome: str, candidate_profile: str | None) -> str:
     if outcome == "compatibility_release":
@@ -38,11 +45,17 @@ def evaluate_response_outcome(
     viability_score = sum(float(value) for value in life_delta.values()) if life_delta else (0.2 if selected_action == "sleep" else 0.0)
     resource_score = sum(float(value) for value in inventory_delta.values()) if inventory_delta else 0.0
     capability_score = 1.0 if selected_action.startswith("make_") or selected_action.startswith("place_") else 0.0
-    task_progress = achievement_delta if achievement_delta != 0.0 else (0.5 if capability_score > 0 else None)
+    task_progress = achievement_delta if achievement_delta != 0.0 else None
     risk_delta = 0.5 if threat_count > 0 and selected_action == "do" else -0.2 if selected_action == "sleep" else 0.0
     reversibility = 1.0 if selected_action.startswith("move_") or selected_action == "noop" else 0.5 if selected_action in {"do", "sleep"} else 0.1
     uncertainty = 0.8 if followup_needed else 0.4
-    outcome_delta = round(viability_score + (0.2 * resource_score) + (0.3 * capability_score) - risk_delta, 3)
+    outcome_delta = round(
+        (OUTCOME_DELTA_WEIGHTS["viability"] * viability_score)
+        + (OUTCOME_DELTA_WEIGHTS["resource"] * resource_score)
+        + (OUTCOME_DELTA_WEIGHTS["capability"] * capability_score)
+        + (OUTCOME_DELTA_WEIGHTS["risk"] * risk_delta),
+        3,
+    )
     if outcome_delta > 0.0:
         label = "positive"
         observed = "improved"
@@ -102,6 +115,7 @@ def build_learning_outcome_content(
 
 
 __all__ = [
+    "OUTCOME_DELTA_WEIGHTS",
     "build_learning_outcome_content",
     "evaluate_response_outcome",
     "expected_outcome_for_release",

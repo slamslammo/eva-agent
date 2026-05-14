@@ -4,7 +4,13 @@ import tempfile
 import unittest
 
 from eva.kernel import ActivePressureTable, ExternalLifeConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
-from eva.l1_sensing import build_external_life_snapshot, collect_external_life_inputs, default_sensor_registry, get_default_dimension_specs
+from eva.l1_sensing import (
+    build_external_life_snapshot,
+    collect_external_life_inputs,
+    default_sensor_registry,
+    get_default_dimension_specs,
+)
+from eva.l1_sensing.dimension_specs import get_default_pressure_type_by_dimension_name
 from eva.l2_drive.pressure_to_drive import build_active_pressure_table
 from scenarios.crafter import activate_crafter_scenario
 from runners.run_crafter import CrafterRuntimeSession
@@ -148,7 +154,31 @@ class CrafterSensorTests(unittest.TestCase):
             self.assertEqual(snapshot.primary_gap, {"type": "avatar_safety", "reason": "health_critical"})
             table, opened, resolved = build_active_pressure_table(snapshot, ActivePressureTable(captured_at=now))
             self.assertEqual(len(table.pressures), 5)
-            self.assertTrue(all(pressure.type == "integrity" for pressure in table.pressures))
+            self.assertEqual(
+                get_default_pressure_type_by_dimension_name(),
+                {
+                    "avatar_safety": "safety",
+                    "avatar_metabolic": "metabolic",
+                    "avatar_recovery": "recovery",
+                    "inventory_capability": "capability",
+                    "inventory_acquisition": "acquisition",
+                    "local_view_state": "safety",
+                },
+            )
+            self.assertEqual(
+                sorted(pressure.type for pressure in table.pressures),
+                ["acquisition", "metabolic", "recovery", "safety", "safety"],
+            )
+            self.assertEqual(
+                {pressure.pressure_id for pressure in table.pressures},
+                {
+                    "pressure-safety-health_critical",
+                    "pressure-metabolic-water_critical",
+                    "pressure-recovery-energy_degraded",
+                    "pressure-acquisition-inventory_sparse",
+                    "pressure-safety-threat_visible",
+                },
+            )
             self.assertEqual(len(opened), 5)
             self.assertEqual(resolved, [])
     def test_runtime_session_exposes_latest_agent_observation_as_shared_fact(self) -> None:

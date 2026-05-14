@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 
 from ..kernel import ActivePressure, ActivePressureTable, DimensionSnapshot, ExternalLifeSnapshot
-from ..scenario_bundle import get_active_runtime_scenario
 
 SEVERITY_ORDER = {"healthy": 0, "degraded": 1, "critical": 2}
 
@@ -17,10 +16,9 @@ def project_active_pressures(
     """Project non-healthy judged gaps into compatibility pressure records."""
 
     previous_by_id = {pressure.pressure_id: pressure for pressure in previous_table.pressures}
-    pressure_type_by_dimension = {
-        spec.name: spec.pressure_type
-        for spec in get_active_runtime_scenario().sensors.dimension_specs
-    }
+    from ..l1_sensing.dimension_specs import get_default_pressure_type_by_dimension_name
+
+    pressure_type_by_dimension = get_default_pressure_type_by_dimension_name()
     current_pressures: list[ActivePressure] = []
     for dimension_name, dimension in snapshot.dimensions.items():
         if dimension.status == "healthy":
