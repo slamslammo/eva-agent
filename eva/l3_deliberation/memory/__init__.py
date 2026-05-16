@@ -1,6 +1,7 @@
 from .encoding import LearningOutcomeRecord, MemoryWriteStub, build_learning_outcome_record, build_memory_stub, evaluate_response_outcome
 from .episodic import append_cognitive_memory_stub, append_habit_bias, append_learning_outcome, read_cognitive_memory_stub, read_habit_bias, read_learning_outcomes
-from .retrieval import latest_habit_bias_summaries, pressure_reason_from_input, recent_cognitive_memory_stub_traces, recent_learning_outcomes, recent_outcome_trace, recent_response_history
+from .retrieval import latest_habit_bias_summaries, pressure_reason_from_input, recent_cognitive_memory_stub_traces, recent_learning_outcomes, recent_outcome_trace, recent_response_history, recent_semantic_memory
+from .semantic import append_semantic_memory, query_semantic_memory_by_scope, query_semantic_memory_by_topic, read_semantic_memory, semantic_memory_registry
 from .skill_library import HabitBiasSummary, HabitSkillSummary, build_situation_key_from_values, derive_habit_skills, summarize_habit_bias
 from .working_memory_adapter import (
     ADAPTER_MODE_HEURISTIC,
@@ -36,15 +37,21 @@ __all__ = [
     "append_cognitive_memory_stub",
     "append_habit_bias",
     "append_learning_outcome",
+    "append_semantic_memory",
     "latest_habit_bias_summaries",
     "pressure_reason_from_input",
     "read_cognitive_memory_stub",
     "read_habit_bias",
     "read_learning_outcomes",
+    "read_semantic_memory",
     "recent_cognitive_memory_stub_traces",
     "recent_learning_outcomes",
     "recent_outcome_trace",
     "recent_response_history",
+    "recent_semantic_memory",
+    "query_semantic_memory_by_scope",
+    "query_semantic_memory_by_topic",
+    "semantic_memory_registry",
     "build_situation_key_from_values",
     "derive_habit_skills",
     "summarize_habit_bias",

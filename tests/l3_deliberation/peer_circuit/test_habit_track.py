@@ -268,6 +268,73 @@ class HabitTrackOwnerTests(unittest.TestCase):
         self.assertEqual(len(shaped), 2)
         self.assertFalse(shaped[0].parameter_domain.get("habit_narrowed", False))
 
+    def test_inherited_priors_can_reorder_candidates_through_existing_shaping_seam(self) -> None:
+        candidates = [
+            Candidate(
+                candidate_id="candidate-compatibility-observe-first",
+                capability="compatibility_response",
+                action="compatibility_release",
+                parameter_domain={"candidate_profile": "observe_first"},
+                justification=("candidate_profile=observe_first",),
+            ),
+            Candidate(
+                candidate_id="candidate-compatibility-stabilize-first",
+                capability="compatibility_response",
+                action="compatibility_release",
+                parameter_domain={"candidate_profile": "stabilize_first"},
+                justification=("candidate_profile=stabilize_first",),
+            ),
+        ]
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "curiosity",
+                "drive_levels": {"curiosity": 0.8},
+                "drive_trends": {"curiosity": "improving"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            working_memory_context={
+                "situation_key": "curiosity|STABLE|none",
+                "bias_summaries": [],
+                "habit_skills": [],
+                "inherited_priors": [
+                    {
+                        "candidate_profile": "stabilize_first",
+                        "preferred_action": "shrink_to_conservative_mode",
+                        "evidence_count": 3,
+                        "stability_score": 0.7,
+                        "confidence": 0.75,
+                        "bias_strength": 0.6,
+                    }
+                ],
+                "recent_relevant_outcomes": [],
+                "confidence": 0.75,
+                "source_backend": "local_rule_based",
+            },
+        )
+
+        shaped = shape_candidates_with_habit_track(candidates, deliberation_input)
+
+        self.assertEqual(len(shaped), 2)
+        self.assertEqual(shaped[0].parameter_domain["candidate_profile"], "stabilize_first")
+        self.assertEqual(shaped[0].parameter_domain["habit_hint_source"], "inherited_prior")
+        self.assertIn("inherited_prior_hint", shaped[0].justification)
+
     def test_habit_track_reorders_candidates_without_removing_them(self) -> None:
         candidates = [
             Candidate(
@@ -338,3 +405,4 @@ class HabitTrackOwnerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

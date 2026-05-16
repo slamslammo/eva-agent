@@ -34,7 +34,7 @@ class PressureTests(unittest.TestCase):
         self.assertEqual(len(first_table.pressures), 1)
         self.assertEqual(len(opened), 1)
         self.assertEqual(len(resolved), 0)
-        self.assertEqual(first_table.pressures[0].pressure_id, "pressure-resource_state-disk_space_declining")
+        self.assertEqual(first_table.pressures[0].pressure_id, "pressure-linux_runtime-resource_state-disk_space_declining")
         self.assertEqual(first_table.pressures[0].trend, "unknown")
 
         second_snapshot = ExternalLifeSnapshot(

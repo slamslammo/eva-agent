@@ -6,6 +6,7 @@ from .value_judgment import assess_candidates
 from .working_memory import (
     AUTO_WORKING_MEMORY_BACKEND,
     MIN_AUTO_LLM_CONFIDENCE,
+    WorkingMemory,
     WorkingMemoryContext,
     build_llm_working_memory_context,
     build_situation_key,
@@ -19,6 +20,7 @@ __all__ = [
     "MIN_AUTO_LLM_CONFIDENCE",
     "CandidateConflictContext",
     "HabitBiasSummary",
+    "WorkingMemory",
     "WorkingMemoryContext",
     "assess_candidates",
     "build_candidate_conflict_context",

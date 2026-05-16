@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from eva.kernel.state import from_iso8601
-from eva.skills import PriorSkillRecord, PriorSkillRegistry, SkillProvenance
+from eva.skills import PriorSkillRegistry
+
+from .bundle import build_crafter_prior_skill_registry
 
 MIN_SKILL_EVIDENCE = 3
 MIN_SKILL_STABILITY = 0.6
@@ -186,73 +188,10 @@ def situation_key_from_learning_outcome(record: dict[str, Any]) -> str:
 
 
 def prior_skill_registry(*, top_drive: str, life_state: str, pressure_reason: str) -> PriorSkillRegistry:
-    situation_key = build_situation_key_from_values(
+    return build_crafter_prior_skill_registry(
         top_drive=top_drive,
         life_state=life_state,
         pressure_reason=pressure_reason,
-    )
-    records = [
-        _prior_record(
-            situation_key=situation_key,
-            candidate_profile=profile,
-            preferred_action=preferred_action,
-            provenance_detail=provenance_detail,
-            confidence=confidence,
-            mutable=mutable,
-            top_drive=top_drive,
-            pressure_reason=pressure_reason,
-        )
-        for profile, preferred_action, provenance_detail, confidence, mutable in _prior_profiles_for_context(
-            top_drive=top_drive,
-            pressure_reason=pressure_reason,
-        )
-    ]
-    return PriorSkillRegistry(records)
-
-
-def _prior_profiles_for_context(*, top_drive: str, pressure_reason: str) -> list[tuple[str, str | None, str, float, bool]]:
-    if pressure_reason in {"health_critical", "threat_visible"} or top_drive == "safety":
-        return [
-            ("escalate_first", "do", "crafter_runtime_survival_prior", 0.9, True),
-            ("stabilize_first", "sleep", "crafter_runtime_survival_prior", 0.75, True),
-        ]
-    if pressure_reason in {"water_critical", "food_critical", "energy_critical"} or top_drive in {"metabolic", "recovery"}:
-        preferred = "sleep" if pressure_reason == "energy_critical" or top_drive == "recovery" else "do"
-        return [
-            ("stabilize_first", preferred, "crafter_runtime_survival_prior", 0.85, True),
-            ("observe_first", "noop", "crafter_runtime_recognition_prior", 0.6, True),
-        ]
-    if top_drive in {"acquisition", "capability"}:
-        return [
-            ("observe_first", "noop", "crafter_runtime_resource_chain_prior", 0.8, True),
-            ("stabilize_first", "sleep", "crafter_runtime_survival_prior", 0.5, True),
-        ]
-    return [("observe_first", "noop", "crafter_runtime_action_semantics", 0.7, False)]
-
-
-def _prior_record(
-    *,
-    situation_key: str,
-    candidate_profile: str,
-    preferred_action: str | None,
-    provenance_detail: str,
-    confidence: float,
-    mutable: bool,
-    top_drive: str,
-    pressure_reason: str,
-) -> PriorSkillRecord:
-    return PriorSkillRecord(
-        recorded_at="scenario_definition",
-        situation_key=situation_key,
-        candidate_profile=candidate_profile,
-        preferred_action=preferred_action,
-        provenance=SkillProvenance(
-            source="scenario",
-            provenance_detail=provenance_detail,
-            confidence=confidence,
-            scope={"scenario": "crafter", "top_drive": top_drive, "pressure_reason": pressure_reason},
-            mutable=mutable,
-        ),
     )
 
 

@@ -53,7 +53,7 @@ class HistoryTests(unittest.TestCase):
                 updated_at=now,
             )
             pressure = ActivePressure(
-                pressure_id="pressure-resource_state-disk_space_critical",
+                pressure_id="pressure-linux_runtime-resource_state-disk_space_critical",
                 type="resource_state",
                 severity="critical",
                 evidence={"reason": "disk_space_critical", "disk_free_bytes": 256},

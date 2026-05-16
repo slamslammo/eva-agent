@@ -20,7 +20,9 @@ class CrafterDrivePresetTests(unittest.TestCase):
         self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("avatar_recovery"), "recovery")
         self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("inventory_acquisition"), "acquisition")
         self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("inventory_capability"), "capability")
-        self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("local_view_state"), "safety")
+        self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("local_view_threat"), "safety")
+        self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("local_view_resource"), "acquisition")
+        self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("local_view_utility"), "capability")
         self.assertIsNone(CRAFTER_DRIVE_PRESET.curiosity_drive_type)
 
     def test_build_default_drive_state_uses_crafter_drive_types_after_activation(self) -> None:
@@ -28,7 +30,7 @@ class CrafterDrivePresetTests(unittest.TestCase):
         table = build_default_drive_state(now)
         self.assertEqual(tuple(drive.drive_type for drive in table.drives), DRIVE_TYPES)
 
-    def test_low_health_and_threat_raise_safety_drive(self) -> None:
+    def test_local_view_subsignals_raise_multiple_drives(self) -> None:
         now = utc_now()
         previous = DriveStateTable(
             captured_at=now - timedelta(seconds=10),
@@ -45,38 +47,48 @@ class CrafterDrivePresetTests(unittest.TestCase):
                         "reason": "health_critical",
                         "status": "critical",
                         "threat_count": 2,
-                        "rate_context": {"available": False, "direction": "unknown"},
+                        "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
                     },
                 ),
                 "avatar_metabolic": DimensionSnapshot(
                     status="healthy",
-                    evidence={"reason": "metabolic_ok", "rate_context": {"available": False, "direction": "unknown"}},
+                    evidence={"reason": "metabolic_ok", "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None}},
                 ),
                 "avatar_recovery": DimensionSnapshot(
                     status="healthy",
-                    evidence={"reason": "recovery_ok", "rate_context": {"available": False, "direction": "unknown"}},
+                    evidence={"reason": "recovery_ok", "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None}},
                 ),
                 "inventory_acquisition": DimensionSnapshot(
                     status="healthy",
-                    evidence={"reason": "inventory_ok", "rate_context": {"available": False, "direction": "unknown"}},
+                    evidence={"reason": "inventory_ok", "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None}},
                 ),
                 "inventory_capability": DimensionSnapshot(
                     status="degraded",
-                    evidence={"reason": "tooling_missing", "rate_context": {"available": False, "direction": "unknown"}},
+                    evidence={"reason": "tooling_missing", "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None}},
                 ),
-                "local_view_state": DimensionSnapshot(
+                "local_view_threat": DimensionSnapshot(
                     status="critical",
-                    evidence={"reason": "threat_visible", "rate_context": {"available": False, "direction": "unknown"}},
+                    evidence={"reason": "threat_visible", "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None}},
+                ),
+                "local_view_resource": DimensionSnapshot(
+                    status="critical",
+                    evidence={"reason": "resource_visible", "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None}},
+                ),
+                "local_view_utility": DimensionSnapshot(
+                    status="degraded",
+                    evidence={"reason": "utility_visible", "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None}},
                 ),
             },
             overall_status="critical",
-            primary_gap={"type": "avatar_state", "reason": "health_critical"},
+            primary_gap={"type": "avatar_safety", "reason": "health_critical"},
             trend="worsening",
             updated_at=now,
         )
         table, summary = update_drive_state(previous, snapshot, [])
         by_type = {drive.drive_type: drive for drive in table.drives}
         self.assertGreater(by_type["safety"].level, 0.0)
+        self.assertGreater(by_type["acquisition"].level, 0.0)
+        self.assertGreater(by_type["capability"].level, 0.0)
         self.assertEqual(summary.top_drive, "safety")
 
 

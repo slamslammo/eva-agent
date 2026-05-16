@@ -77,7 +77,9 @@ Current dimension mapping is intentionally scenario-shaped rather than Linux-sha
 - `avatar_recovery -> recovery`
 - `inventory_acquisition -> acquisition`
 - `inventory_capability -> capability`
-- `local_view_state -> safety`
+- `local_view_threat -> safety`
+- `local_view_resource -> acquisition`
+- `local_view_utility -> capability`
 
 Current pressure-type mapping is aligned to the Crafter drive families rather than flattened into one generic bucket:
 - `avatar_metabolic -> metabolic`
@@ -85,11 +87,32 @@ Current pressure-type mapping is aligned to the Crafter drive families rather th
 - `avatar_recovery -> recovery`
 - `inventory_acquisition -> acquisition`
 - `inventory_capability -> capability`
-- `local_view_state -> safety`
+- `local_view_threat -> safety`
+- `local_view_resource -> acquisition`
+- `local_view_utility -> capability`
 
-`local_view_state -> safety` remains a bounded simplification for the current Stage-H validation shape. The same local-view payload can carry threat, resource, and utility cues, but the landed runtime currently routes that dimension through the safety side first rather than modeling it as a multi-drive projection surface.
+The landed local-view decomposition now projects one bounded observation surface into three scenario-owned dimensions:
+- `local_view_threat` emits threat-presence semantics for `safety`
+- `local_view_resource` emits visible-resource opportunity semantics for `acquisition`
+- `local_view_utility` emits visible-utility / tooling-gap semantics for `capability`
 
-The sensors read the bounded `agent_observation` surface and do not consume evaluator-only or hidden payloads directly.
+This keeps the decomposition at the scenario sensor seam without changing framework drive structure. The sensors still read only the bounded `agent_observation` surface and do not consume evaluator-only or hidden payloads directly.
+
+Stage I I-1 extends this sensing surface from status-only interpretation toward bounded trajectory awareness:
+- `avatar_safety`, `avatar_metabolic`, and `avatar_recovery` are the Crafter required-tier rate-sensing dimensions
+- those required-tier dimensions now emit real `rate_context` from previous snapshots when same-episode history exists
+- rate unavailability stays explicit through the canonical payload shape:
+  - `available=False`
+  - `direction="unknown"`
+  - `magnitude=None`
+  - `acceleration=None`
+- `inventory_capability` and `inventory_acquisition` are currently recommended-tier only
+- `local_view_threat`, `local_view_resource`, and `local_view_utility` are currently optional-tier only
+
+Within current I-1 scope, Crafter pressure projection is also rate-aware:
+- pressure urgency now reflects bounded rate direction / magnitude context
+- healthy but fast-degrading required-tier dimensions can emit bounded anticipatory pressure
+- anticipatory coverage is intentionally limited to the configured required-tier dimensions rather than every Crafter signal
 
 ### H-2 actions, anchors, and outcome observers
 
@@ -126,6 +149,8 @@ The landed outcome observer interprets Crafter actions into `OutcomeVector` fiel
 - `cost`
 - `uncertainty`
 
+Crafter confidence is now derived directly from `OutcomeVector.uncertainty` through a bounded linear mapping in `scenarios/crafter/outcome_observers/compatibility.py`, replacing the earlier placeholder-like fixed confidence values.
+
 ### H-3 persistence hierarchy and learning integration
 
 Current H-3 persistence owners:
@@ -146,6 +171,7 @@ Crafter learning integration now preserves multi-dimensional outcome fields thro
 
 Current H-4 prior-skill owners:
 - `scenarios/crafter/prior_skills/compatibility.py`
+- `scenarios/crafter/prior_skills/bundle.py`
 - `scenarios/crafter/prior_skills/__init__.py`
 
 The landed Crafter prior layer includes:
@@ -159,7 +185,57 @@ These priors project onto the already-landed candidate-profile vocabulary:
 - `stabilize_first`
 - `escalate_first`
 
+Stage I I-2 canonicalizes those startup priors into one scenario-owned bundle:
+- `build_crafter_startup_prior_registry()` is the canonical inspection surface for Crafter startup priors
+- each startup prior now carries explicit `SkillProvenance` with scenario scope, source paths, and applicability context
+- provenance now distinguishes safety escalation, metabolic stabilization, recovery rest, acquisition/capability resource-chain, and baseline action-surface priors
+- the runtime context registry remains behavior-preserving and is derived from the same canonical definitions
+
 Each prior carries Crafter scenario provenance through the framework skill types.
+
+### Stage I I-3 memory participation
+
+Current I-3 memory owners and seams:
+- framework layer interfaces in `eva/skills/__init__.py`
+- working-memory assembly in `eva/l3_deliberation/reasoning/working_memory.py`
+- semantic storage/query helpers in `eva/l3_deliberation/memory/semantic.py`
+- procedural-memory shaping seam in `eva/l3_deliberation/peer_circuit/habit_track.py`
+
+Crafter runtime participation after I-3 is now explicit:
+- working memory is surfaced as the framework `WorkingMemory` / `WorkingMemoryContext` payload assembled on each deliberation turn
+- episodic reuse still comes from bounded retrieval over `cognitive_memory_stub.jsonl`, `learning_outcomes.jsonl`, and response-history traces; Crafter does not get a separate scenario-only memory path
+- semantic memory now has a first-class append-only `semantic_memory.jsonl` backing track and bounded query surface
+- procedural memory is represented through the existing habit path backed by `habit_bias.jsonl`, with scenario-qualified provenance and no release-authority widening
+
+Crafter-specific alignment rules remain narrow:
+- semantic retrieval is scenario-qualified, so Crafter entries only match Crafter runtime turns
+- situation matching reuses the same `top_drive` / `life_state` / `pressure_reason` semantics already used by the prior/habit path
+- semantic memory can only add a tiny auditable candidate prior modifier during value judgment
+- procedural memory can narrow or reorder candidates only through the existing mediator-gated deliberation path
+- semantic-to-L2 drive-weight modification remains deferred in I-3
+
+### Stage I I-4 inherited-prior reuse
+
+Current I-4 owners and seams:
+- `scenarios/crafter/prior_skills/inherited.py`
+- `runners/run_crafter.py`
+- `eva/l3_deliberation/reasoning/working_memory.py`
+- `eva/l3_deliberation/peer_circuit/habit_track.py`
+- `eva/l3_deliberation/reasoning/value_judgment.py`
+- top-level `inheritance_distillation/`
+
+Crafter runtime participation after I-4 is now explicit:
+- `runners/run_crafter.py` can pass an optional `--inherited-priors-path` bundle into scenario activation
+- `activate_crafter_scenario()` loads only Crafter-qualified distilled bundles and rejects cross-scenario bundles
+- matching inherited priors appear in `working_memory_context["inherited_priors"]` for the exact current `situation_key`
+- candidate shaping reuses the normal habit-path seam and marks inherited hints through `habit_hint_source="inherited_prior"`
+- value judgment can add only a tiny auditable `inherited_prior_bias`
+
+Crafter-specific I-4 guardrails remain narrow:
+- inherited priors are same-scenario only
+- inherited priors can suggest only the existing candidate profiles and bounded Crafter action hints (`noop`, `sleep`, `do`)
+- inherited priors do not create new candidates, do not widen the release surface, and do not bypass anchors or mediator gating
+- distillation remains outside the scenario package and consumes append-only traces rather than runtime internals
 
 ### H-0F framework follow-up
 
@@ -221,6 +297,9 @@ Install-independent verification now includes:
 - `tests/scenarios/crafter/test_prior_skills.py`
 - `tests/scenarios/crafter/test_skill_provenance.py`
 - `tests/scenarios/crafter/test_prior_guided_candidates.py`
+- `tests/l3_deliberation/reasoning/test_working_memory.py`
+- `tests/l3_deliberation/reasoning/test_value.py`
+- `tests/l3_deliberation/memory/test_semantic.py`
 - `tests/integration/test_crafter_runtime.py`
 
 Optional live verification now includes:
@@ -228,7 +307,7 @@ Optional live verification now includes:
 - `python -m stability_metrics calculate <runtime_dir>`
 - `tests/stability_metrics/test_cli_smoke.py`
 
-If the local `crafter` package is unavailable, live-Crafter smoke remains skip-based rather than fabricating success.
+In the current local Python 3.11 environment, live Crafter loading is now validated: the local `crafter==1.8.3` / `gym==0.26.2` install can create `crafter.Env`, and the wrapper smoke plus Crafter stability-metrics CLI smoke execute without skip.
 
 ## Current limits
 

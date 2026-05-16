@@ -1,6 +1,8 @@
 from __future__ import annotations
+import json
 import tempfile
 import unittest
+from pathlib import Path
 from eva.kernel import StateStore, build_runtime_paths
 from eva.l3_deliberation import build_deliberation_input, build_learning_outcome_record, evaluate_response_outcome
 from eva.l3_deliberation.memory import derive_habit_skills, summarize_habit_bias
@@ -23,7 +25,6 @@ from eva.l3_deliberation.memory import (
     build_builtin_working_memory_model_client,
 )
 from scenarios.linux_runtime import activate_linux_runtime_scenario
-from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE
 
 
 class SkillLibraryTests(unittest.TestCase):
@@ -138,12 +139,67 @@ class SkillLibraryTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].provenance.source, "experience")
         self.assertTrue(records[0].provenance.mutable)
+        self.assertEqual(records[0].provenance.scope["scenario"], "linux_runtime")
         self.assertEqual(records[0].provenance.scope["situation_key"], "integrity|STABLE|recent_yield_detected")
+        self.assertEqual(records[0].provenance.provenance_detail, "linux_runtime_procedural_memory_derivation")
 
-    def test_inherited_prior_registry_remains_placeholder(self) -> None:
+    def test_inherited_prior_registry_returns_empty_registry_without_bundle(self) -> None:
         registry = inherited_prior_registry()
 
         self.assertEqual(registry.records(), [])
-        with self.assertRaisesRegex(NotImplementedError, "reserved for v0.7\+"):
-            registry.register({"candidate_profile": "observe_first"})
+
+    def test_inherited_prior_registry_loads_linux_runtime_bundle(self) -> None:
+        bundle = {
+            "scenario": "linux_runtime",
+            "distillation_date": "2026-05-15T00:00:00Z",
+            "records": [
+                {
+                    "confidence": 0.84,
+                    "content": {
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                        "candidate_profile": "observe_first",
+                        "preferred_action": "recheck_runtime_integrity",
+                        "avoid_action": "escalate_integrity_risk",
+                        "evidence_count": 5,
+                        "stability_score": 0.8,
+                        "bias_strength": 0.6,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "DistilledPriorBundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            activate_linux_runtime_scenario(inherited_priors_path=str(bundle_path))
+
+            registry = inherited_prior_registry()
+            records = registry.records()
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].candidate_profile, "observe_first")
+        self.assertEqual(records[0].preferred_action, "recheck_runtime_integrity")
+        self.assertEqual(records[0].provenance.scope["scenario"], "linux_runtime")
+
+    def test_inherited_prior_registry_rejects_cross_scenario_bundle(self) -> None:
+        bundle = {
+            "scenario": "crafter",
+            "records": [
+                {
+                    "confidence": 0.84,
+                    "content": {
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                        "candidate_profile": "observe_first",
+                        "preferred_action": "recheck_runtime_integrity",
+                        "evidence_count": 5,
+                        "stability_score": 0.8,
+                        "bias_strength": 0.6,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "DistilledPriorBundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "linux_runtime"):
+                activate_linux_runtime_scenario(inherited_priors_path=str(bundle_path))
 

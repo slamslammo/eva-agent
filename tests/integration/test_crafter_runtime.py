@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from eva.kernel import ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
@@ -100,7 +102,19 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
             store = StateStore(config.paths)
             snapshot = store.read_external_life_snapshot()
             assert snapshot is not None
-            self.assertIn(snapshot.primary_gap["type"], {"avatar_safety", "avatar_metabolic", "avatar_recovery", "inventory_capability", "inventory_acquisition", "local_view_state"})
+            self.assertIn(
+                snapshot.primary_gap["type"],
+                {
+                    "avatar_safety",
+                    "avatar_metabolic",
+                    "avatar_recovery",
+                    "inventory_capability",
+                    "inventory_acquisition",
+                    "local_view_threat",
+                    "local_view_resource",
+                    "local_view_utility",
+                },
+            )
             self.assertGreaterEqual(len(store.read_response_history()), 1)
             response = store.read_response_history()[-1]
             self.assertIn("life_delta", response)
@@ -138,6 +152,69 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(len(stub_session.step_actions), 1)
             self.assertGreaterEqual(len(response_history), 1)
             self.assertIn(response_history[-1]["pressure_type"], {"safety", "metabolic", "recovery", "acquisition", "capability"})
+
+    def test_crafter_runtime_surfaces_loaded_inherited_priors_in_working_memory(self) -> None:
+        bundle = {
+            "scenario": "crafter",
+            "distillation_date": "2026-05-15T00:00:00Z",
+            "records": [
+                {
+                    "confidence": 0.84,
+                    "content": {
+                        "situation_key": "acquisition|RECOVERING|health_critical",
+                        "candidate_profile": "stabilize_first",
+                        "preferred_action": "sleep",
+                        "evidence_count": 5,
+                        "stability_score": 0.8,
+                        "bias_strength": 0.6,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "DistilledPriorBundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+                inherited_priors_path=str(bundle_path),
+            )
+            stub_session = StubCrafterSession()
+            with patch.object(CrafterRuntimeSession, "start", return_value=stub_session):
+                run_crafter_runtime(config)
+            store = StateStore(config.paths)
+            audits = store.read_deliberation_audit()
+            self.assertGreaterEqual(len(audits), 1)
+            matching_audit = next(
+                audit
+                for audit in audits
+                if audit["deliberation_input"]["working_memory_context"].get("situation_key") == "acquisition|RECOVERING|health_critical"
+            )
+            working_memory_context = matching_audit["deliberation_input"]["working_memory_context"]
+            self.assertEqual(working_memory_context["source_backend"], "local_rule_based")
+            self.assertEqual(len(working_memory_context["inherited_priors"]), 1)
+            self.assertEqual(working_memory_context["inherited_priors"][0]["candidate_profile"], "stabilize_first")
+            self.assertEqual(working_memory_context["inherited_priors"][0]["preferred_action"], "sleep")
+            self.assertEqual(working_memory_context["inherited_priors"][0]["provenance"]["scope"]["scenario"], "crafter")
+            self.assertEqual(working_memory_context["situation_key"], "acquisition|RECOVERING|health_critical")
+            self.assertEqual(matching_audit["candidates"][0]["parameter_domain"]["candidate_profile"], "stabilize_first")
+            self.assertEqual(matching_audit["candidates"][0]["parameter_domain"]["habit_hint_source"], "inherited_prior")
+            self.assertIn("inherited_prior_hint", matching_audit["candidates"][0]["justification"])
+            self.assertIn("inherited_prior_bias", matching_audit["assessments"][0]["bias_reasons"])
+            self.assertTrue(config.paths.learning_outcomes_file.exists())
+
 
 
 if __name__ == "__main__":

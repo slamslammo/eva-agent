@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from eva.scenario_bundle import (
     ActionPolicyBundle,
     AnchorPolicyBundle,
@@ -42,6 +44,9 @@ from .dimensions import LINUX_RUNTIME_DIMENSION_SPECS
 from .drive_preset import DEFAULT_DRIVE_UPDATE_POLICY, DRIVE_TYPES, DRIVE_TYPE_BY_DIMENSION, LINUX_RUNTIME_DRIVE_PRESET
 from .outcome_observers import build_learning_outcome_content, evaluate_response_outcome, expected_outcome_for_release
 from .prior_skills import (
+    build_linux_runtime_inherited_prior_registry,
+    build_linux_runtime_prior_skill_registry,
+    build_linux_runtime_startup_prior_registry,
     build_situation_key_from_values,
     derive_habit_skills,
     habit_skill_match_for_candidate_profile,
@@ -56,6 +61,7 @@ LINUX_RUNTIME_SCENARIO_BUNDLE = RuntimeScenarioBundle(
     sensors=SensorPolicyBundle(
         sensor_providers=linux_runtime_sensor_providers,
         dimension_specs=LINUX_RUNTIME_DIMENSION_SPECS,
+        pressure_types=tuple(dict.fromkeys(spec.pressure_type for spec in LINUX_RUNTIME_DIMENSION_SPECS)),
     ),
     actions=ActionPolicyBundle(
         recheck_action=RECHECK_ACTION,
@@ -92,14 +98,24 @@ LINUX_RUNTIME_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         derive_habit_skills=derive_habit_skills,
         situation_key_from_learning_outcome=situation_key_from_learning_outcome,
         summarize_habit_bias=summarize_habit_bias,
+        build_prior_skill_registry=build_linux_runtime_prior_skill_registry,
+        build_startup_prior_registry=build_linux_runtime_startup_prior_registry,
+        build_inherited_prior_registry=build_linux_runtime_inherited_prior_registry,
     ),
 )
 
 
-def activate_linux_runtime_scenario() -> RuntimeScenarioBundle:
+def activate_linux_runtime_scenario(*, inherited_priors_path: str | None = None) -> RuntimeScenarioBundle:
     """Activate the Linux runtime bundle for framework compatibility lookups."""
 
-    bundle = activate_runtime_scenario(LINUX_RUNTIME_SCENARIO_BUNDLE)
+    prior_skills = LINUX_RUNTIME_SCENARIO_BUNDLE.prior_skills
+    if inherited_priors_path is not None:
+        inherited_registry = build_linux_runtime_inherited_prior_registry(inherited_priors_path)
+        prior_skills = replace(
+            prior_skills,
+            build_inherited_prior_registry=lambda path, registry=inherited_registry: registry,
+        )
+    bundle = activate_runtime_scenario(replace(LINUX_RUNTIME_SCENARIO_BUNDLE, prior_skills=prior_skills))
     register_default_drive_preset(LINUX_RUNTIME_DRIVE_PRESET)
     register_default_persistence_hierarchy(build_linux_runtime_persistence_hierarchy())
     return bundle

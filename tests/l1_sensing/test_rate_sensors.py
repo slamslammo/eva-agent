@@ -92,13 +92,13 @@ class RateSensorsTests(unittest.TestCase):
         resource = resource_state_rate_context(facts=facts, previous_snapshot=previous)
         anomaly = anomaly_accumulation_rate_context(facts=facts, previous_snapshot=previous, window_sec=60.0)
 
-        self.assertEqual(host["direction"], "worsening")
-        self.assertEqual(host["schedule_drift_direction"], "worsening")
-        self.assertEqual(runtime["direction"], "worsening")
-        self.assertEqual(runtime["heartbeat_age_direction"], "worsening")
+        self.assertEqual(host["direction"], "degrading")
+        self.assertEqual(host["schedule_drift_direction"], "degrading")
+        self.assertEqual(runtime["direction"], "degrading")
+        self.assertEqual(runtime["heartbeat_age_direction"], "degrading")
         self.assertEqual(resource["direction"], "improving")
         self.assertIn("disk_free_bytes_delta", resource)
-        self.assertEqual(anomaly["direction"], "worsening")
+        self.assertEqual(anomaly["direction"], "degrading")
         self.assertIn("anomaly_count_delta", anomaly)
 
 

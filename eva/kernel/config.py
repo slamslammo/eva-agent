@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 
+DEFAULT_INHERITED_PRIORS_FILE = "DistilledPriorBundle.json"
+
+
 @dataclass(frozen=True)
 class EvaPaths:
     """Resolved paths for runtime state, logs, and control files."""
@@ -25,6 +28,7 @@ class EvaPaths:
     cognitive_memory_stub_file: Path
     learning_outcomes_file: Path
     habit_bias_file: Path
+    semantic_memory_file: Path
     events_file: Path
     lock_file: Path
     distress_injection_file: Path
@@ -90,6 +94,7 @@ class RuntimeConfig:
     working_memory_adapter_mode: str = "inert"
     working_memory_model_client_mode: str = "anthropic"
     working_memory_model_client_config: Any | None = None
+    inherited_priors_path: str | None = None
 
 
 def build_runtime_paths(
@@ -115,6 +120,7 @@ def build_runtime_paths(
         cognitive_memory_stub_file=runtime_dir / "cognitive_memory_stub.jsonl",
         learning_outcomes_file=runtime_dir / "learning_outcomes.jsonl",
         habit_bias_file=runtime_dir / "habit_bias.jsonl",
+        semantic_memory_file=runtime_dir / "semantic_memory.jsonl",
         events_file=runtime_dir / "events.jsonl",
         lock_file=runtime_dir / "eva.lock",
         distress_injection_file=runtime_dir / "distress_injection.json",
@@ -133,6 +139,7 @@ def build_runtime_config(
     working_memory_adapter_mode: str = "inert",
     working_memory_model_client_mode: str = "anthropic",
     working_memory_model_client_config: Any | None = None,
+    inherited_priors_path: str | None = None,
 ) -> RuntimeConfig:
     """Build a runtime config and fill in omitted sections with defaults."""
 
@@ -154,4 +161,5 @@ def build_runtime_config(
         working_memory_adapter_mode=working_memory_adapter_mode,
         working_memory_model_client_mode=working_memory_model_client_mode,
         working_memory_model_client_config=working_memory_model_client_config,
+        inherited_priors_path=inherited_priors_path,
     )

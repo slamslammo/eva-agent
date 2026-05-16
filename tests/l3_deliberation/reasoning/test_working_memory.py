@@ -1,6 +1,8 @@
 from __future__ import annotations
+import json
 import tempfile
 import unittest
+from pathlib import Path
 from eva.kernel import StateStore, build_runtime_paths
 from eva.l3_deliberation import build_deliberation_input
 from eva.l3_deliberation import build_learning_outcome_record, evaluate_response_outcome
@@ -95,7 +97,9 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
         self.assertEqual(context.situation_key, "curiosity|STABLE|none")
         self.assertEqual(context.bias_summaries, [])
         self.assertEqual(context.habit_skills, [])
+        self.assertEqual(context.inherited_priors, [])
         self.assertEqual(context.recent_relevant_outcomes, [])
+        self.assertEqual(context.semantic_patterns, [])
         self.assertEqual(context.confidence, 0.0)
         self.assertEqual(context.advisory_context, {})
 
@@ -413,7 +417,61 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             self.assertEqual(context.recent_relevant_outcomes[0]["memory_type"], "threat_trace")
             self.assertEqual(context.recent_relevant_outcomes[0]["habitual_trace"], "habitual_suppression")
 
-    def test_build_working_memory_context_from_store_can_attach_llm_advisory_context(self) -> None:
+    def test_build_working_memory_context_surfaces_matching_semantic_patterns(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}],
+                "summary": {
+                    "signal_count": 1,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 0,
+                    "background_signal_count": 0,
+                    "has_threat_signal": False,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "stable"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+        )
+
+        context = build_working_memory_context(
+            deliberation_input,
+            learning_outcomes=[],
+            habit_bias_entries=[],
+            response_history=[],
+            memory_stubs=[],
+            semantic_entries=[
+                {
+                    "recorded_at": "2026-05-01T00:00:00Z",
+                    "pattern_summary": "stabilize_first usually relieves integrity pressure",
+                    "confidence": 0.8,
+                    "scope": {
+                        "scenario": "linux_runtime",
+                        "situation_key": "integrity|STABLE|none",
+                        "top_drive": "integrity",
+                        "life_state": "STABLE",
+                        "pressure_reason": "none",
+                    },
+                    "preferred_candidate_profiles": ["stabilize_first"],
+                    "provenance": {"source": "experience"},
+                }
+            ],
+        )
+
+        self.assertEqual(len(context.semantic_patterns), 1)
+        self.assertEqual(context.semantic_patterns[0]["preferred_candidate_profiles"], ["stabilize_first"])
+        self.assertEqual(context.semantic_patterns[0]["pattern_summary"], "stabilize_first usually relieves integrity pressure")
+        self.assertGreaterEqual(context.confidence, 0.8)
+
         deliberation_input = build_deliberation_input(
             signal_batch={
                 "signals": [{"class": "status"}, {"class": "threat"}],
@@ -481,7 +539,9 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
         self.assertEqual(adapter.request.to_dict()["local_confidence"], 0.0)
         self.assertIn("bias_summaries", adapter.request.to_dict())
         self.assertIn("habit_skills", adapter.request.to_dict())
+        self.assertIn("inherited_priors", adapter.request.to_dict())
         self.assertIn("recent_relevant_outcomes", adapter.request.to_dict())
+        self.assertIn("semantic_patterns", adapter.request.to_dict())
 
     def test_auto_backend_prefers_local_when_crystallized_habit_is_confident(self) -> None:
         deliberation_input = build_deliberation_input(
@@ -1307,6 +1367,138 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
         self.assertTrue(skills[0].crystallized)
         self.assertEqual(skills[0].candidate_profile, "observe_first")
         self.assertEqual(skills[0].preferred_action, "recheck_runtime_integrity")
+
+    def test_build_working_memory_context_surfaces_matching_inherited_priors(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "type": "integrity",
+                        "evidence": {"reason": "recent_yield_detected"},
+                    }
+                ]
+            },
+        )
+        bundle = {
+            "scenario": "linux_runtime",
+            "distillation_date": "2026-05-15T00:00:00Z",
+            "records": [
+                {
+                    "confidence": 0.84,
+                    "content": {
+                        "situation_key": "integrity|STABLE|recent_yield_detected",
+                        "candidate_profile": "observe_first",
+                        "preferred_action": "recheck_runtime_integrity",
+                        "avoid_action": "escalate_integrity_risk",
+                        "evidence_count": 5,
+                        "stability_score": 0.8,
+                        "bias_strength": 0.6,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "DistilledPriorBundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            activate_linux_runtime_scenario(inherited_priors_path=str(bundle_path))
+            context = build_working_memory_context(
+                deliberation_input,
+                learning_outcomes=[],
+                habit_bias_entries=[],
+                response_history=[],
+                memory_stubs=[],
+            )
+
+        self.assertEqual(len(context.inherited_priors), 1)
+        self.assertEqual(context.inherited_priors[0]["candidate_profile"], "observe_first")
+        self.assertEqual(context.inherited_priors[0]["preferred_action"], "recheck_runtime_integrity")
+        self.assertEqual(context.inherited_priors[0]["provenance"]["scope"]["scenario"], "linux_runtime")
+
+    def test_build_working_memory_context_matches_inherited_priors_by_exact_situation_key(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+            },
+            pressure_table={
+                "pressures": [
+                    {
+                        "type": "integrity",
+                        "evidence": {"reason": "recent_yield_detected"},
+                    }
+                ]
+            },
+        )
+        bundle = {
+            "scenario": "linux_runtime",
+            "distillation_date": "2026-05-15T00:00:00Z",
+            "records": [
+                {
+                    "confidence": 0.84,
+                    "content": {
+                        "situation_key": "integrity|STABLE|other_reason",
+                        "candidate_profile": "observe_first",
+                        "preferred_action": "recheck_runtime_integrity",
+                        "evidence_count": 5,
+                        "stability_score": 0.8,
+                        "bias_strength": 0.6,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "DistilledPriorBundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            activate_linux_runtime_scenario(inherited_priors_path=str(bundle_path))
+            context = build_working_memory_context(
+                deliberation_input,
+                learning_outcomes=[],
+                habit_bias_entries=[],
+                response_history=[],
+                memory_stubs=[],
+            )
+
+        self.assertEqual(context.inherited_priors, [])
     def test_build_working_memory_context_ranks_similar_drive_learning_outcomes(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={

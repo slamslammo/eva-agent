@@ -247,9 +247,9 @@ class SensingTests(unittest.TestCase):
             )
 
             self.assertTrue(inputs["host_continuity"]["rate_context"]["available"])
-            self.assertEqual(inputs["host_continuity"]["rate_context"]["schedule_drift_direction"], "worsening")
-            self.assertEqual(inputs["runtime_integrity"]["rate_context"]["heartbeat_age_direction"], "worsening")
-            self.assertEqual(inputs["runtime_integrity"]["rate_context"]["consecutive_failures_direction"], "worsening")
+            self.assertEqual(inputs["host_continuity"]["rate_context"]["schedule_drift_direction"], "degrading")
+            self.assertEqual(inputs["runtime_integrity"]["rate_context"]["heartbeat_age_direction"], "degrading")
+            self.assertEqual(inputs["runtime_integrity"]["rate_context"]["consecutive_failures_direction"], "degrading")
             self.assertEqual(inputs["anomaly_accumulation"]["rate_context"]["direction"], "stable")
             self.assertEqual(elapsed_since_previous(previous_snapshot, now), 10.0)
 

@@ -9,4 +9,4 @@ description = "Existence-centered agent runtime experiment aligned with EVA theo
 requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
-include = ["eva*"]
+include = ["eva*", "stability_metrics*", "inheritance_distillation*"]

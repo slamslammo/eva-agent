@@ -7,6 +7,7 @@ from typing import Any
 
 from ..kernel import DimensionSnapshot, ExternalLifeConfig, ExternalLifeSnapshot
 from .dimension_specs import get_default_dimension_priority_by_name, get_default_dimension_specs
+from .rate_sensors import normalize_rate_direction
 
 SEVERITY_ORDER = {"healthy": 0, "degraded": 1, "critical": 2}
 
@@ -25,10 +26,7 @@ def _rate_direction(snapshot: DimensionSnapshot | None) -> str:
     rate_context = snapshot.evidence.get("rate_context")
     if not isinstance(rate_context, dict):
         return "unknown"
-    direction = rate_context.get("direction")
-    if isinstance(direction, str):
-        return direction
-    return "unknown"
+    return normalize_rate_direction(rate_context.get("direction"))
 
 
 def evaluate_dimensions(inputs: dict[str, dict[str, object]], config: ExternalLifeConfig) -> dict[str, DimensionSnapshot]:
@@ -85,8 +83,10 @@ def _dimension_trend(
         if current_rank < previous_rank:
             return "improving"
         direction = _rate_direction(current)
-        if direction in {"worsening", "improving"}:
-            return direction
+        if direction == "degrading":
+            return "worsening"
+        if direction == "improving":
+            return "improving"
     return "stable"
 
 

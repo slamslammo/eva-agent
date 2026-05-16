@@ -16,6 +16,12 @@ OUTCOME_DELTA_WEIGHTS = {
 }
 
 
+def _confidence_from_uncertainty(uncertainty: float) -> float:
+    """Map observed uncertainty onto a bounded compatibility confidence."""
+
+    return round(max(0.0, min(1.0, 1.0 - (uncertainty * 0.5))), 2)
+
+
 def expected_outcome_for_release(outcome: str, candidate_profile: str | None) -> str:
     if outcome == "compatibility_release":
         if candidate_profile == "observe_first":
@@ -49,6 +55,7 @@ def evaluate_response_outcome(
     risk_delta = 0.5 if threat_count > 0 and selected_action == "do" else -0.2 if selected_action == "sleep" else 0.0
     reversibility = 1.0 if selected_action.startswith("move_") or selected_action == "noop" else 0.5 if selected_action in {"do", "sleep"} else 0.1
     uncertainty = 0.8 if followup_needed else 0.4
+    confidence = _confidence_from_uncertainty(uncertainty)
     outcome_delta = round(
         (OUTCOME_DELTA_WEIGHTS["viability"] * viability_score)
         + (OUTCOME_DELTA_WEIGHTS["resource"] * resource_score)
@@ -59,15 +66,12 @@ def evaluate_response_outcome(
     if outcome_delta > 0.0:
         label = "positive"
         observed = "improved"
-        confidence = 0.75
     elif outcome_delta < 0.0:
         label = "negative"
         observed = "degraded"
-        confidence = 0.75
     else:
         label = "uncertain"
         observed = "unchanged"
-        confidence = 0.4
     return (
         observed,
         outcome_delta,
@@ -100,6 +104,7 @@ def build_learning_outcome_content(
     situation_key: str,
 ) -> dict[str, Any]:
     return {
+        "scenario": "crafter",
         "execution_status": execution_status,
         "pressure_outcome": pressure_outcome,
         "followup_needed": followup_needed,

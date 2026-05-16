@@ -132,23 +132,44 @@ Current expected-outcome labels include:
 - `wait_for_safer_boundary`
 - `no_external_change`
 
-## 6. Prior skills and habit shaping
+## 6. Prior skills, memory, and habit shaping
 
-The Linux runtime scenario currently provides read-side prior-skill and habit policy in `scenarios/linux_runtime/prior_skills/compatibility.py`.
+The Linux runtime scenario currently provides read-side prior-skill and memory-shaping policy in `scenarios/linux_runtime/prior_skills/compatibility.py`.
 
 It owns:
 - situation-key construction from `top_drive`, `life_state`, and `pressure_reason`
 - habit-bias summarization from accumulated learning outcomes
 - habit-skill derivation under bounded evidence / stability / confidence thresholds
 - candidate-profile matching for the current scenario vocabulary
-- provenance metadata for scenario-owned prior skill records and experience-derived habit records
+- provenance metadata for scenario-owned prior skill records and experience-derived procedural-memory records
 
 Current matching profiles are:
 - `observe_first`
 - `stabilize_first`
 - `escalate_first`
 
-The current scenario is still bounded to one runtime. It does not implement inherited priors beyond the framework placeholder registry, and it does not claim ownership of any release authority.
+Stage I I-3 keeps Linux behavior narrow while making the four memory layers explicit:
+- working memory is the in-cycle `WorkingMemory` / `WorkingMemoryContext` surface assembled inside framework deliberation
+- episodic reuse continues through the existing append-only `cognitive_memory_stub.jsonl`, `learning_outcomes.jsonl`, and response-history retrieval path
+- semantic memory now has a first-class append-only `semantic_memory.jsonl` track plus exact query helpers, but remains bounded and advisory
+- procedural memory is represented through the existing `habit_bias.jsonl` track and `shape_candidates_with_habit_track()` candidate-shaping seam
+
+Linux runtime alignment after I-3 is intentionally conservative:
+- semantic retrieval is scenario-qualified, so Linux and Crafter semantic entries do not leak across scenarios
+- semantic memory can add only a tiny auditable candidate prior modifier during value judgment
+- procedural shaping can narrow or reorder candidates, but release still remains fully mediator-gated
+- inherited priors are now supported only as a conservative scenario-owned loader path and remain advisory
+
+The current scenario is still bounded to one runtime. It now exposes a same-scenario inherited-prior loading seam, but does not claim ownership of any release authority.
+
+### Stage I I-4 inherited-prior reuse
+
+Linux runtime alignment after I-4 remains intentionally conservative:
+- `scenarios/linux_runtime/prior_skills/inherited.py` can load only `linux_runtime` bundles and rejects Crafter bundles
+- no-bundle behavior remains the baseline path
+- inherited priors can surface in working memory and add bounded shaping/bias context, but only through the existing framework deliberation path
+- inherited priors stay limited to the existing Linux candidate profiles and bounded Linux action hints
+- Linux still does not gain any scenario-specific release authority or separate decision path
 
 ## 7. Persistence / stability alignment
 

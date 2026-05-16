@@ -9,6 +9,7 @@ from ...scenario_bundle import get_active_runtime_scenario
 from ...skills import (
     HabitSkillRecord,
     HabitSkillRegistry,
+    InheritedPriorRecord,
     InheritedPriorRegistry,
     PriorSkillRecord,
     PriorSkillRegistry,
@@ -193,6 +194,7 @@ def habit_skill_registry(
         habit_bias_entries=habit_bias_entries,
         learning_outcomes=learning_outcomes,
     )
+    scenario_name = get_active_runtime_scenario().name
     records = [
         HabitSkillRecord(
             recorded_at=str(skill.get("recorded_at") or ""),
@@ -206,9 +208,9 @@ def habit_skill_registry(
             crystallization_reasons=tuple(str(reason) for reason in skill.get("crystallization_reasons", [])),
             provenance=SkillProvenance(
                 source="experience",
-                provenance_detail="linux_runtime_habit_bias_derivation",
+                provenance_detail=f"{scenario_name}_procedural_memory_derivation",
                 confidence=float(skill.get("confidence", 0.0)),
-                scope={"situation_key": situation_key},
+                scope={"scenario": scenario_name, "situation_key": situation_key},
                 mutable=True,
             ),
         )
@@ -217,54 +219,29 @@ def habit_skill_registry(
     return HabitSkillRegistry(records)
 
 
-def _prior_skill_profiles() -> tuple[str, ...]:
-    return tuple(sorted({
-        profile
-        for profile in (
-            "observe_first",
-            "stabilize_first",
-            "escalate_first",
-        )
-        if get_active_runtime_scenario().prior_skills.habit_skill_match_for_candidate_profile(profile)
-    }))
-
-
-def _preferred_action_for_candidate_profile(candidate_profile: str) -> str | None:
-    if candidate_profile == "observe_first":
-        return "recheck_runtime_integrity"
-    if candidate_profile == "stabilize_first":
-        return "shrink_to_conservative_mode"
-    if candidate_profile == "escalate_first":
-        return "escalate_integrity_risk"
-    return None
+def _parse_situation_key(situation_key: str) -> tuple[str, str, str]:
+    parts = str(situation_key or "").split("|", 2)
+    if len(parts) == 3:
+        return parts[0] or "unknown", parts[1] or "unknown", parts[2] or "none"
+    return str(situation_key or "unknown"), "unknown", "none"
 
 
 def prior_skill_registry(*, situation_key: str) -> PriorSkillRegistry:
     """Return the current scenario prior-skill registry for one situation."""
 
-    records = [
-        PriorSkillRecord(
-            recorded_at="scenario_definition",
-            situation_key=situation_key,
-            candidate_profile=candidate_profile,
-            preferred_action=_preferred_action_for_candidate_profile(candidate_profile),
-            provenance=SkillProvenance(
-                source="scenario",
-                provenance_detail="linux_runtime_candidate_profile_policy",
-                confidence=1.0,
-                scope={"situation_key": situation_key},
-                mutable=False,
-            ),
-        )
-        for candidate_profile in _prior_skill_profiles()
-    ]
-    return PriorSkillRegistry(records)
+    top_drive, life_state, pressure_reason = _parse_situation_key(situation_key)
+    return get_active_runtime_scenario().prior_skills.build_prior_skill_registry(
+        top_drive=top_drive,
+        life_state=life_state,
+        pressure_reason=pressure_reason,
+        situation_key=situation_key,
+    )
 
 
-def inherited_prior_registry() -> InheritedPriorRegistry:
-    """Return the placeholder inherited-prior registry reserved for v0.7+."""
+def inherited_prior_registry(*, path: str | None = None) -> InheritedPriorRegistry:
+    """Return the current scenario inherited-prior registry for optional cross-life reuse."""
 
-    return InheritedPriorRegistry()
+    return get_active_runtime_scenario().prior_skills.build_inherited_prior_registry(path)
 
 
 __all__ = [

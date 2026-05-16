@@ -6,19 +6,22 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...kernel import StateStore, to_iso8601, utc_now
+from ...scenario_bundle import get_active_runtime_scenario
 from ..contracts import DeliberationInput
 from ..memory.episodic import read_cognitive_memory_stub, read_habit_bias, read_learning_outcomes
+from ..memory.semantic import read_semantic_memory
 from ..memory.retrieval import (
     latest_habit_bias_summaries,
     pressure_reason_from_input,
     recent_cognitive_memory_stub_traces,
     recent_learning_outcomes,
     recent_response_history,
+    recent_semantic_memory,
 )
 from ..memory.skill_library import (
-    HabitBiasSummary,
     build_situation_key_from_values,
     derive_habit_skills,
+    inherited_prior_registry,
     summarize_habit_bias,
 )
 from ..memory.working_memory_adapter import (
@@ -42,7 +45,9 @@ class WorkingMemoryContext:
     situation_key: str
     bias_summaries: list[dict[str, Any]] = field(default_factory=list)
     habit_skills: list[dict[str, Any]] = field(default_factory=list)
+    inherited_priors: list[dict[str, Any]] = field(default_factory=list)
     recent_relevant_outcomes: list[dict[str, Any]] = field(default_factory=list)
+    semantic_patterns: list[dict[str, Any]] = field(default_factory=list)
     confidence: float = 0.0
     source_backend: str = "local_rule_based"
     advisory_source: str = "local_rule_based"
@@ -56,13 +61,18 @@ class WorkingMemoryContext:
             "situation_key": self.situation_key,
             "bias_summaries": [dict(summary) for summary in self.bias_summaries],
             "habit_skills": [dict(skill) for skill in self.habit_skills],
+            "inherited_priors": [dict(prior) for prior in self.inherited_priors],
             "recent_relevant_outcomes": [dict(outcome) for outcome in self.recent_relevant_outcomes],
+            "semantic_patterns": [dict(pattern) for pattern in self.semantic_patterns],
             "confidence": self.confidence,
             "source_backend": self.source_backend,
             "advisory_source": self.advisory_source,
             "advisory_context": dict(self.advisory_context),
             "advisory_fallback": self.advisory_fallback,
         }
+
+
+WorkingMemory = WorkingMemoryContext
 
 
 def build_situation_key(deliberation_input: DeliberationInput) -> str:
@@ -82,13 +92,16 @@ def build_working_memory_context(
     habit_bias_entries: list[dict[str, Any]] | None = None,
     response_history: list[dict[str, Any]] | None = None,
     memory_stubs: list[dict[str, Any]] | None = None,
+    semantic_entries: list[dict[str, Any]] | None = None,
     max_bias_summaries: int = 2,
     max_habit_skills: int = 2,
     max_recent_outcomes: int = 3,
+    max_semantic_patterns: int = 2,
 ) -> WorkingMemoryContext:
     """Build a compact working-memory context from local append-only artifacts."""
 
     situation_key = build_situation_key(deliberation_input)
+    scenario_name = get_active_runtime_scenario().name
     matching_habit_bias = [
         dict(entry)
         for entry in (habit_bias_entries or [])
@@ -110,6 +123,10 @@ def build_working_memory_context(
         learning_outcomes=learning_outcomes,
     )
     habit_skills = [skill.to_dict() for skill in habit_skill_objects[:max_habit_skills]]
+    inherited_priors = [
+        record.to_dict()
+        for record in inherited_prior_registry().for_situation(situation_key)
+    ]
     skill_by_profile = {skill.candidate_profile: skill for skill in habit_skill_objects}
     for summary in bias_summaries:
         candidate_profile = str(summary.get("candidate_profile") or "unknown")
@@ -153,13 +170,26 @@ def build_working_memory_context(
             drive_levels=normalized_drive_levels,
             limit=max_recent_outcomes,
         )
+    semantic_patterns = recent_semantic_memory(
+        semantic_entries or [],
+        scenario=scenario_name,
+        situation_key=situation_key,
+        top_drive=top_drive,
+        life_state=life_state,
+        pressure_reason=pressure_reason,
+        limit=max_semantic_patterns,
+    )
     top_bias_confidence = max((float(summary.get("confidence", 0.0)) for summary in bias_summaries), default=0.0)
-    confidence = min(1.0, max(top_bias_confidence, 0.2 * len(recent_outcomes)))
+    top_semantic_confidence = max((float(pattern.get("confidence", 0.0)) for pattern in semantic_patterns), default=0.0)
+    top_inherited_confidence = max((float(prior.get("confidence", 0.0)) for prior in inherited_priors), default=0.0)
+    confidence = min(1.0, max(top_bias_confidence, top_semantic_confidence, top_inherited_confidence, 0.2 * len(recent_outcomes)))
     return WorkingMemoryContext(
         situation_key=situation_key,
         bias_summaries=bias_summaries,
         habit_skills=habit_skills,
+        inherited_priors=inherited_priors,
         recent_relevant_outcomes=recent_outcomes,
+        semantic_patterns=semantic_patterns,
         confidence=round(confidence, 3),
         source_backend="local_rule_based",
         advisory_source="local_rule_based",
@@ -175,11 +205,13 @@ def build_llm_working_memory_context(
     habit_bias_entries: list[dict[str, Any]] | None = None,
     response_history: list[dict[str, Any]] | None = None,
     memory_stubs: list[dict[str, Any]] | None = None,
+    semantic_entries: list[dict[str, Any]] | None = None,
     llm_adapter: WorkingMemoryAdapter,
     advisory_source: str = "llm_assisted",
     max_bias_summaries: int = 2,
     max_habit_skills: int = 2,
     max_recent_outcomes: int = 3,
+    max_semantic_patterns: int = 2,
 ) -> WorkingMemoryContext:
     """Build working memory through the local path, then attach bounded llm advisory context."""
 
@@ -189,9 +221,11 @@ def build_llm_working_memory_context(
         habit_bias_entries=habit_bias_entries,
         response_history=response_history,
         memory_stubs=memory_stubs,
+        semantic_entries=semantic_entries,
         max_bias_summaries=max_bias_summaries,
         max_habit_skills=max_habit_skills,
         max_recent_outcomes=max_recent_outcomes,
+        max_semantic_patterns=max_semantic_patterns,
     )
     advisory_context = _sanitize_llm_advisory_context(
         llm_adapter.build_advisory_context(
@@ -201,7 +235,9 @@ def build_llm_working_memory_context(
                 runtime_gate_context=dict(deliberation_input.runtime_gate_context),
                 bias_summaries=[dict(summary) for summary in local_context.bias_summaries],
                 habit_skills=[dict(skill) for skill in local_context.habit_skills],
+                inherited_priors=[dict(prior) for prior in local_context.inherited_priors],
                 recent_relevant_outcomes=[dict(outcome) for outcome in local_context.recent_relevant_outcomes],
+                semantic_patterns=[dict(pattern) for pattern in local_context.semantic_patterns],
                 local_confidence=local_context.confidence,
             )
         )
@@ -211,7 +247,9 @@ def build_llm_working_memory_context(
         situation_key=local_context.situation_key,
         bias_summaries=[dict(summary) for summary in local_context.bias_summaries],
         habit_skills=[dict(skill) for skill in local_context.habit_skills],
+        inherited_priors=[dict(prior) for prior in local_context.inherited_priors],
         recent_relevant_outcomes=[dict(outcome) for outcome in local_context.recent_relevant_outcomes],
+        semantic_patterns=[dict(pattern) for pattern in local_context.semantic_patterns],
         confidence=round(max(local_context.confidence, llm_confidence), 3),
         source_backend="llm_assisted",
         advisory_source=advisory_source,
@@ -234,7 +272,9 @@ def build_llm_fallback_working_memory_context(
         situation_key=local_context.situation_key,
         bias_summaries=[dict(summary) for summary in local_context.bias_summaries],
         habit_skills=[dict(skill) for skill in local_context.habit_skills],
+        inherited_priors=[dict(prior) for prior in local_context.inherited_priors],
         recent_relevant_outcomes=[dict(outcome) for outcome in local_context.recent_relevant_outcomes],
+        semantic_patterns=[dict(pattern) for pattern in local_context.semantic_patterns],
         confidence=local_context.confidence,
         source_backend="local_rule_based",
         advisory_source=fallback_source,
@@ -253,26 +293,31 @@ def build_working_memory_context_from_store(
     max_bias_summaries: int = 2,
     max_habit_skills: int = 2,
     max_recent_outcomes: int = 3,
+    max_semantic_patterns: int = 2,
     response_history: list[dict[str, Any]] | None = None,
 ) -> WorkingMemoryContext:
     """Build working-memory context directly from the runtime store."""
 
     learning_outcomes = read_learning_outcomes(store)
     habit_bias_entries = read_habit_bias(store)
+    semantic_entries = read_semantic_memory(store)
     if response_history is None:
         response_history = store.read_response_history()
     memory_stubs = read_cognitive_memory_stub(store)
+    local_context: WorkingMemoryContext | None = None
     if backend == AUTO_WORKING_MEMORY_BACKEND:
-        backend = _select_working_memory_backend(
+        backend, local_context = _select_working_memory_backend(
             deliberation_input,
             learning_outcomes=learning_outcomes,
             habit_bias_entries=habit_bias_entries,
             response_history=response_history,
             memory_stubs=memory_stubs,
+            semantic_entries=semantic_entries,
             llm_adapter=llm_adapter,
             max_bias_summaries=max_bias_summaries,
             max_habit_skills=max_habit_skills,
             max_recent_outcomes=max_recent_outcomes,
+            max_semantic_patterns=max_semantic_patterns,
         )
         if backend == "local_rule_based":
             advisory_source = "auto_preferred_local" if llm_adapter is not None else "auto_no_adapter"
@@ -283,16 +328,19 @@ def build_working_memory_context_from_store(
     else:
         advisory_source = advisory_source or "local_rule_based"
 
-    local_context = build_working_memory_context(
-        deliberation_input,
-        learning_outcomes=learning_outcomes,
-        habit_bias_entries=habit_bias_entries,
-        response_history=response_history,
-        memory_stubs=memory_stubs,
-        max_bias_summaries=max_bias_summaries,
-        max_habit_skills=max_habit_skills,
-        max_recent_outcomes=max_recent_outcomes,
-    )
+    if local_context is None:
+        local_context = build_working_memory_context(
+            deliberation_input,
+            learning_outcomes=learning_outcomes,
+            habit_bias_entries=habit_bias_entries,
+            response_history=response_history,
+            memory_stubs=memory_stubs,
+            semantic_entries=semantic_entries,
+            max_bias_summaries=max_bias_summaries,
+            max_habit_skills=max_habit_skills,
+            max_recent_outcomes=max_recent_outcomes,
+            max_semantic_patterns=max_semantic_patterns,
+        )
     if backend == "llm_assisted":
         if llm_adapter is None:
             raise ValueError("llm_adapter is required for llm_assisted working-memory backend")
@@ -303,11 +351,13 @@ def build_working_memory_context_from_store(
                 habit_bias_entries=habit_bias_entries,
                 response_history=response_history,
                 memory_stubs=memory_stubs,
+                semantic_entries=semantic_entries,
                 llm_adapter=llm_adapter,
                 advisory_source=advisory_source,
                 max_bias_summaries=max_bias_summaries,
                 max_habit_skills=max_habit_skills,
                 max_recent_outcomes=max_recent_outcomes,
+                max_semantic_patterns=max_semantic_patterns,
             )
         except Exception as exc:
             error_label = _llm_error_label(exc)
@@ -343,7 +393,9 @@ def build_working_memory_context_from_store(
         situation_key=local_context.situation_key,
         bias_summaries=[dict(summary) for summary in local_context.bias_summaries],
         habit_skills=[dict(skill) for skill in local_context.habit_skills],
+        inherited_priors=[dict(prior) for prior in local_context.inherited_priors],
         recent_relevant_outcomes=[dict(outcome) for outcome in local_context.recent_relevant_outcomes],
+        semantic_patterns=[dict(pattern) for pattern in local_context.semantic_patterns],
         confidence=local_context.confidence,
         source_backend=local_context.source_backend,
         advisory_source=advisory_source,
@@ -359,28 +411,32 @@ def _select_working_memory_backend(
     habit_bias_entries: list[dict[str, Any]],
     response_history: list[dict[str, Any]],
     memory_stubs: list[dict[str, Any]],
+    semantic_entries: list[dict[str, Any]],
     llm_adapter: WorkingMemoryAdapter | None,
     max_bias_summaries: int,
     max_habit_skills: int,
     max_recent_outcomes: int,
-) -> str:
+    max_semantic_patterns: int,
+) -> tuple[str, WorkingMemoryContext | None]:
     """Choose a working-memory backend without changing release authority semantics."""
 
     if llm_adapter is None or isinstance(llm_adapter, NullWorkingMemoryAdapter):
-        return "local_rule_based"
+        return "local_rule_based", None
     local_context = build_working_memory_context(
         deliberation_input,
         learning_outcomes=learning_outcomes,
         habit_bias_entries=habit_bias_entries,
         response_history=response_history,
         memory_stubs=memory_stubs,
+        semantic_entries=semantic_entries,
         max_bias_summaries=max_bias_summaries,
         max_habit_skills=max_habit_skills,
         max_recent_outcomes=max_recent_outcomes,
+        max_semantic_patterns=max_semantic_patterns,
     )
     if _should_prefer_local_working_memory(local_context):
-        return "local_rule_based"
-    return "llm_assisted"
+        return "local_rule_based", local_context
+    return "llm_assisted", local_context
 
 
 def _should_prefer_local_working_memory(local_context: WorkingMemoryContext) -> bool:
@@ -437,7 +493,9 @@ def _llm_advisory_request_payload(
         "runtime_gate_context": dict(deliberation_input.runtime_gate_context),
         "bias_summary_count": len(local_context.bias_summaries),
         "habit_skill_count": len(local_context.habit_skills),
+        "inherited_prior_count": len(local_context.inherited_priors),
         "recent_outcome_count": len(local_context.recent_relevant_outcomes),
+        "semantic_pattern_count": len(local_context.semantic_patterns),
         "local_confidence": local_context.confidence,
     }
 

@@ -1,6 +1,12 @@
 """Layer 1 sensing, judgment, cadence, and history projections."""
 
-from .dimension_specs import DimensionSpec, get_default_dimension_specs, register_default_dimension_specs
+from .dimension_specs import (
+    DimensionSpec,
+    RateSensingTier,
+    get_default_dimension_spec_by_name,
+    get_default_dimension_specs,
+    register_default_dimension_specs,
+)
 from .history import build_pressure_event, build_survival_snapshot_entry, persist_patrol_artifacts
 from .judgment import build_external_life_snapshot, determine_overall_status, determine_primary_gap, determine_trend, evaluate_dimensions
 from .patrol import PATROL_ORDER, PATROL_INTERVAL_SECONDS, PatrolPlan, PatrolResult, PatrolScheduler, execute_patrol
@@ -16,6 +22,7 @@ __all__ = [
     "PATROL_ORDER",
     "PatrolPlan",
     "PatrolResult",
+    "RateSensingTier",
     "RoutingDecision",
     "SensingContext",
     "SensorOutput",
@@ -37,6 +44,7 @@ __all__ = [
     "determine_trend",
     "evaluate_dimensions",
     "execute_patrol",
+    "get_default_dimension_spec_by_name",
     "get_default_dimension_specs",
     "register_default_dimension_specs",
     "summarize_signal_dispatch",

@@ -194,6 +194,26 @@ def _learning_bias_for_candidate_profile(
             total_bias += recent_outcome_bias
             reasons.append("recent_negative_outcome_bias")
 
+    semantic_patterns = working_memory_context.get("semantic_patterns")
+    if isinstance(semantic_patterns, list):
+        semantic_bias = _semantic_pattern_bias(
+            semantic_patterns,
+            candidate_profile=candidate_profile,
+        )
+        if semantic_bias != 0.0:
+            total_bias += semantic_bias
+            reasons.append("semantic_pattern_bias")
+
+    inherited_priors = working_memory_context.get("inherited_priors")
+    if isinstance(inherited_priors, list):
+        inherited_bias = _inherited_prior_bias(
+            inherited_priors,
+            candidate_profile=candidate_profile,
+        )
+        if inherited_bias != 0.0:
+            total_bias += inherited_bias
+            reasons.append("inherited_prior_bias")
+
     bounded_bias = _bounded_learning_bias(total_bias)
     if bounded_bias == 0.0:
         return 0.0, []
@@ -221,6 +241,48 @@ def _recent_negative_outcome_bias(
             return -0.1
         return 0.0
     return 0.0
+
+
+def _semantic_pattern_bias(
+    semantic_patterns: list[dict[str, object]],
+    *,
+    candidate_profile: str,
+) -> float:
+    """Return a tiny bounded bias from matching semantic-memory guidance."""
+
+    for pattern in semantic_patterns:
+        preferred_profiles = pattern.get("preferred_candidate_profiles")
+        if not isinstance(preferred_profiles, list) or candidate_profile not in preferred_profiles:
+            continue
+        confidence = float(pattern.get("confidence", 0.0))
+        if confidence <= 0.0:
+            return 0.0
+        return min(0.08, confidence * 0.08)
+    return 0.0
+
+
+
+def _inherited_prior_bias(
+    inherited_priors: list[dict[str, object]],
+    *,
+    candidate_profile: str,
+) -> float:
+    """Return a tiny bounded bias from same-scenario inherited priors."""
+
+    for prior in inherited_priors:
+        if str(prior.get("candidate_profile") or "") != candidate_profile:
+            continue
+        confidence = float(prior.get("confidence", 0.0))
+        stability_score = float(prior.get("stability_score", 0.0))
+        evidence_count = int(prior.get("evidence_count", 0))
+        if confidence < 0.5 or stability_score < 0.5 or evidence_count < 2:
+            return 0.0
+        bias_strength = float(prior.get("bias_strength", 0.0))
+        if bias_strength == 0.0:
+            return 0.0
+        return _bounded_learning_bias(max(-0.06, min(0.06, bias_strength * 0.06)))
+    return 0.0
+
 
 
 def _habit_skill_priority_bonus(parameter_domain: dict[str, object]) -> float:

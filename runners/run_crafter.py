@@ -73,7 +73,7 @@ def run_crafter_runtime(
 ) -> RunSummary:
     """Activate the Crafter scenario and execute the generic framework loop."""
 
-    activate_crafter_scenario()
+    activate_crafter_scenario(inherited_priors_path=config.inherited_priors_path)
     session = CrafterRuntimeSession.start()
     try:
         return run_runtime(
@@ -90,7 +90,6 @@ def run_crafter_runtime(
 def main() -> None:
     """Build Crafter runtime config from CLI arguments and print a short summary."""
 
-    activate_crafter_scenario()
     args = parse_args()
     config = build_runtime_config_from_args(args)
     summary = run_crafter_runtime(config)

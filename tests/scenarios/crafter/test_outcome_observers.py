@@ -23,7 +23,8 @@ class CrafterOutcomeObserverTests(unittest.TestCase):
         self.assertEqual(observed, "improved")
         self.assertGreater(delta, 0.0)
         self.assertEqual(label, "positive")
-        self.assertGreater(confidence, 0.0)
+        self.assertEqual(confidence, 0.8)
+        self.assertEqual(outcome_vector.uncertainty, 0.4)
         self.assertEqual(outcome_vector.viability_delta, {"energy": 1.0})
         self.assertEqual(outcome_vector.cost, {"action_count": 1.0})
 
@@ -73,7 +74,7 @@ class CrafterOutcomeObserverTests(unittest.TestCase):
         self.assertEqual(observed, "improved")
         self.assertGreater(delta, 0.0)
         self.assertEqual(label, "positive")
-        self.assertGreater(confidence, 0.0)
+        self.assertEqual(confidence, 0.8)
         self.assertIsNone(outcome_vector.task_progress)
         self.assertEqual(outcome_vector.capability_delta, {"craft_or_place": 1.0})
 
@@ -96,8 +97,24 @@ class CrafterOutcomeObserverTests(unittest.TestCase):
         self.assertEqual(observed, "improved")
         self.assertEqual(delta, expected)
         self.assertEqual(label, "positive")
-        self.assertGreater(confidence, 0.0)
+        self.assertEqual(confidence, 0.8)
         self.assertEqual(outcome_vector.task_progress, 1.0)
+
+    def test_followup_needed_lowers_confidence_from_uncertainty(self) -> None:
+        observed, delta, label, confidence, outcome_vector = evaluate_response_outcome(
+            {
+                "selected_action": "do",
+                "life_delta": {},
+                "inventory_delta": {},
+                "visible_threat_count": 1,
+                "followup_needed": True,
+            }
+        )
+        self.assertEqual(observed, "degraded")
+        self.assertLess(delta, 0.0)
+        self.assertEqual(label, "negative")
+        self.assertEqual(outcome_vector.uncertainty, 0.8)
+        self.assertEqual(confidence, 0.6)
 
     def test_make_without_achievement_keeps_task_progress_empty_in_learning_record(self) -> None:
         record = build_learning_outcome_record(

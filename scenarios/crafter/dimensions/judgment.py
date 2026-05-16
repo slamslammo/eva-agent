@@ -31,7 +31,15 @@ def inventory_acquisition_snapshot(inputs: dict[str, object], config: ExternalLi
     return _snapshot_from_payload(inputs, config)
 
 
-def local_view_state_snapshot(inputs: dict[str, object], config: ExternalLifeConfig) -> DimensionSnapshot:
+def local_view_threat_snapshot(inputs: dict[str, object], config: ExternalLifeConfig) -> DimensionSnapshot:
+    return _snapshot_from_payload(inputs, config)
+
+
+def local_view_resource_snapshot(inputs: dict[str, object], config: ExternalLifeConfig) -> DimensionSnapshot:
+    return _snapshot_from_payload(inputs, config)
+
+
+def local_view_utility_snapshot(inputs: dict[str, object], config: ExternalLifeConfig) -> DimensionSnapshot:
     return _snapshot_from_payload(inputs, config)
 
 
@@ -41,5 +49,7 @@ __all__ = [
     "avatar_safety_snapshot",
     "inventory_acquisition_snapshot",
     "inventory_capability_snapshot",
-    "local_view_state_snapshot",
+    "local_view_resource_snapshot",
+    "local_view_threat_snapshot",
+    "local_view_utility_snapshot",
 ]

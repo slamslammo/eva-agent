@@ -8,9 +8,11 @@ from eva.l3_deliberation.memory import (
     append_cognitive_memory_stub,
     append_habit_bias,
     append_learning_outcome,
+    append_semantic_memory,
     read_cognitive_memory_stub,
     read_habit_bias,
     read_learning_outcomes,
+    read_semantic_memory,
 )
 
 
@@ -94,6 +96,40 @@ class EpisodicMemoryTests(unittest.TestCase):
             self.assertEqual(len(entries), 1)
             self.assertEqual(entries[0]["candidate_profile"], "stabilize_first")
             self.assertEqual(entries[0]["bias_strength"], 1.0)
+
+    def test_append_and_read_semantic_memory_through_semantic_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            append_semantic_memory(
+                store,
+                {
+                    "recorded_at": utc_now().isoformat(),
+                    "pattern_summary": "stabilize_first usually relieves integrity pressure under stable runtime conditions",
+                    "extracted_from_episodes": ["2026-05-01T00:00:00Z"],
+                    "confidence": 0.8,
+                    "scope": {
+                        "scenario": "linux_runtime",
+                        "situation_key": "integrity|STABLE|none",
+                        "top_drive": "integrity",
+                        "life_state": "STABLE",
+                        "pressure_reason": "none",
+                        "topic": "compatibility_release",
+                    },
+                    "preferred_candidate_profiles": ["stabilize_first"],
+                    "provenance": {
+                        "source": "experience",
+                        "provenance_detail": "stage_i_semantic_memory",
+                        "confidence": 0.8,
+                        "scope": {"scenario": "linux_runtime"},
+                        "mutable": True,
+                    },
+                },
+            )
+
+            entries = read_semantic_memory(store)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["preferred_candidate_profiles"], ["stabilize_first"])
+            self.assertEqual(entries[0]["scope"]["scenario"], "linux_runtime")
 
 
 if __name__ == "__main__":

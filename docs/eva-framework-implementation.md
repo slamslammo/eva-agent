@@ -1,6 +1,6 @@
 # EVA Framework Implementation
 
-**Status**: Landed framework boundary after Stage G capability landing  
+**Status**: Stage I I-4 same-scenario inherited-prior reuse landed on the Stage G framework boundary  
 **Scope**: Framework code under `eva/`  
 **Companion documents**: `docs/scenarios-SPEC.md`, `scenarios/linux_runtime/SPEC.md`  
 **Historical reference**: `docs/archive/eva-agent-full-implementation-v0.5.md`
@@ -73,18 +73,91 @@ The framework owns the structure of:
 - the canonical multi-dimensional `OutcomeVector` contract in `eva/l3_deliberation/contracts.py`
 - skill provenance and registry types in `eva/skills/__init__.py`
 - the persistence-target hierarchy contract in `eva/persistence_targets/__init__.py`
+- working-memory assembly and bounded advisory attachment in `eva/l3_deliberation/reasoning/working_memory.py`
+- episodic / semantic / procedural memory owners under `eva/l3_deliberation/memory/`
 - habit-bias and habit-skill summary dataclasses in `eva/l3_deliberation/memory/skill_library.py`
+- inherited-prior loading, shaping, and bounded value bias through `InheritedPriorRegistry`, `eva/l3_deliberation/peer_circuit/habit_track.py`, and `eva/l3_deliberation/reasoning/value_judgment.py`
 
-The framework therefore owns the structure of deliberation, mediated release, append-only learning records, read-side learning overlays, explicit persistence-target lookup, and skill provenance. Concrete policy inside those structures comes from the active scenario.
+The framework therefore owns the structure of deliberation, mediated release, append-only learning records, read-side learning overlays, explicit persistence-target lookup, Stage I four-layer memory surfaces, and skill provenance. Concrete policy inside those structures comes from the active scenario.
 
 ### 6. Append-only and authority boundaries
 
 The framework remains the owner of:
 - current runtime state writes
 - append-only event and audit writes
+- append-only cognitive / learning / habit / semantic memory tracks
 - mediated release authority
 - runtime-only release-token validation
 - the rule that scenario content may shape candidates and interpretation, but may not bypass release or rewrite history
+
+## Stage I four-layer memory model
+
+Stage I I-3 makes the memory layers explicit without widening authority boundaries.
+
+### Layer surfaces
+- `WorkingMemory` / `WorkingMemoryContext` in `eva/l3_deliberation/reasoning/working_memory.py`
+  - in-cycle only; not persisted
+  - assembled from bounded retrieval over append-only artifacts
+- `EpisodicMemoryRegistry` in `eva/skills/__init__.py`
+  - record surface for relevance-anchored cross-cycle traces
+  - current practical backing: `cognitive_memory_stub.jsonl`, `learning_outcomes.jsonl`, and bounded response-history reuse
+- `SemanticMemoryRegistry` in `eva/skills/__init__.py`
+  - record surface for regularities extracted from episodes
+  - current practical backing: `semantic_memory.jsonl`
+- `ProceduralMemoryRegistry` in `eva/skills/__init__.py`
+  - record surface for condition-matched action patterns
+  - current practical backing: `habit_bias.jsonl` through the existing habit path
+
+### Stage I storage mapping
+
+| Layer | Current storage / owner | Stage I status |
+|---|---|---|
+| Working memory | in-cycle `WorkingMemory` assembly | explicit interface landed |
+| Episodic memory | `cognitive_memory_stub.jsonl`, `learning_outcomes.jsonl`, response history retrieval | explicit registry surface landed |
+| Semantic memory | `semantic_memory.jsonl` | first-class append-only storage + query interface landed |
+| Procedural memory | `habit_bias.jsonl` | explicit registry surface landed via Stage I path (b) |
+
+### Semantic memory in Stage I
+- storage path is configured in `eva/kernel/config.py` and persisted through `eva/kernel/state.py`
+- owner helpers in `eva/l3_deliberation/memory/semantic.py` support append, read, exact query-by-topic, and exact query-by-scope
+- Stage I does **not** implement automatic episodic-to-semantic extraction; semantic storage is provided as a first-class owner and read-side participation seam only
+- runtime participation is bounded: matching semantic entries are retrieved into working memory and may add a tiny auditable candidate prior modifier during value judgment
+
+### Procedural memory in Stage I
+- Stage I adopts path **(b)** from the startup instruction review: formalize and slightly extend the existing habit path rather than adding a separate `procedural_memory.jsonl`
+- `habit_bias.jsonl` remains the backing track
+- `derive_habit_skills()` and `habit_skill_registry()` now form the explicit procedural-memory read surface
+- `shape_candidates_with_habit_track()` remains the candidate-generation shortcut seam
+- procedural shaping can narrow or reorder candidates, but does not own release authority and does not bypass mediator gating
+
+### Integration status by layer
+- **Working memory → L3 deliberation**: direct input; landed
+- **Episodic memory → L3 deliberation**: relevance retrieval; landed
+- **Semantic memory → L3 deliberation**: bounded candidate prior modifier; landed
+- **Semantic memory → L2 drive weights**: deferred in I-3 to preserve the existing drive-boundary invariant
+- **Procedural memory → L3 deliberation**: candidate shaping / shortcut via habit path; landed
+
+These Stage I memory surfaces remain bounded, append-only compatible, and scenario-qualified where retrieval could otherwise leak across scenarios.
+
+## Stage I inherited-prior reuse
+
+Stage I I-4 adds same-scenario inter-life reuse without creating a second decision lane.
+
+### Framework/runtime boundary
+- `InheritedPriorRecord` / `InheritedPriorRegistry` in `eva/skills/__init__.py` are the framework-owned record surfaces for loaded inherited priors
+- runtime config in `eva/kernel/config.py` and CLI parsing in `eva/kernel/main.py` now carry an optional `inherited_priors_path`
+- scenario activation remains the only place where bundle loading happens; the framework reads inherited priors through the existing active-scenario seam
+
+### Runtime participation
+- working-memory assembly in `eva/l3_deliberation/reasoning/working_memory.py` now surfaces `inherited_priors` for the exact current `situation_key`
+- `shape_candidates_with_habit_track()` merges inherited-prior hints into the existing habit-path shaping flow
+- `assess_candidates()` applies only a tiny auditable `inherited_prior_bias` when a matching prior is strong enough
+- inherited priors remain advisory: anchors still bound admission, mediator still owns release, and append-only artifacts remain framework-owned
+
+### Distillation boundary
+- `inheritance_distillation/` is now a landed top-level package separate from `eva/` and `scenarios/`
+- it reads append-only trace files, extracts same-scenario regularities, validates structural invariants, and writes `DistilledPriorBundle.json`
+- it does not import framework or scenario modules
 
 ## What the framework does not own
 

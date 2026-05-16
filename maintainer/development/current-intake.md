@@ -9,31 +9,48 @@
 
 > 这是本地单-Claude 开发阶段的轻量工作入口，不是长期归档文档。
 
-## Change intake
+## Slice I-5 — Crafter runtime readiness audit and Stage I exit
 
-- **Change title**: Post-Stage-H review hardening for Crafter pressure semantics and outcome projection
-- **Goal**: 在不改变 release authority、framework ownership 与 bounded compatibility release surface 的前提下，落实 Stage H review 中的 4 个 fix-now 项：收紧 Crafter dimension `pressure_type` 语义、消除 pressure-type lookup 的双重真相源、纠正 Crafter `task_progress` 计算、把 Crafter scalar `outcome_delta` 权重显式化；同时补充 Stage H follow-up 记录与 Crafter SPEC 说明。
-- **Change type**: bugfix
+### Status
+- completed locally
+- Stage I exit package prepared
 
-## Ownership
+### Change intake
+- **Change title**: Slice I-5 — Crafter runtime readiness audit and Stage I exit
+- **Goal**:
+  - Verify that Stage I now forms one coherent Crafter runtime chain rather than isolated feature landings, and prepare the Stage I exit package.
+- **Change type**: feature / docs-sync / audit / exit-prep
 
-- **Layer**: `l1_sensing`, `l2_drive`, `l3_deliberation`, `scenarios`
-- **Canonical owner**: `scenarios/crafter/dimensions/__init__.py` 作为 Crafter dimension pressure-type owner；`eva/l2_drive/pressure_projection.py` 作为 framework pressure projection lookup owner；`scenarios/crafter/outcome_observers/compatibility.py` 作为 Crafter outcome projection owner；`tests/scenarios/crafter/` 作为 Crafter review-fix verification owner；`maintainer/development/stage-h-followups.md` 与 `scenarios/crafter/SPEC.md` 作为 review closeout record owner
-- **Touched current files**: `maintainer/development/current-intake.md`, `maintainer/development/stage-h-followups.md`, `maintainer/development/stage-h-progress.md`, `scenarios/crafter/dimensions/__init__.py`, `eva/l2_drive/pressure_projection.py`, `scenarios/crafter/outcome_observers/compatibility.py`, `scenarios/crafter/SPEC.md`, `tests/scenarios/crafter/test_sensors.py`, `tests/scenarios/crafter/test_outcome_observers.py`
+### Ownership
+- **Layer**:
+  - `l3_deliberation` read-side audit / Stage-level runtime validation / docs and review closure
+- **Canonical owner**:
+  - `maintainer/architecture/memory-decision-integration-audit.md` for the integration-table audit
+  - `maintainer/development/stage-i-progress.md` for slice and exit tracking
+  - `maintainer/development/stage-i-i5-review-package.md` for the architect-facing close package
+  - existing framework/scenario docs only if the audit exposes slice-scope drift
+- **Touched current files**:
+  - `maintainer/development/current-intake.md`
+  - `maintainer/development/stage-i-progress.md`
+  - new `maintainer/architecture/memory-decision-integration-audit.md`
+  - new `maintainer/development/stage-i-i5-review-package.md`
+  - `docs/eva-framework-implementation.md`
+  - `scenarios/crafter/SPEC.md`
+  - `scenarios/linux_runtime/SPEC.md`
+  - `tests/integration/` and targeted Stage-I suites only if the audit reveals a concrete missing coverage or narrow implementation gap
 - **Owner class**: stable
 
-## Realignment stage
+### Realignment stage
+- **Stage**: other
+- **If other, why**:
+  - This is a Stage I exit-audit slice, not an R1/R2/R3 codebase realignment pass.
 
-- **Stage**: `other`
-- **If other, why**: 这是 Stage H closeout 后的 review-driven hardening slice，不属于既有 R1 / R2 / R3 realignment，也不扩新 capability stage
-
-## Boundary check
-
+### Boundary check
 - **Affected contracts**:
-  - scenario-owned dimension -> pressure-type registration contract
-  - framework pressure projection lookup contract
-  - Crafter outcome observer `task_progress` / scalar projection contract
-  - Crafter scenario spec / maintainer follow-up record contract
+  - Stage I runtime-readiness judgment
+  - memory-decision integration table interpretation
+  - append-only trace schema preservation
+  - Linux behavior-preservation evidence
 - **Hard boundaries to preserve**:
   - heartbeat-first
   - default inhibition
@@ -41,37 +58,45 @@
   - drive read-only
   - mediated release
   - append-only artifact discipline
-- **Why this change does not widen a transitional owner**: 改动只是在已落地的 stable framework/scenario seam 上收紧语义一致性与文档口径，没有扩展 compatibility bridge、没有放松 mediator / release-token 边界，也没有把 Crafter-specific policy 反推回 framework
+- **Why this change does not widen a transitional owner**:
+  - I-5 is expected to audit, verify, and close Stage I rather than expanding scenario or framework responsibilities. Any code change discovered by the audit must remain narrow, justified, and within the existing Stage I whitelist.
 
-## Verification
-
+### Verification
 - **Freeze tests**:
   - `tests/integration/test_main_runtime.py`
-  - `tests/integration/test_linux_alignment.py`
-  - `tests/integration/test_patrol_turn_flow.py`
   - `tests/integration/test_lifecycle_patrol_learning.py`
-  - `tests/scenarios/crafter/test_sensors.py`
-  - `tests/scenarios/crafter/test_outcome_observers.py`
-  - `tests/scenarios/crafter/test_learning_integration.py`
+  - `tests/integration/test_linux_alignment.py`
+  - `tests/integration/test_crafter_runtime.py`
+  - `tests/l3_deliberation/memory/test_skill_library.py`
+  - `tests/l3_deliberation/reasoning/test_working_memory.py`
+  - `tests/l3_deliberation/reasoning/test_value.py`
+  - `tests/l3_deliberation/peer_circuit/test_habit_track.py`
+  - `tests/scenarios/crafter/test_prior_skills.py`
+  - `tests/scenarios/crafter/test_prior_guided_candidates.py`
+  - `tests/inheritance_distillation/`
+  - `tests/stability_metrics/test_metrics.py`
+  - `tests/stability_metrics/test_cli_smoke.py`
 - **Additional tests**:
-  - `tests/l1_sensing/test_judgment.py`
+  - new targeted audit/trace-integrity coverage only if I-5 adds executable verification beyond documentation
 - **Need full regression?** yes
-- **Regression note**: 本 slice 需要先跑 Crafter targeted + framework freeze tests，再跑标准全量回归 `python -m unittest discover -s tests -t .`
 
-## Docs sync
-
+### Docs sync
 - **Docs to update**:
+  - `docs/eva-agent-full-implementation.md`
   - `docs/current-status.md`
+  - `maintainer/development/development-standards.md`
+  - `maintainer/development/module-organization-contract.md`
+  - `maintainer/development/codebase-realignment-plan.md`
   - `maintainer/development/roadmap.md`
   - related `phase-*.md`
 - **Docs actually needed for this change**:
-  - `maintainer/development/current-intake.md`
-  - `maintainer/development/stage-h-followups.md`
-  - `maintainer/development/stage-h-progress.md`
-  - `scenarios/crafter/SPEC.md`
+  - `maintainer/development/stage-i-progress.md`
+  - new `maintainer/architecture/memory-decision-integration-audit.md`
+  - new `maintainer/development/stage-i-i5-review-package.md`
+  - `docs/eva-framework-implementation.md` only if the audit finds Stage-I-scope drift
+  - `scenarios/crafter/SPEC.md` only if the audit finds Stage-I-scope drift
+  - `scenarios/linux_runtime/SPEC.md` only if the audit finds Stage-I-scope drift
 
-## Intake status
-
-- 当前检查点：**post-Stage-H review hardening in progress**
-- blocker 文档：`maintainer/development/stage-h-blockers.md`
-- 下一 gate：**完成 4 个 review fix-now 项、补 follow-up 文档、通过 targeted + full regression，然后再做 commit / push**
+### Go / no-go
+- **Can implementation start now?** yes
+- **If no, what must be clarified first?**:

@@ -636,6 +636,16 @@ class StateStore:
 
         return self._read_jsonl_history(self.paths.habit_bias_file)
 
+    def append_semantic_memory(self, payload: dict[str, Any]) -> None:
+        """Append one Stage I semantic-memory record."""
+
+        self._append_jsonl(self.paths.semantic_memory_file, payload)
+
+    def read_semantic_memory(self) -> list[dict[str, Any]]:
+        """Read the append-only Stage I semantic-memory log."""
+
+        return self._read_jsonl_history(self.paths.semantic_memory_file)
+
     def append_event(self, event: EventRecord) -> None:
         """Append one lifecycle event to events.jsonl."""
 

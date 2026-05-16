@@ -147,7 +147,7 @@ class StateStoreTests(unittest.TestCase):
                 captured_at=now,
                 pressures=[
                     ActivePressure(
-                        pressure_id="pressure-resource_state-disk_space_declining",
+                        pressure_id="pressure-linux_runtime-resource_state-disk_space_declining",
                         type="resource_state",
                         severity="degraded",
                         evidence={"disk_free_bytes": 1024},
@@ -162,7 +162,7 @@ class StateStoreTests(unittest.TestCase):
             store.write_active_pressures(table)
             loaded = store.read_active_pressures()
             self.assertEqual(len(loaded.pressures), 1)
-            self.assertEqual(loaded.pressures[0].pressure_id, "pressure-resource_state-disk_space_declining")
+            self.assertEqual(loaded.pressures[0].pressure_id, "pressure-linux_runtime-resource_state-disk_space_declining")
             self.assertEqual(loaded.pressures[0].type, "resource_state")
 
     def test_append_survival_log(self) -> None:

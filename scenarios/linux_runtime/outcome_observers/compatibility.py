@@ -122,6 +122,7 @@ def build_learning_outcome_content(
     """Build the Linux runtime learning-content payload attached to one learning record."""
 
     return {
+        "scenario": "linux_runtime",
         "execution_status": execution_status,
         "pressure_outcome": pressure_outcome,
         "followup_needed": followup_needed,

@@ -297,6 +297,72 @@ def _learning_outcome_match_score(
     return round(score, 6)
 
 
+def recent_semantic_memory(
+    semantic_entries: list[dict[str, Any]],
+    *,
+    scenario: str,
+    situation_key: str,
+    top_drive: str,
+    life_state: str,
+    pressure_reason: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Return bounded semantic-memory entries most relevant to the current situation."""
+
+    ranked: list[tuple[float, float, str, dict[str, Any]]] = []
+    for entry in semantic_entries:
+        scope = entry.get("scope") or {}
+        if not isinstance(scope, dict):
+            continue
+        if str(scope.get("scenario") or "") != scenario:
+            continue
+        score = 0.0
+        has_bounded_match = False
+        if str(scope.get("situation_key") or "") == situation_key:
+            score += 4.0
+            has_bounded_match = True
+        if pressure_reason != "none" and str(scope.get("pressure_reason") or "") == pressure_reason:
+            score += 1.5
+            has_bounded_match = True
+        if str(scope.get("life_state") or "") == life_state:
+            score += 0.5
+        if str(scope.get("top_drive") or "") == top_drive:
+            score += 1.5
+            has_bounded_match = True
+        if not has_bounded_match:
+            continue
+        confidence = float(entry.get("confidence", 0.0))
+        ranked.append((round(score, 6), confidence, str(entry.get("recorded_at") or ""), _semantic_trace(entry)))
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+    return [trace for _, _, _, trace in ranked[:limit]]
+
+
+
+def _semantic_trace(entry: dict[str, Any]) -> dict[str, Any]:
+    """Return one compact semantic-memory trace for working-memory assembly."""
+
+    scope = entry.get("scope") or {}
+    provenance = entry.get("provenance") or {}
+    trace = {
+        "recorded_at": entry.get("recorded_at"),
+        "pattern_summary": str(entry.get("pattern_summary") or ""),
+        "confidence": float(entry.get("confidence", 0.0)),
+        "scope": dict(scope) if isinstance(scope, dict) else {},
+        "preferred_candidate_profiles": [
+            str(profile)
+            for profile in entry.get("preferred_candidate_profiles", [])
+            if profile is not None
+        ],
+        "provenance": dict(provenance) if isinstance(provenance, dict) else {},
+    }
+    if isinstance(scope, dict):
+        for field_name in ("situation_key", "top_drive", "life_state", "pressure_reason", "topic", "scenario"):
+            if field_name in scope:
+                trace[field_name] = scope.get(field_name)
+    return trace
+
+
+
 def _memory_stub_match_score(
     *,
     situation_key: str,

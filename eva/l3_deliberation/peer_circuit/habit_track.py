@@ -16,6 +16,7 @@ MIN_HABIT_NARROWING_CONFIDENCE = 0.8
 __all__ = [
     "crystallized_habit_skill_hints",
     "habitual_candidate_explanations",
+    "inherited_prior_hints",
     "shape_candidates_with_habit_track",
 ]
 
@@ -27,16 +28,18 @@ def shape_candidates_with_habit_track(
     """Apply habit-path candidate shaping from already-assembled working memory."""
 
     habit_skill_hints = crystallized_habit_skill_hints(deliberation_input)
+    inherited_hints = inherited_prior_hints(deliberation_input)
+    shaping_hints = _merged_shaping_hints(habit_skill_hints, inherited_hints)
     habitual_explanations = habitual_candidate_explanations(deliberation_input)
     enriched_candidates = [
         _enrich_candidate_with_habit_context(
             candidate,
-            habit_skill_hint=habit_skill_hints.get(str(candidate.parameter_domain.get("candidate_profile") or "")),
+            habit_skill_hint=shaping_hints.get(str(candidate.parameter_domain.get("candidate_profile") or "")),
             habitual_explanation=habitual_explanations.get(str(candidate.parameter_domain.get("candidate_profile") or "")),
         )
         for candidate in candidates
     ]
-    narrowed = _narrow_candidates_from_habit_skill(enriched_candidates, habit_skill_hints=habit_skill_hints)
+    narrowed = _narrow_candidates_from_habit_skill(enriched_candidates, habit_skill_hints=shaping_hints)
     if narrowed is not None:
         return narrowed
     base_order = {
@@ -48,10 +51,57 @@ def shape_candidates_with_habit_track(
         enriched_candidates,
         key=lambda candidate: _candidate_priority_key(
             candidate,
-            habit_skill_hints=habit_skill_hints,
+            habit_skill_hints=shaping_hints,
             base_order=base_order,
         ),
     )
+
+
+def inherited_prior_hints(deliberation_input: DeliberationInput) -> dict[str, dict[str, Any]]:
+    """Return inherited-prior hints keyed by candidate profile."""
+
+    working_memory_context = deliberation_input.working_memory_context or {}
+    inherited_priors = working_memory_context.get("inherited_priors")
+    if not isinstance(inherited_priors, list):
+        return {}
+    hints: dict[str, dict[str, Any]] = {}
+    for prior in inherited_priors:
+        if not isinstance(prior, dict):
+            continue
+        candidate_profile = str(prior.get("candidate_profile") or "")
+        if candidate_profile not in {OBSERVE_FIRST_PROFILE, STABILIZE_FIRST_PROFILE, ESCALATE_FIRST_PROFILE}:
+            continue
+        confidence = float(prior.get("confidence", 0.0))
+        stability_score = float(prior.get("stability_score", 0.0))
+        evidence_count = int(prior.get("evidence_count", 0))
+        if confidence <= 0.0 or stability_score <= 0.0 or evidence_count <= 0:
+            continue
+        current = hints.get(candidate_profile)
+        candidate_hint = {
+            "preferred_action": prior.get("preferred_action"),
+            "confidence": confidence,
+            "stability_score": stability_score,
+            "evidence_count": evidence_count,
+            "source": "inherited_prior",
+            "bias_strength": float(prior.get("bias_strength", 0.0)),
+        }
+        if current is None or _hint_rank(candidate_hint) < _hint_rank(current):
+            hints[candidate_profile] = candidate_hint
+    return hints
+
+
+def _merged_shaping_hints(
+    habit_skill_hints: dict[str, dict[str, Any]],
+    inherited_prior_hints: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Return one merged hint map while keeping crystallized habits higher authority."""
+
+    merged = {candidate_profile: dict(hint) for candidate_profile, hint in inherited_prior_hints.items()}
+    for candidate_profile, hint in habit_skill_hints.items():
+        current = merged.get(candidate_profile)
+        if current is None or _hint_rank(hint) <= _hint_rank(current):
+            merged[candidate_profile] = dict(hint)
+    return merged
 
 
 def crystallized_habit_skill_hints(deliberation_input: DeliberationInput) -> dict[str, dict[str, Any]]:
@@ -139,10 +189,14 @@ def _enrich_candidate_with_habit_context(
         parameter_domain["habit_eligible"] = True
         parameter_domain["habit_skill_confidence"] = float(habit_skill_hint.get("confidence", 0.0))
         parameter_domain["habit_skill_evidence_count"] = int(habit_skill_hint.get("evidence_count", 0))
+        parameter_domain["habit_hint_source"] = str(habit_skill_hint.get("source") or "habit_skill")
         if habit_skill_hint.get("preferred_action") is not None:
             parameter_domain["habit_preferred_action"] = str(habit_skill_hint.get("preferred_action"))
             justification.append(f"habit_preferred_action={habit_skill_hint.get('preferred_action')}")
-        justification.append("habit_skill_match")
+        if parameter_domain["habit_hint_source"] == "inherited_prior":
+            justification.append("inherited_prior_hint")
+        else:
+            justification.append("habit_skill_match")
     if habitual_explanation:
         if "habitual_trace" in habitual_explanation:
             parameter_domain["habitual_trace"] = str(habitual_explanation.get("habitual_trace") or "habitual_neutral")

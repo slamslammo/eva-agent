@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from scenarios.crafter import activate_crafter_scenario
 from scenarios.crafter.prior_skills import (
+    CRAFTER_STARTUP_PRIOR_DEFINITIONS,
     PRIOR_SKILL_MATCH_PROFILES,
+    build_crafter_inherited_prior_registry,
+    build_crafter_startup_prior_registry,
     build_situation_key_from_values,
     derive_habit_skills,
     habit_skill_match_for_candidate_profile,
@@ -61,6 +67,70 @@ class CrafterPriorSkillTests(unittest.TestCase):
             learning_outcomes=learning_outcomes,
         )
         self.assertEqual(skills[0]["candidate_profile"], "stabilize_first")
+
+
+    def test_startup_prior_registry_exposes_canonical_bundle(self) -> None:
+        registry = build_crafter_startup_prior_registry()
+        records = registry.records()
+
+        self.assertEqual(len(records), len(CRAFTER_STARTUP_PRIOR_DEFINITIONS))
+        self.assertTrue(all(record.provenance.source == "scenario" for record in records))
+        self.assertTrue(all(record.provenance.scope["scenario"] == "crafter" for record in records))
+        self.assertTrue(all("source_paths" in record.provenance.scope for record in records))
+        self.assertTrue(all(record.situation_key.startswith("crafter_startup_prior|") for record in records))
+
+    def test_crafter_inherited_prior_registry_loads_valid_bundle(self) -> None:
+        bundle = {
+            "scenario": "crafter",
+            "distillation_date": "2026-05-15T00:00:00Z",
+            "records": [
+                {
+                    "confidence": 0.84,
+                    "content": {
+                        "situation_key": "metabolic|STABLE|water_critical",
+                        "candidate_profile": "stabilize_first",
+                        "preferred_action": "sleep",
+                        "avoid_action": "do",
+                        "evidence_count": 5,
+                        "stability_score": 0.8,
+                        "bias_strength": 0.6,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "DistilledPriorBundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            registry = build_crafter_inherited_prior_registry(bundle_path)
+
+        records = registry.records()
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].candidate_profile, "stabilize_first")
+        self.assertEqual(records[0].preferred_action, "sleep")
+        self.assertEqual(records[0].provenance.scope["scenario"], "crafter")
+
+    def test_crafter_inherited_prior_registry_rejects_invalid_scenario_bundle(self) -> None:
+        bundle = {
+            "scenario": "linux_runtime",
+            "records": [
+                {
+                    "confidence": 0.84,
+                    "content": {
+                        "situation_key": "metabolic|STABLE|water_critical",
+                        "candidate_profile": "stabilize_first",
+                        "preferred_action": "sleep",
+                        "evidence_count": 5,
+                        "stability_score": 0.8,
+                        "bias_strength": 0.6,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "DistilledPriorBundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "crafter"):
+                build_crafter_inherited_prior_registry(bundle_path)
 
 
 if __name__ == "__main__":

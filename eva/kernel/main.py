@@ -232,6 +232,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--working-memory-model-client-provider", default="anthropic")
     parser.add_argument("--working-memory-model-client-model", default=DEFAULT_ANTHROPIC_MODEL)
     parser.add_argument("--working-memory-model-client-timeout-sec", type=float, default=5.0)
+    parser.add_argument("--inherited-priors-path")
     return parser.parse_args()
 
 
@@ -274,6 +275,7 @@ def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
             model=args.working_memory_model_client_model,
             request_timeout_sec=args.working_memory_model_client_timeout_sec,
         ),
+        inherited_priors_path=args.inherited_priors_path,
     )
 
 

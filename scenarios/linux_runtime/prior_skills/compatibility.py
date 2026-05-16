@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
 
 from eva.kernel.state import from_iso8601
+from eva.skills import PriorSkillRecord, PriorSkillRegistry, SkillProvenance
 
 MIN_SKILL_EVIDENCE = 3
 MIN_SKILL_STABILITY = 0.6
@@ -265,8 +265,57 @@ def _is_stale_record(recorded_at: str) -> bool:
     return age_days > 30.0
 
 
+def build_linux_runtime_startup_prior_registry() -> PriorSkillRegistry:
+    """Return the canonical Linux startup-prior inspection registry."""
+
+    return build_linux_runtime_prior_skill_registry(situation_key="linux_runtime_startup|STABLE|none")
+
+
+def build_linux_runtime_prior_skill_registry(*, situation_key: str | None = None, top_drive: str | None = None, life_state: str | None = None, pressure_reason: str | None = None) -> PriorSkillRegistry:
+    """Return explicit Linux scenario prior records for one situation."""
+
+    resolved_situation_key = situation_key or build_situation_key_from_values(
+        top_drive=str(top_drive or "unknown"),
+        life_state=str(life_state or "unknown"),
+        pressure_reason=str(pressure_reason or "none"),
+    )
+    records = [
+        PriorSkillRecord(
+            recorded_at="scenario_definition",
+            situation_key=resolved_situation_key,
+            candidate_profile=candidate_profile,
+            preferred_action=_preferred_action_for_candidate_profile(candidate_profile),
+            provenance=SkillProvenance(
+                source="scenario",
+                provenance_detail="linux_runtime_candidate_profile_policy",
+                confidence=1.0,
+                scope={"scenario": "linux_runtime", "situation_key": resolved_situation_key},
+                mutable=False,
+            ),
+        )
+        for candidate_profile in _prior_skill_profiles()
+    ]
+    return PriorSkillRegistry(records)
+
+
+def _prior_skill_profiles() -> tuple[str, ...]:
+    return tuple(sorted(PRIOR_SKILL_MATCH_PROFILES))
+
+
+def _preferred_action_for_candidate_profile(candidate_profile: str) -> str | None:
+    if candidate_profile == "observe_first":
+        return "recheck_runtime_integrity"
+    if candidate_profile == "stabilize_first":
+        return "shrink_to_conservative_mode"
+    if candidate_profile == "escalate_first":
+        return "escalate_integrity_risk"
+    return None
+
+
 __all__ = [
     "PRIOR_SKILL_MATCH_PROFILES",
+    "build_linux_runtime_prior_skill_registry",
+    "build_linux_runtime_startup_prior_registry",
     "build_situation_key_from_values",
     "derive_habit_skills",
     "habit_skill_match_for_candidate_profile",

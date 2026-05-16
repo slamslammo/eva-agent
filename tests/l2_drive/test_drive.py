@@ -17,15 +17,15 @@ class DriveTests(unittest.TestCase):
             dimensions={
                 "resource_state": DimensionSnapshot(
                     status="critical",
-                    evidence={"reason": "disk_space_critical", "rate_context": {"direction": "worsening"}},
+                    evidence={"reason": "disk_space_critical", "rate_context": {"direction": "degrading"}},
                 ),
                 "runtime_integrity": DimensionSnapshot(
                     status="degraded",
-                    evidence={"reason": "recent_yield_detected", "rate_context": {"direction": "worsening"}},
+                    evidence={"reason": "recent_yield_detected", "rate_context": {"direction": "degrading"}},
                 ),
                 "host_continuity": DimensionSnapshot(
                     status="degraded",
-                    evidence={"reason": "restart_unstable", "rate_context": {"direction": "worsening"}},
+                    evidence={"reason": "restart_unstable", "rate_context": {"direction": "degrading"}},
                 ),
                 "anomaly_accumulation": DimensionSnapshot(
                     status="healthy",
@@ -136,7 +136,7 @@ class DriveTests(unittest.TestCase):
             source_patrol="deep",
             dimensions={
                 "resource_state": DimensionSnapshot(status="healthy", evidence={"reason": "resource_state_ok", "rate_context": {"direction": "stable"}}),
-                "runtime_integrity": DimensionSnapshot(status="degraded", evidence={"reason": "recent_yield_detected", "rate_context": {"direction": "worsening"}}),
+                "runtime_integrity": DimensionSnapshot(status="degraded", evidence={"reason": "recent_yield_detected", "rate_context": {"direction": "degrading"}}),
                 "host_continuity": DimensionSnapshot(status="healthy", evidence={"reason": "host_continuity_ok", "rate_context": {"direction": "stable"}}),
                 "anomaly_accumulation": DimensionSnapshot(status="healthy", evidence={"reason": "anomaly_window_quiet", "rate_context": {"direction": "stable"}}),
             },
@@ -149,7 +149,7 @@ class DriveTests(unittest.TestCase):
             pressure_id="pressure-integrity-recent_yield_detected",
             type="integrity",
             severity="degraded",
-            evidence={"reason": "recent_yield_detected", "rate_context": {"direction": "worsening"}},
+            evidence={"reason": "recent_yield_detected", "rate_context": {"direction": "degrading"}},
             first_seen_at=now,
             last_seen_at=now,
             trend="worsening",

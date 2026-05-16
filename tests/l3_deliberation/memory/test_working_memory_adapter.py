@@ -56,6 +56,7 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
                 bias_summaries=[],
                 habit_skills=[],
                 recent_relevant_outcomes=[],
+                semantic_patterns=[],
                 local_confidence=0.2,
             )
         )
@@ -91,6 +92,7 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
                 bias_summaries=[{"candidate_profile": "stabilize_first"}],
                 habit_skills=[],
                 recent_relevant_outcomes=[],
+                semantic_patterns=[],
                 local_confidence=0.45,
             )
         )
@@ -119,6 +121,7 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
                 bias_summaries=[],
                 habit_skills=[],
                 recent_relevant_outcomes=[],
+                semantic_patterns=[],
                 local_confidence=0.2,
             )
         )
@@ -140,6 +143,7 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
                 bias_summaries=[],
                 habit_skills=[],
                 recent_relevant_outcomes=[],
+                semantic_patterns=[],
                 local_confidence=0.2,
             )
         )

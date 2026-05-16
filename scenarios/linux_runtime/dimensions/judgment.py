@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from eva.kernel import DimensionSnapshot, ExternalLifeConfig
+from eva.l1_sensing.rate_sensors import normalize_rate_direction
 from eva.persistence_targets import get_default_persistence_hierarchy
 
 
@@ -19,7 +20,7 @@ def _rate_available(inputs: dict[str, object]) -> bool:
 
 def _rate_direction_from_inputs(inputs: dict[str, object]) -> str:
     direction = _rate_context(inputs).get("direction")
-    return str(direction) if isinstance(direction, str) else "unknown"
+    return normalize_rate_direction(direction)
 
 
 def _float_value(payload: dict[str, Any], key: str) -> float | None:
@@ -57,7 +58,7 @@ def host_continuity_snapshot(inputs: dict[str, object], config: ExternalLifeConf
     elif restart_count >= config.continuity_restart_degraded_count:
         status = "degraded"
         reason = "restart_unstable"
-    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening":
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "degrading":
         near_degraded = restart_count >= max(config.continuity_restart_degraded_count - 1, 1)
         if near_degraded:
             status = "degraded"
@@ -92,7 +93,7 @@ def runtime_integrity_snapshot(inputs: dict[str, object], config: ExternalLifeCo
     elif yield_count > 0:
         status = "degraded"
         reason = "recent_yield_detected"
-    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening" and consecutive_failures > 0:
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "degrading" and consecutive_failures > 0:
         status = "degraded"
         reason = "heartbeat_miss_trend"
     evidence = dict(inputs)
@@ -123,7 +124,7 @@ def resource_state_snapshot(inputs: dict[str, object], config: ExternalLifeConfi
     elif disk_free_bytes <= config.disk_degraded_free_bytes:
         status = "degraded"
         reason = "disk_space_declining"
-    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening":
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "degrading":
         rate_context = _rate_context(inputs)
         disk_delta = _float_value(rate_context, "disk_free_bytes_delta")
         if disk_delta is not None and disk_delta < 0:
@@ -150,7 +151,7 @@ def anomaly_accumulation_snapshot(inputs: dict[str, object], config: ExternalLif
     elif anomaly_count >= config.anomaly_degraded_count:
         status = "degraded"
         reason = "anomaly_density_rising"
-    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "worsening":
+    elif _rate_available(inputs) and _rate_direction_from_inputs(inputs) == "degrading":
         near_degraded = anomaly_count >= max(config.anomaly_degraded_count - 1, 1)
         if near_degraded:
             status = "degraded"

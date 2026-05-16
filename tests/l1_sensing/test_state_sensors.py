@@ -132,18 +132,18 @@ class StateSensorsTests(unittest.TestCase):
             self.assertTrue(outputs_by_dimension["runtime_integrity"]["active_instance_present"])
             self.assertTrue(outputs_by_dimension["resource_state"]["runtime_path_exists"])
             self.assertEqual(outputs_by_dimension["anomaly_accumulation"]["recent_error_count"], 1)
-            self.assertEqual(outputs_by_dimension["host_continuity"]["rate_context"]["direction"], "worsening")
+            self.assertEqual(outputs_by_dimension["host_continuity"]["rate_context"]["direction"], "degrading")
             self.assertEqual(
                 host_continuity_rate_context(
                     facts=context.shared_facts,
                     previous_snapshot=context.previous_snapshot,
                     window_sec=context.config.recent_event_window_sec,
                 )["direction"],
-                "worsening",
+                "degrading",
             )
-            self.assertEqual(outputs_by_dimension["runtime_integrity"]["rate_context"]["direction"], "worsening")
+            self.assertEqual(outputs_by_dimension["runtime_integrity"]["rate_context"]["direction"], "degrading")
             self.assertIn("direction", outputs_by_dimension["resource_state"]["rate_context"])
-            self.assertEqual(outputs_by_dimension["anomaly_accumulation"]["rate_context"]["direction"], "worsening")
+            self.assertEqual(outputs_by_dimension["anomaly_accumulation"]["rate_context"]["direction"], "degrading")
 
 
 if __name__ == "__main__":

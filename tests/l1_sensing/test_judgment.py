@@ -124,7 +124,7 @@ class JudgmentTests(unittest.TestCase):
                 "process_running": True,
                 "recent_restart_count": 1,
                 "schedule_drift_sec": 0.0,
-                "rate_context": {"available": True, "direction": "worsening"},
+                "rate_context": {"available": True, "direction": "degrading"},
             },
             "runtime_integrity": {
                 "instance_valid": True,
@@ -137,7 +137,7 @@ class JudgmentTests(unittest.TestCase):
                 "recent_distress_count": 0,
                 "heartbeat_age_sec": 1.0,
                 "consecutive_failures": 1,
-                "rate_context": {"available": True, "direction": "worsening"},
+                "rate_context": {"available": True, "direction": "degrading"},
             },
             "resource_state": {
                 "runtime_path_exists": True,
@@ -145,7 +145,7 @@ class JudgmentTests(unittest.TestCase):
                 "disk_free_bytes": 105,
                 "rate_context": {
                     "available": True,
-                    "direction": "worsening",
+                    "direction": "degrading",
                     "disk_free_bytes_delta": -10.0,
                 },
             },
@@ -155,7 +155,7 @@ class JudgmentTests(unittest.TestCase):
                 "recent_distress_count": 0,
                 "recent_restart_count": 1,
                 "anomaly_count": 1,
-                "rate_context": {"available": True, "direction": "worsening"},
+                "rate_context": {"available": True, "direction": "degrading"},
             },
         }
 
@@ -189,7 +189,7 @@ class JudgmentTests(unittest.TestCase):
                 status="degraded",
                 evidence={
                     "reason": "recent_yield_detected",
-                    "rate_context": {"direction": "worsening"},
+                    "rate_context": {"direction": "degrading"},
                 },
             ),
             "host_continuity": DimensionSnapshot(status="healthy", evidence={}),

@@ -17,11 +17,20 @@ class CrafterSkillProvenanceTests(unittest.TestCase):
         for record in records:
             self.assertEqual(record.provenance.source, "scenario")
             self.assertEqual(record.provenance.scope["scenario"], "crafter")
+            self.assertIn("source_paths", record.provenance.scope)
+            self.assertIn("related_anchor_profiles", record.provenance.scope)
             self.assertIn(record.provenance.provenance_detail, {
-                "crafter_runtime_survival_prior",
-                "crafter_runtime_recognition_prior",
-                "crafter_runtime_resource_chain_prior",
-                "crafter_runtime_action_semantics",
+                "crafter_safety_escalation_prior",
+                "crafter_safety_stabilization_floor_prior",
+                "crafter_metabolic_stabilization_prior",
+                "crafter_metabolic_recognition_prior",
+                "crafter_recovery_rest_prior",
+                "crafter_recovery_recognition_prior",
+                "crafter_acquisition_resource_chain_prior",
+                "crafter_acquisition_survival_floor_prior",
+                "crafter_capability_resource_chain_prior",
+                "crafter_capability_survival_floor_prior",
+                "crafter_action_surface_baseline_prior",
             })
 
 

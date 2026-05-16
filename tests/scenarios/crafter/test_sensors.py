@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 
-from eva.kernel import ActivePressureTable, ExternalLifeConfig, RuntimeState, StateStore, build_runtime_paths, utc_now
+from eva.kernel import ActivePressureTable, DimensionSnapshot, ExternalLifeConfig, ExternalLifeSnapshot, RuntimeState, StateStore, build_runtime_paths, utc_now
 from eva.l1_sensing import (
     build_external_life_snapshot,
     collect_external_life_inputs,
@@ -56,6 +56,9 @@ class CrafterSensorTests(unittest.TestCase):
             "notes": [],
         }
 
+    def _snapshot(self, *, status: str, reason: str, rate_context: dict[str, object], **evidence: object) -> DimensionSnapshot:
+        return DimensionSnapshot(status=status, evidence={**evidence, "reason": reason, "rate_context": rate_context})
+
     def test_default_sensor_registry_collects_crafter_dimensions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -77,7 +80,9 @@ class CrafterSensorTests(unittest.TestCase):
                     "avatar_recovery",
                     "inventory_acquisition",
                     "inventory_capability",
-                    "local_view_state",
+                    "local_view_threat",
+                    "local_view_resource",
+                    "local_view_utility",
                 },
             )
 
@@ -114,8 +119,11 @@ class CrafterSensorTests(unittest.TestCase):
             self.assertEqual(by_dimension["avatar_recovery"]["status"], "degraded")
             self.assertEqual(by_dimension["inventory_capability"]["available_tools"], ["wood_pickaxe"])
             self.assertIn("stone", by_dimension["inventory_acquisition"]["scarce_resources"])
-            self.assertEqual(by_dimension["local_view_state"]["threat_counts"], {"zombie": 1})
-            self.assertEqual(by_dimension["local_view_state"]["utility_counts"], {"table": 1})
+            self.assertEqual(by_dimension["local_view_threat"]["threat_counts"], {"zombie": 1})
+            self.assertEqual(by_dimension["local_view_resource"]["resource_counts"], {"tree": 2, "water": 1})
+            self.assertEqual(by_dimension["local_view_utility"]["utility_counts"], {"table": 1})
+            self.assertEqual(by_dimension["local_view_utility"]["status"], "degraded")
+
     def test_crafter_dimension_specs_drive_judgment_and_pressure_projection(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -142,7 +150,9 @@ class CrafterSensorTests(unittest.TestCase):
                     "avatar_recovery",
                     "inventory_capability",
                     "inventory_acquisition",
-                    "local_view_state",
+                    "local_view_threat",
+                    "local_view_resource",
+                    "local_view_utility",
                 ],
             )
             snapshot = build_external_life_snapshot(
@@ -153,7 +163,7 @@ class CrafterSensorTests(unittest.TestCase):
             )
             self.assertEqual(snapshot.primary_gap, {"type": "avatar_safety", "reason": "health_critical"})
             table, opened, resolved = build_active_pressure_table(snapshot, ActivePressureTable(captured_at=now))
-            self.assertEqual(len(table.pressures), 5)
+            self.assertEqual(len(table.pressures), 7)
             self.assertEqual(
                 get_default_pressure_type_by_dimension_name(),
                 {
@@ -162,25 +172,164 @@ class CrafterSensorTests(unittest.TestCase):
                     "avatar_recovery": "recovery",
                     "inventory_capability": "capability",
                     "inventory_acquisition": "acquisition",
-                    "local_view_state": "safety",
+                    "local_view_threat": "safety",
+                    "local_view_resource": "acquisition",
+                    "local_view_utility": "capability",
                 },
             )
             self.assertEqual(
                 sorted(pressure.type for pressure in table.pressures),
-                ["acquisition", "metabolic", "recovery", "safety", "safety"],
+                ["acquisition", "acquisition", "capability", "metabolic", "recovery", "safety", "safety"],
             )
             self.assertEqual(
                 {pressure.pressure_id for pressure in table.pressures},
                 {
-                    "pressure-safety-health_critical",
-                    "pressure-metabolic-water_critical",
-                    "pressure-recovery-energy_degraded",
-                    "pressure-acquisition-inventory_sparse",
-                    "pressure-safety-threat_visible",
+                    "pressure-crafter-safety-health_critical",
+                    "pressure-crafter-metabolic-water_critical",
+                    "pressure-crafter-recovery-energy_degraded",
+                    "pressure-crafter-acquisition-inventory_sparse",
+                    "pressure-crafter-safety-threat_visible",
+                    "pressure-crafter-acquisition-resource_visible",
+                    "pressure-crafter-capability-utility_visible",
                 },
             )
-            self.assertEqual(len(opened), 5)
+            self.assertEqual(len(opened), 7)
             self.assertEqual(resolved, [])
+
+    def test_crafter_required_tier_dimensions_emit_real_rate_context_from_previous_snapshot(self) -> None:
+        registry = default_sensor_registry()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            store.ensure_runtime_dir()
+            runtime_state = self._runtime_state()
+            store.write_runtime_state(runtime_state)
+            now = utc_now()
+            previous = ExternalLifeSnapshot(
+                captured_at=now,
+                source_patrol="deep",
+                dimensions={
+                    "avatar_safety": self._snapshot(
+                        status="healthy",
+                        reason="avatar_safety_ok",
+                        rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                        health=9.0,
+                        threat_count=0.0,
+                        episode_id="episode-1",
+                    ),
+                    "avatar_metabolic": self._snapshot(
+                        status="healthy",
+                        reason="metabolic_ok",
+                        rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                        food=9.0,
+                        water=9.0,
+                        episode_id="episode-1",
+                    ),
+                    "avatar_recovery": self._snapshot(
+                        status="healthy",
+                        reason="recovery_ok",
+                        rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                        energy=9.0,
+                        episode_id="episode-1",
+                    ),
+                },
+                overall_status="healthy",
+                primary_gap={"type": "none", "reason": "none"},
+                trend="stable",
+                updated_at=now,
+            )
+            from eva.l1_sensing.sensor_registry import SensingContext
+
+            context = SensingContext(
+                store=store,
+                runtime_state=runtime_state,
+                config=ExternalLifeConfig(recent_event_window_sec=60.0),
+                now=now,
+                previous_snapshot=previous,
+                shared_facts={
+                    "agent_observation": self._agent_observation(),
+                    "elapsed_sec": 10.0,
+                    "rate_available": True,
+                },
+            )
+            outputs = {output.dimension: output.payload for output in registry.collect_all(context)}
+            self.assertTrue(outputs["avatar_safety"]["rate_context"]["available"])
+            self.assertEqual(outputs["avatar_safety"]["rate_context"]["direction"], "degrading")
+            self.assertIsNotNone(outputs["avatar_safety"]["rate_context"]["magnitude"])
+            self.assertTrue(outputs["avatar_metabolic"]["rate_context"]["available"])
+            self.assertEqual(outputs["avatar_metabolic"]["rate_context"]["direction"], "degrading")
+            self.assertTrue(outputs["avatar_recovery"]["rate_context"]["available"])
+            self.assertEqual(outputs["avatar_recovery"]["rate_context"]["direction"], "degrading")
+
+    def test_anticipatory_pressure_can_open_for_healthy_but_fast_degrading_required_dimension(self) -> None:
+        now = utc_now()
+        snapshot = ExternalLifeSnapshot(
+            captured_at=now,
+            source_patrol="deep",
+            dimensions={
+                "avatar_safety": self._snapshot(
+                    status="healthy",
+                    reason="avatar_safety_ok",
+                    rate_context={"available": True, "direction": "degrading", "magnitude": 0.3, "acceleration": None},
+                    health=8.0,
+                    threat_count=0.0,
+                    episode_id="episode-1",
+                ),
+                "avatar_metabolic": self._snapshot(
+                    status="healthy",
+                    reason="metabolic_ok",
+                    rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                    food=8.0,
+                    water=8.0,
+                    episode_id="episode-1",
+                ),
+                "avatar_recovery": self._snapshot(
+                    status="healthy",
+                    reason="recovery_ok",
+                    rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                    energy=8.0,
+                    episode_id="episode-1",
+                ),
+                "inventory_capability": self._snapshot(
+                    status="healthy",
+                    reason="tooling_available",
+                    rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                ),
+                "inventory_acquisition": self._snapshot(
+                    status="healthy",
+                    reason="inventory_ok",
+                    rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                ),
+                "local_view_threat": self._snapshot(
+                    status="healthy",
+                    reason="local_threat_clear",
+                    rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                ),
+                "local_view_resource": self._snapshot(
+                    status="healthy",
+                    reason="local_resource_clear",
+                    rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                ),
+                "local_view_utility": self._snapshot(
+                    status="healthy",
+                    reason="local_utility_clear",
+                    rate_context={"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
+                ),
+            },
+            overall_status="healthy",
+            primary_gap={"type": "none", "reason": "none"},
+            trend="stable",
+            updated_at=now,
+        )
+        table, opened, resolved = build_active_pressure_table(snapshot, ActivePressureTable(captured_at=now))
+        self.assertEqual(len(resolved), 0)
+        safety = [pressure for pressure in table.pressures if pressure.type == "safety"]
+        self.assertEqual(len(safety), 1)
+        self.assertEqual(safety[0].severity, "degraded")
+        self.assertEqual(safety[0].evidence["pressure_mode"], "anticipatory")
+        self.assertEqual(safety[0].evidence["urgency"], "high")
+        self.assertEqual(safety[0].pressure_id, "pressure-crafter-safety-avatar_safety_degrading")
+        self.assertEqual(len(opened), 1)
+
     def test_runtime_session_exposes_latest_agent_observation_as_shared_fact(self) -> None:
         class StubWrapper:
             def __init__(self) -> None:

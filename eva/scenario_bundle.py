@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ class SensorPolicyBundle:
 
     sensor_providers: SensorProviderFactory
     dimension_specs: tuple["DimensionSpec", ...]
+    pressure_types: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -63,13 +65,16 @@ class OutcomeObserverBundle:
 
 @dataclass(frozen=True)
 class PriorSkillBundle:
-    """Scenario-owned prior-skill derivation bundle."""
+    """Scenario-owned prior-skill derivation and startup-prior inspection bundle."""
 
     habit_skill_match_for_candidate_profile: Callable[[str | None], bool]
     build_situation_key_from_values: Callable[..., str]
     derive_habit_skills: Callable[..., list[dict[str, Any]]]
     situation_key_from_learning_outcome: Callable[[dict[str, Any]], str]
     summarize_habit_bias: Callable[..., list[dict[str, Any]]]
+    build_prior_skill_registry: Callable[..., Any]
+    build_startup_prior_registry: Callable[[], Any]
+    build_inherited_prior_registry: Callable[[str | Path | None], Any]
 
 
 @dataclass(frozen=True)
@@ -95,7 +100,7 @@ def activate_runtime_scenario(bundle: RuntimeScenarioBundle) -> RuntimeScenarioB
 
     global _ACTIVE_RUNTIME_SCENARIO
     _ACTIVE_RUNTIME_SCENARIO = bundle
-    register_default_dimension_specs(tuple(bundle.sensors.dimension_specs))
+    register_default_dimension_specs(tuple(bundle.sensors.dimension_specs), pressure_types=tuple(bundle.sensors.pressure_types))
     return bundle
 
 

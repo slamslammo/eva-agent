@@ -18,7 +18,9 @@ DRIVE_TYPE_BY_DIMENSION = {
     "avatar_recovery": "recovery",
     "inventory_acquisition": "acquisition",
     "inventory_capability": "capability",
-    "local_view_state": "safety",
+    "local_view_threat": "safety",
+    "local_view_resource": "acquisition",
+    "local_view_utility": "capability",
 }
 
 DEFAULT_DRIVE_UPDATE_POLICY = DriveUpdatePolicy(

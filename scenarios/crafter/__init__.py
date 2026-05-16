@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from eva.scenario_bundle import (
     ActionPolicyBundle,
     AnchorPolicyBundle,
@@ -43,19 +45,23 @@ from .drive_preset import CRAFTER_DRIVE_PRESET
 from .outcome_observers import build_learning_outcome_content, evaluate_response_outcome, expected_outcome_for_release
 from .persistence import build_crafter_persistence_hierarchy
 from .prior_skills import (
+    build_crafter_inherited_prior_registry,
     build_situation_key_from_values,
     derive_habit_skills,
     habit_skill_match_for_candidate_profile,
     situation_key_from_learning_outcome,
     summarize_habit_bias,
 )
+from .prior_skills.bundle import build_crafter_prior_skill_registry, build_crafter_startup_prior_registry
 from .sensors import crafter_sensor_providers
+
 CRAFTER_SCENARIO_BUNDLE = RuntimeScenarioBundle(
     name="crafter",
     drive_preset=CRAFTER_DRIVE_PRESET,
     sensors=SensorPolicyBundle(
         sensor_providers=crafter_sensor_providers,
         dimension_specs=CRAFTER_DIMENSION_SPECS,
+        pressure_types=tuple(dict.fromkeys(spec.pressure_type for spec in CRAFTER_DIMENSION_SPECS)),
     ),
     actions=ActionPolicyBundle(
         recheck_action=RECHECK_ACTION,
@@ -92,14 +98,24 @@ CRAFTER_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         derive_habit_skills=derive_habit_skills,
         situation_key_from_learning_outcome=situation_key_from_learning_outcome,
         summarize_habit_bias=summarize_habit_bias,
+        build_prior_skill_registry=build_crafter_prior_skill_registry,
+        build_startup_prior_registry=build_crafter_startup_prior_registry,
+        build_inherited_prior_registry=build_crafter_inherited_prior_registry,
     ),
 )
 
 
-def activate_crafter_scenario():
+def activate_crafter_scenario(*, inherited_priors_path: str | None = None) -> RuntimeScenarioBundle:
     """Activate the Crafter scenario bundle on top of the stable framework seam."""
 
-    activated = activate_runtime_scenario(CRAFTER_SCENARIO_BUNDLE)
+    prior_skills = CRAFTER_SCENARIO_BUNDLE.prior_skills
+    if inherited_priors_path is not None:
+        inherited_registry = build_crafter_inherited_prior_registry(inherited_priors_path)
+        prior_skills = replace(
+            prior_skills,
+            build_inherited_prior_registry=lambda path, registry=inherited_registry: registry,
+        )
+    activated = activate_runtime_scenario(replace(CRAFTER_SCENARIO_BUNDLE, prior_skills=prior_skills))
     register_default_drive_preset(CRAFTER_DRIVE_PRESET)
     register_default_persistence_hierarchy(build_crafter_persistence_hierarchy())
     return activated

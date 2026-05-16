@@ -27,7 +27,9 @@ class WorkingMemoryAdapterRequest:
     runtime_gate_context: dict[str, Any]
     bias_summaries: list[dict[str, Any]] = field(default_factory=list)
     habit_skills: list[dict[str, Any]] = field(default_factory=list)
+    inherited_priors: list[dict[str, Any]] = field(default_factory=list)
     recent_relevant_outcomes: list[dict[str, Any]] = field(default_factory=list)
+    semantic_patterns: list[dict[str, Any]] = field(default_factory=list)
     local_confidence: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -39,7 +41,9 @@ class WorkingMemoryAdapterRequest:
             "runtime_gate_context": dict(self.runtime_gate_context),
             "bias_summaries": [dict(summary) for summary in self.bias_summaries],
             "habit_skills": [dict(skill) for skill in self.habit_skills],
+            "inherited_priors": [dict(prior) for prior in self.inherited_priors],
             "recent_relevant_outcomes": [dict(outcome) for outcome in self.recent_relevant_outcomes],
+            "semantic_patterns": [dict(pattern) for pattern in self.semantic_patterns],
             "local_confidence": round(max(0.0, min(1.0, float(self.local_confidence))), 3),
         }
 

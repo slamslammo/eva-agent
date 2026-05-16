@@ -35,7 +35,7 @@ def _inventory_acquisition_sensor(context: SensingContext) -> SensorOutput:
             "scarce_resources": scarce_resources,
             "status": status,
             "reason": reason,
-            "rate_context": {"available": False, "direction": "unknown"},
+            "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
         },
     )
 
@@ -56,7 +56,7 @@ def _inventory_capability_sensor(context: SensingContext) -> SensorOutput:
             "available_tools": available_tools,
             "status": status,
             "reason": reason,
-            "rate_context": {"available": False, "direction": "unknown"},
+            "rate_context": {"available": False, "direction": "unknown", "magnitude": None, "acceleration": None},
         },
     )
 
