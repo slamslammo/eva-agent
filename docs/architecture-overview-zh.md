@@ -61,6 +61,8 @@ EVA-Agent 实现五层架构 + 跨层约束系统 + 内核基座：
 
 **框架拥有运行时权威和结构不变量。场景拥有世界特定内容。** 这不是软分离——它在代码边界被强制执行：场景可以塑造 candidate 和解释，但不能 mint release authority、绕过 mediator-owned execution、rewrite append-only history 或接管 kernel cadence。
 
+仓库当前用两个 framework 侧具体机制（structural + dynamic）再加上 scenario-owned admission policy seam，来实现 anchor 的三向区分。这是 v0.6 区分的一种合法收敛方式；blueprint 并不要求三套独立模块。
+
 ### 1.3 模块所有权映射
 
 | 模块 | 所有者 | 职责 |

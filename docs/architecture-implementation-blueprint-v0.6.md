@@ -41,6 +41,8 @@ EVA-Agent begins from the claim that **continuous existence is a first-order des
 
 The move from theory to implementation is therefore not a translation into feature modules. It is the conversion of structural claims into engineering boundaries: heartbeat-first lifecycle, instance legitimacy, drive as internal context, anchor as pre-generative restriction, release authority distinct from reasoning, separated audit/memory/learning tracks, bounded learning overlays, and scenario-owned content under framework-owned runtime authority.
 
+“Continuous existence” here is read in its active sense, per v0.6: what is preserved is the agent's projected capacity to continue existing, not the current state values themselves. State preservation and persistence are not the same thing.
+
 ### 0.2 What EVA-Agent v0.6 is
 
 EVA-Agent v0.6 is not a generic task orchestrator centered on completion. It is an **existence-centered agent architecture** whose first constraint is continuous, bounded, durable operation.
@@ -571,6 +573,19 @@ Semantic memory may influence deliberation directly in L3. In future implementat
 
 This boundary preserves the distinction between operational content and structural invariants.
 
+Two valid realizations exist:
+
+- **Option A**: semantic memory remains purely an L3 advisory input and does not participate in L2 at all
+- **Option B**: semantic memory may inform audited, field-configured L2 update parameters without becoming a direct write path
+
+They are equivalent only if all of the following hold:
+
+1. semantic memory does not become a write owner of drive state
+2. drive prototypes remain structurally owned outside semantic memory
+3. current drive state is never directly written from semantic-memory content
+4. provenance is preserved for any semantic-derived parameter influence
+5. L2 remains the sole runtime owner of drive updates
+
 ### 6.9 What L2 ultimately decides
 
 L2 is where EVA-Agent decisively diverges from task-agent structure: behavior unfolds inside a continuous internal environment rather than from direct task command.
@@ -677,6 +692,18 @@ Its role is to:
 - carry pathway updates shaped by outcome
 
 The peer circuit is parallel to reasoning, not subordinate to it. If selection and justification collapse into one process, default inhibition becomes a policy preference rather than a structural property.
+
+Two valid realizations exist:
+
+- **Option A**: an explicitly separate peer-circuit module or subsystem
+- **Option B**: a single larger deliberative subsystem with a structurally distinct selection function inside it
+
+They are equivalent only if all of the following hold:
+
+1. default inhibition remains a structural property rather than a reasoning preference
+2. selection and justification are not collapsed into the same computation
+3. habit formation is not entangled with ordinary reasoning updates in a way that erases its separate structural role
+4. release is never directly commanded by reasoning output alone
 
 ![L3 basal ganglia](./assets/architecture/l3_basal_ganglia_overview.svg)
 
@@ -949,19 +976,27 @@ The runtime loop is the process by which the agent sustains continuity, adapts t
 
 ```text
 kernel cadence (tick / turn)
-  → L1 sensing (state + rate)
-  → L2 drive update + broadcast
-  → Anchor domain restriction
-  → L3 working-memory assembly
-  → candidate generation and value judgment
-  → peer-circuit selection
-  → mediator release
-  → tool-edge execution
-  → multi-dimensional outcome observation
-  → vector RPE
-  → episodic / semantic / procedural updates
-  → next-cycle context
+  │
+  ├──> [fast path] L1 threat signals
+  │      → L2 reflex arc
+  │      → mediator (still required)
+  │      → tool edge
+  │
+  └──> [slow path] L1 sensing (state + rate)
+         → L2 drive update + broadcast
+         → Anchor domain restriction
+         → L3 working-memory assembly
+         → candidate generation and value judgment
+         → peer-circuit selection
+         → mediator release
+         → tool-edge execution
+         → outcome vector (multi-dim: progress / viability / resource / capability / risk / reversibility / cost / uncertainty)
+         → vector RPE
+         → episodic / semantic / procedural updates
+         → next-cycle context
 ```
+
+Fast path and slow path run in parallel as distinct routes. Fast path does not bypass the mediator. Outcome is multi-dimensional rather than scalar.
 
 ### 11.2 What the loop makes real
 
@@ -982,6 +1017,18 @@ The runtime loop only:
 - checks for available same-field prior bundles at activation
 - loads them if appropriate
 - uses them as bounded operational content during deliberation
+
+Two valid realizations exist:
+
+- **Option A**: distillation lives in an independently packaged top-level subsystem outside the runtime framework
+- **Option B**: distillation lives inside the broader framework repository but remains isolated from runtime execution as a separate subsystem
+
+They are equivalent only if all of the following hold:
+
+1. distillation does not import scenario-specific runtime modules as part of the per-cycle loop
+2. distillation does not modify structural invariants
+3. distillation does not execute inside the per-cycle runtime loop
+4. the prior-bundle schema remains an interface contract between runtime and distillation machinery
 
 ### 11.4 Bounded learning
 

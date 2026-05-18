@@ -4,7 +4,7 @@ This document tracks where EVA v0.5 and v0.6 theory commitments currently land i
 
 It answers: **for a given theory commitment, where is it in code, and how complete is it?**
 
-For the theory itself, read [eva-theory](https://github.com/slamslammo/eva-theory). For architecture at a glance, read [`architecture-overview.md`](architecture-overview.md). For the current framework surface, read [`eva-framework-implementation.md`](eva-framework-implementation.md).
+For the theory itself, read [eva-theory](https://github.com/slamslammo/eva-theory). For architecture at a glance, read [`architecture-overview.md`](architecture-overview.md). For the target-state blueprint, read [`architecture-implementation-blueprint-v0.6.md`](architecture-implementation-blueprint-v0.6.md). For the current framework surface, read [`eva-framework-implementation.md`](eva-framework-implementation.md). For a direct commitment-by-commitment bridge between blueprint and tracking, read [`blueprint-to-tracking-map.md`](blueprint-to-tracking-map.md).
 
 ---
 
@@ -27,8 +27,10 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 |---|---|---|---|---|
 | Bounded heartbeat / tick / turn runtime loop | `eva/kernel/main.py`, `eva/kernel/lifecycle.py` | production | — | — |
 | Instance legitimacy (lock / generation / lease) | `eva/kernel/instance.py` | production | — | — |
+| Separated atomic current-state persistence and append-only audit substrate | `eva/kernel/state.py` | production | — | — |
 | Explicit scenario activation through RuntimeScenarioBundle | `eva/scenario_bundle.py` | production | — | — |
 | Runner-owned startup assembly for shipped scenarios | `runners/run_linux.py`, `runners/run_crafter.py` | production | — | — |
+| Integrated fast/slow closed-loop runtime composition | `eva/kernel/main.py`, `eva/l1_sensing/signal_bus.py`, `eva/l2_drive/reflex.py`, `eva/l3_deliberation/contracts.py` | production | — | — |
 | Explicit persistence hierarchy contract | `eva/persistence_targets/__init__.py` | production | — | — |
 | Scenario-owned activation of lower persistence levels | `scenarios/linux_runtime/persistence/`, `scenarios/crafter/persistence/` | production | — | — |
 | Persistence target Levels 5–7 | — | deferred | Theoretical placeholder; mechanisms reserved for future versions | Later phase |
@@ -49,6 +51,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Component | Code location | Completeness | Known limitation | Planned evolution |
 |---|---|---|---|---|
 | Drive preset and drive-update seam | `eva/l2_drive/drive_registry.py`, `eva/l2_drive/pressure_to_drive.py` | production | — | — |
+| Read-only drive broadcast with L2-owned state authority | `eva/l2_drive/drive_registry.py`, `eva/l3_deliberation/contracts.py` | production | — | — |
 | Pressure projection with urgency modulation and bounded anticipatory pressure | `eva/l2_drive/pressure_projection.py` | production | — | — |
 | Protective reflex fast path parallel to slower deliberation | `eva/l2_drive/reflex.py` | production | — | — |
 
@@ -57,6 +60,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Component | Code location | Completeness | Known limitation | Planned evolution |
 |---|---|---|---|---|
 | Canonical deliberation input contract | `eva/l3_deliberation/contracts.py` | production | — | — |
+| Four-layer memory surface (working / episodic / semantic / procedural) | `eva/l3_deliberation/reasoning/working_memory.py`, `eva/l3_deliberation/memory/`, `eva/skills/__init__.py` | partial | Semantic store-side windowing / indexing not implemented; procedural memory remains habit-backed rather than a dedicated store | Stage I follow-up #1, future evaluation |
 | Mediator as independent peer circuit (default inhibition + selective release) | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | Runtime-only release token boundary | `eva/l3_deliberation/contracts.py` | production | — | — |
 | Drive-weighted candidate assessment with bounded learned overlays | `eva/l3_deliberation/reasoning/value_judgment.py`, `eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |
@@ -77,6 +81,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 |---|---|---|---|---|
 | Framework-owned action domain and pre-generative restriction surface | `eva/anchor/domain_restriction.py` | production | — | — |
 | Scenario-owned anchor admission policy through active bundle seam | `eva/scenario_bundle.py`, scenario `anchors/` | production | — | — |
+| Capability restriction and parameter-domain restriction inside the active action domain | `eva/anchor/domain_restriction.py`, `eva/l3_deliberation/tool_edge/tool_registry.py` | production | — | — |
 | Mediated candidate filtering, selection, and execution path | `eva/l3_deliberation/tool_edge/tool_registry.py`, `eva/l3_deliberation/tool_edge/executors.py` | production | — | — |
 | Anchor three-layer distinction (mechanism / constitutional policies / emergent overlays) | `eva/anchor/domain_restriction.py`, scenario anchor policies | partial | Mechanism / constitutional policy separation is clear; emergent overlay story is narrower than the theory's long-term framing | Future deepening |
 

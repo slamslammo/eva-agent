@@ -63,6 +63,8 @@ Each layer addresses a pressure that prior layers cannot absorb:
 
 **Why the split exists:** The framework implements the structural properties that make EVA-agent an EVA agent (heartbeat-first, default inhibition, mediated release, append-only tracks). Scenarios implement the world-specific vocabulary the framework operates over. The same framework can carry more than one scenario without the framework's invariants being compromised.
 
+The repository realizes the three-way anchor distinction with two concrete framework-side mechanisms (structural + dynamic) plus the scenario-owned admission policy seam. This is one valid collapse of the v0.6 distinction; the blueprint does not require three separate modules.
+
 ### 1.3 Module ownership map
 
 | Module | Owner | Role |

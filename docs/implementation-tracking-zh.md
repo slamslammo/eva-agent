@@ -6,7 +6,7 @@
 
 它回答的问题是：**对于某个理论承诺，它现在在代码哪里、完成度如何？**
 
-理论本身请阅读 [eva-theory](https://github.com/slamslammo/eva-theory)。架构鸟瞰请阅读 [`architecture-overview-zh.md`](architecture-overview-zh.md)（中文版）。当前框架落地情况请阅读 [`eva-framework-implementation.md`](eva-framework-implementation.md)。
+理论本身请阅读 [eva-theory](https://github.com/slamslammo/eva-theory)。架构鸟瞰请阅读 [`architecture-overview-zh.md`](architecture-overview-zh.md)（中文版）。目标态蓝图请阅读 [`architecture-implementation-blueprint-v0.6-zh.md`](architecture-implementation-blueprint-v0.6-zh.md)。当前框架落地情况请阅读 [`eva-framework-implementation.md`](eva-framework-implementation.md)。如果你想逐条查看 blueprint 承诺与 tracking 条目的对应关系，请阅读 [`blueprint-to-tracking-map-zh.md`](blueprint-to-tracking-map-zh.md)。
 
 ---
 
@@ -29,8 +29,10 @@
 |---|---|---|---|---|
 | 有界 heartbeat / tick / turn 运行时循环 | `eva/kernel/main.py`、`eva/kernel/lifecycle.py` | production | — | — |
 | Instance legitimacy（lock / generation / lease） | `eva/kernel/instance.py` | production | — | — |
+| 分离的 atomic current-state persistence 与 append-only audit substrate | `eva/kernel/state.py` | production | — | — |
 | 通过 RuntimeScenarioBundle 的显式场景激活 | `eva/scenario_bundle.py` | production | — | — |
 | Shipped 场景的 runner-owned 启动装配 | `runners/run_linux.py`、`runners/run_crafter.py` | production | — | — |
+| 集成的 fast/slow 双路径闭环运行时组合 | `eva/kernel/main.py`、`eva/l1_sensing/signal_bus.py`、`eva/l2_drive/reflex.py`、`eva/l3_deliberation/contracts.py` | production | — | — |
 | 显式 persistence hierarchy contract | `eva/persistence_targets/__init__.py` | production | — | — |
 | 场景所有者在 shipped 场景中激活 lower persistence levels | `scenarios/linux_runtime/persistence/`、`scenarios/crafter/persistence/` | production | — | — |
 | Persistence target Levels 5–7 | — | deferred | 理论 placeholder；机制预留至未来版本 | 后期 |
@@ -51,6 +53,7 @@
 | 组件 | 代码位置 | 完成度 | 已知限制 | 计划演进 |
 |---|---|---|---|---|
 | Drive preset 和 drive-update 接口 | `eva/l2_drive/drive_registry.py`、`eva/l2_drive/pressure_to_drive.py` | production | — | — |
+| L2 持有状态所有权的只读 drive broadcast | `eva/l2_drive/drive_registry.py`、`eva/l3_deliberation/contracts.py` | production | — | — |
 | 带 urgency 调制和有界 anticipatory pressure 的 pressure projection | `eva/l2_drive/pressure_projection.py` | production | — | — |
 | 与较慢 deliberation 并行的保护性 reflex fast path | `eva/l2_drive/reflex.py` | production | — | — |
 
@@ -59,6 +62,7 @@
 | 组件 | 代码位置 | 完成度 | 已知限制 | 计划演进 |
 |---|---|---|---|---|
 | 规范 deliberation 输入 contract | `eva/l3_deliberation/contracts.py` | production | — | — |
+| 四层记忆表面（working / episodic / semantic / procedural） | `eva/l3_deliberation/reasoning/working_memory.py`、`eva/l3_deliberation/memory/`、`eva/skills/__init__.py` | partial | semantic store-side windowing / indexing 未实现；procedural memory 仍是 habit-backed，而非 dedicated store | Stage I follow-up #1、后续评估 |
 | Mediator 作为独立 peer circuit（default inhibition + 选择性 release） | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | 运行时独属 release token 边界 | `eva/l3_deliberation/contracts.py` | production | — | — |
 | 带有界 learned overlay 的 drive 加权 candidate 评估 | `eva/l3_deliberation/reasoning/value_judgment.py`、`eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |
@@ -79,6 +83,7 @@
 |---|---|---|---|---|
 | 框架所有的 action domain 和生成前限制 surface | `eva/anchor/domain_restriction.py` | production | — | — |
 | 通过 active bundle seam 的场景所有 anchor admission policy | `eva/scenario_bundle.py`、场景 `anchors/` | production | — | — |
+| active action domain 内的 capability restriction 与 parameter-domain restriction | `eva/anchor/domain_restriction.py`、`eva/l3_deliberation/tool_edge/tool_registry.py` | production | — | — |
 | Mediated candidate 过滤、选择和 execution 路径 | `eva/l3_deliberation/tool_edge/tool_registry.py`、`eva/l3_deliberation/tool_edge/executors.py` | production | — | — |
 | Anchor 三层区分（机制 / 宪法策略 / 涌现 overlay） | `eva/anchor/domain_restriction.py`、场景 anchor policies | partial | 机制 / 宪法策略分离清晰；emergent overlay 故事比理论的长期框架更窄 | 后续深化 |
 

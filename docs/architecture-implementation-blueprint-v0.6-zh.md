@@ -41,6 +41,8 @@ EVA-Agent 从一个前提出发：对于一类 agent 来说，**连续存在是�
 
 因此，从理论走向实现，并不是把概念翻译成 feature module，而是把结构性主张转化为工程边界：heartbeat-first 生命周期、实例合法性、drive 作为内部环境、anchor 作为生成前约束、release authority 独立于 reasoning、audit/memory/learning 三轨分离、bounded learning overlay，以及 scenario-owned content 受 framework-owned runtime authority 约束。
 
+本文中的“连续存在”按 v0.6 的主动语义解读：被保护的是 agent 持续存在的能力本身，而不是当前状态值。状态保留与持续存在不是同一件事。
+
 ### 0.2 什么是 EVA-Agent v0.6
 
 EVA-Agent v0.6 不是以任务完成为中心的通用任务编排器。它是一种**以存在为中心的 agent 架构**，其首要约束是持续、有界、可恢复的运行。
@@ -571,6 +573,19 @@ semantic memory 可以直接影响 L3 中的 deliberation。未来实现中，�
 
 这条边界保护的是操作性内容与结构不变量之间的区分。
 
+这里有两种有效实现：
+
+- **Option A**：semantic memory 纯粹作为 L3 advisory input，不参与 L2
+- **Option B**：semantic memory 可以影响经过审计、由 field 配置的 L2 update parameter，但不会变成 direct write path
+
+只有当下列条件全部成立时，两者才是等价的：
+
+1. semantic memory 不成为 drive state 的写入方
+2. drive prototype 的结构所有权不落到 semantic memory 上
+3. current drive state 不会被 semantic-memory content 直接写入
+4. 任何 semantic-derived parameter influence 都保留 provenance
+5. L2 仍然是 drive update 的唯一 runtime owner
+
 ### 6.9 L2 最终决定什么
 
 L2 是 EVA-Agent 与 task-agent 在结构上明确分岔的地方：行为展开于一个连续内部环境之中，而不是直接从外部任务命令出发。
@@ -677,6 +692,18 @@ EVA-Agent 必须把“什么看起来合理”和“什么最终被选中并 rel
 - 承载由 outcome 塑造的 pathway 更新
 
 peer circuit 与 reasoning 平行，而不是 subordinate 于 reasoning。否则，default inhibition 就会退化为一个策略偏好，而不是结构属性。
+
+这里有两种有效实现：
+
+- **Option A**：显式独立的 peer-circuit 模块或子系统
+- **Option B**：在一个更大的 deliberative subsystem 内，保留结构上独立的 selection function
+
+只有当下列条件全部成立时，两者才是等价的：
+
+1. default inhibition 仍然是结构属性，而不是 reasoning 偏好
+2. selection 与 justification 不塌缩为同一计算
+3. habit formation 不会与普通 reasoning update 纠缠到抹去其独立结构角色
+4. release 不会仅由 reasoning output 直接命令触发
 
 ![L3 basal ganglia](./assets/architecture/l3_basal_ganglia_overview.svg)
 
@@ -949,19 +976,27 @@ runtime loop 是 agent 维持 continuity、适应 field、并从经验中增长�
 
 ```text
 kernel cadence (tick / turn)
-  → L1 sensing (state + rate)
-  → L2 drive update + broadcast
-  → Anchor domain restriction
-  → L3 working-memory assembly
-  → candidate generation and value judgment
-  → peer-circuit selection
-  → mediator release
-  → tool-edge execution
-  → multi-dimensional outcome observation
-  → vector RPE
-  → episodic / semantic / procedural updates
-  → next-cycle context
+  │
+  ├──> [fast path] L1 threat signals
+  │      → L2 reflex arc
+  │      → mediator（仍然必需）
+  │      → tool edge
+  │
+  └──> [slow path] L1 sensing (state + rate)
+         → L2 drive update + broadcast
+         → Anchor domain restriction
+         → L3 working-memory assembly
+         → candidate generation and value judgment
+         → peer-circuit selection
+         → mediator release
+         → tool-edge execution
+         → outcome vector（多维：progress / viability / resource / capability / risk / reversibility / cost / uncertainty）
+         → vector RPE
+         → episodic / semantic / procedural updates
+         → next-cycle context
 ```
+
+fast path 与 slow path 是并行的两条不同路径。fast path 不绕过 mediator。outcome 是多维的，而不是标量。
 
 ### 11.2 这个闭环使什么变为真实
 
@@ -982,6 +1017,18 @@ runtime loop 本身只：
 - 在 activation 时检查是否有 same-field prior bundle
 - 在合适时加载它们
 - 在 deliberation 中把它们当作 bounded operational content 使用
+
+这里有两种有效实现：
+
+- **Option A**：distillation 位于 runtime framework 之外、独立打包的 top-level subsystem 中
+- **Option B**：distillation 位于更大的 framework repository 之内，但与 runtime execution 保持隔离，作为单独 subsystem 存在
+
+只有当下列条件全部成立时，两者才是等价的：
+
+1. distillation 不作为 per-cycle loop 的一部分去导入 scenario-specific runtime module
+2. distillation 不修改 structural invariant
+3. distillation 不在 per-cycle runtime loop 中执行
+4. prior-bundle schema 仍然是 runtime 与 distillation machinery 之间的接口契约
 
 ### 11.4 有界 learning
 
