@@ -7,10 +7,12 @@
 
 ## 当前主线
 当前后续工作统一遵循：
-- `docs/README.md`
-- `docs/current-status.md`
-- `docs/capability-inventory.md`
-- `docs/theory-implementation-landing.md`
+- `README.md`（仓库唯一入口，英文）
+- `README-zh.md`（中文入口）
+- `docs/architecture-overview.md` / `docs/architecture-overview-zh.md`
+- `docs/eva-framework-implementation.md`
+- `docs/scenarios-SPEC.md`
+- `docs/implementation-tracking.md` / `docs/implementation-tracking-zh.md`
 - `maintainer/development/roadmap.md`
 - 当前激活 phase 对应的 `maintainer/development/phase-*-plan.md` 与 `phase-*-progress.md`
 
@@ -65,9 +67,10 @@
 
 ## 文档更新要求
 当前阶段至少维护：
-1. `README.md`、`docs/README.md`、`docs/current-status.md` 与 `docs/capability-inventory.md` 之间的一致性
-2. 公开主线与维护者参考材料的边界清晰
-3. 当前激活 phase 的计划文档与进展文档在 `maintainer/development/` 下同步更新
+1. `README.md`（英文入口）与 `README-zh.md`（中文入口）之间的一致性
+2. `docs/` 下英文文档与对应中文版本之间的一致性（中文版：`-zh.md` 后缀）
+3. 公开主线与维护者参考材料的边界清晰
+4. 当前激活 phase 的计划文档与进展文档在 `maintainer/development/` 下同步更新
 
 ## 边界
 - 持续执行、实现和文档沉淀都在 `eva-agent/` 项目目录内推进
