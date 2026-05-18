@@ -20,6 +20,9 @@ The current priority is deepening memory composition and broadening mediated act
 
 Start here based on what you need to understand:
 
+**If you want the target architecture to build from scratch**
+→ [`docs/architecture-implementation-blueprint-v0.6.md`](docs/architecture-implementation-blueprint-v0.6.md)
+
 **If you want the overall architecture at a glance**
 → [`docs/architecture-overview.md`](docs/architecture-overview.md)
 

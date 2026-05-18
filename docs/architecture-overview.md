@@ -2,7 +2,7 @@
 
 This document is the architecture bird's-eye view for `eva-agent`: what the architecture looks like, how the main modules collaborate, and what the key structural commitments are.
 
-It is not a theory restatement — read [eva-theory](https://github.com/slamslammo/eva-theory) for the theory. It is not an implementation log — read [`eva-framework-implementation.md`](eva-framework-implementation.md) for the current framework surface. This document connects those two by showing the architectural glue: how the pieces fit together and what invariants hold across them.
+It is not a theory restatement — read [eva-theory](https://github.com/slamslammo/eva-theory) for the theory. It is not a target-state blueprint — read [`architecture-implementation-blueprint-v0.6.md`](architecture-implementation-blueprint-v0.6.md) for the from-scratch architecture to build. It is not an implementation log — read [`eva-framework-implementation.md`](eva-framework-implementation.md) for the current framework surface. This document connects those views by showing the architectural glue: how the pieces fit together and what invariants hold across them.
 
 For scenario-specific content, see [`scenarios-SPEC.md`](scenarios-SPEC.md) and the per-scenario `SPEC.md` files under `scenarios/`.
 

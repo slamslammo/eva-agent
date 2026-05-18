@@ -20,6 +20,9 @@ EVA-agent 不是从"任务优先的 agent + 逐步增加编排"开始，而是�
 
 根据你的需求选择入口：
 
+**想看“如果从零实现，应当怎么构建”的目标蓝图**
+→ [`docs/architecture-implementation-blueprint-v0.6.md`](docs/architecture-implementation-blueprint-v0.6.md)（英文）
+
 **想快速了解整体架构**
 → [`docs/architecture-overview.md`](docs/architecture-overview.md)（英文）
 
