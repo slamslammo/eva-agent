@@ -7,8 +7,10 @@
 
 ## 当前主线
 当前后续工作统一遵循：
-- `docs/eva-agent-full-implementation.md`
+- `docs/README.md`
 - `docs/current-status.md`
+- `docs/capability-inventory.md`
+- `docs/theory-implementation-landing.md`
 - `maintainer/development/roadmap.md`
 - 当前激活 phase 对应的 `maintainer/development/phase-*-plan.md` 与 `phase-*-progress.md`
 
@@ -63,7 +65,7 @@
 
 ## 文档更新要求
 当前阶段至少维护：
-1. `README.md`、`docs/eva-agent-full-implementation.md` 与 `docs/current-status.md` 之间的一致性
+1. `README.md`、`docs/README.md`、`docs/current-status.md` 与 `docs/capability-inventory.md` 之间的一致性
 2. 公开主线与维护者参考材料的边界清晰
 3. 当前激活 phase 的计划文档与进展文档在 `maintainer/development/` 下同步更新
 

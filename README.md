@@ -12,8 +12,9 @@ Instead of starting from a task-first agent and adding more orchestration, the p
 
 ## Public documentation
 
-- [Full implementation architecture](docs/eva-agent-full-implementation.md)
-- [Current implementation status](docs/current-status.md) — layer-by-layer capability checklist, remaining gaps, and next-step direction
+- [Documentation entry point](docs/README.md)
+- [Current implementation status](docs/current-status.md) — public snapshot of the current runtime posture
+- [Capability inventory](docs/capability-inventory.md) — capability tiers, gaps, and deferred items
 
 ## Repository structure
 
