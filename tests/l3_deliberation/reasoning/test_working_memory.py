@@ -828,7 +828,11 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
             },
         )
 
-        adapter = FailingWorkingMemoryAdapter("anthropic_transport_unavailable")
+        # Round 1.7-c: advisory_source label renamed to the vendor-neutral
+        # 'client_backed_live_openai_compatible'. The audit's error string
+        # is whatever the adapter raised — kept as a stable test fixture
+        # (it's an opaque label, not tied to a real protocol now).
+        adapter = FailingWorkingMemoryAdapter("openai_compatible_transport_unavailable")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))
@@ -837,20 +841,19 @@ class WorkingMemoryReasoningTests(unittest.TestCase):
                 deliberation_input,
                 backend="llm_assisted",
                 llm_adapter=adapter,
-                advisory_source="client_backed_anthropic",
+                advisory_source="client_backed_live_openai_compatible",
             )
             llm_audit = store.read_llm_advisory_audit()
 
         self.assertTrue(adapter.called)
         self.assertEqual(context.source_backend, "local_rule_based")
-        self.assertEqual(context.advisory_source, "client_backed_anthropic:fallback")
+        self.assertEqual(context.advisory_source, "client_backed_live_openai_compatible:fallback")
         self.assertEqual(context.advisory_context, {})
         self.assertTrue(context.advisory_fallback)
         self.assertEqual(len(llm_audit), 1)
-        self.assertEqual(llm_audit[0]["provider"], "anthropic")
-        self.assertEqual(llm_audit[0]["model"], "claude-sonnet-4-6")
+        self.assertEqual(llm_audit[0]["provider"], "openai-compatible")
         self.assertEqual(llm_audit[0]["outcome"], "fallback_local")
-        self.assertEqual(llm_audit[0]["error"], "anthropic_transport_unavailable")
+        self.assertEqual(llm_audit[0]["error"], "openai_compatible_transport_unavailable")
 
         summaries = summarize_habit_bias(
             [

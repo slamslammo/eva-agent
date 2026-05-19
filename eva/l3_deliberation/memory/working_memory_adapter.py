@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 from .working_memory_model_client import (
     ALLOWED_CANDIDATE_SUGGESTIONS,
-    MODEL_CLIENT_MODE_ANTHROPIC,
+    MODEL_CLIENT_MODE_LIVE,
     WorkingMemoryModelClient,
     WorkingMemoryModelClientConfig,
     WorkingMemoryModelClientRequest,
@@ -150,7 +150,7 @@ class ClientBackedWorkingMemoryAdapter:
         self,
         client: WorkingMemoryModelClient | None = None,
         *,
-        client_mode: str = MODEL_CLIENT_MODE_ANTHROPIC,
+        client_mode: str = MODEL_CLIENT_MODE_LIVE,
         client_config: WorkingMemoryModelClientConfig | None = None,
     ) -> None:
         if client is not None:

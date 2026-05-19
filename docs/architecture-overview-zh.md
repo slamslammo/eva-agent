@@ -297,3 +297,59 @@ EVA-Agent 通过结构不变量而非模块覆盖率来验证。
 - **`scenarios/crafter/SPEC.md`** — Bounded 验证运行时的具体设计
 
 支撑这些设计选择的理论请阅读 [eva-theory 仓库](https://github.com/slamslammo/eva-theory) — v0.5 包含核心架构和四大工程贡献，v0.6 包含主动存续、rate sensing、memory layering 和 inherited priors。
+
+---
+
+## 9. LLM advisory 配置
+
+Working-memory 层可选地调用 LLM 生成 bounded advisory。Advisory **从不是运行时前进的必要条件** — kernel 和 L3 mediator 在没有它的情况下也能继续运行（default inhibition 仍然成立）。
+
+框架以 **OpenAI Chat Completions** 协议对接任何兼容端点（DeepSeek / OpenAI / Moonshot / Qwen via DashScope / Together / Fireworks / Groq / OpenRouter / 本地 Ollama / vLLM / LM Studio）。框架代码内部不存在任何 vendor-specific 分支；"使用哪家厂家"完全由 base URL 决定。
+
+### 启用 live advisory
+
+传入这些 CLI flag 并设置四个环境变量：
+
+```bash
+python -m runners.run_crafter \
+  --working-memory-backend llm_assisted \
+  --working-memory-model-client-mode live \
+  ...
+```
+
+| 变量 | 必填 | 作用 |
+|---|---|---|
+| `EVA_LLM_API_BASE_URL` | 是 | 含 `/v1` 段的 base URL（如 `https://api.deepseek.com/v1`） |
+| `EVA_LLM_API_KEY` | 是 | Bearer token，作为 `Authorization: Bearer <key>` 发送 |
+| `EVA_LLM_MODEL` | 是 | 请求体中的模型名 |
+| `EVA_LLM_EXTRA_PARAMS_JSON` | 否 | JSON object，合并入请求体；承载厂家私有字段（如 DeepSeek `thinking.disabled`） |
+
+缺失或格式错误的值在 startup 时直接抛出 `RuntimeError`；运行时不会静默 fallback —— 那会掩盖长跑场景下的配置错误。
+
+### 参考配置
+
+```bash
+# DeepSeek v4-flash, non-thinking mode（advisory 推荐配置）
+export EVA_LLM_API_BASE_URL=https://api.deepseek.com/v1
+export EVA_LLM_API_KEY=<your-deepseek-key>
+export EVA_LLM_MODEL=deepseek-v4-flash
+export EVA_LLM_EXTRA_PARAMS_JSON='{"thinking":{"type":"disabled"}}'
+
+# OpenAI (gpt-4o-mini)
+export EVA_LLM_API_BASE_URL=https://api.openai.com/v1
+export EVA_LLM_API_KEY=<your-openai-key>
+export EVA_LLM_MODEL=gpt-4o-mini
+
+# 本地 Ollama
+export EVA_LLM_API_BASE_URL=http://localhost:11434/v1
+export EVA_LLM_API_KEY=ollama
+export EVA_LLM_MODEL=qwen2.5:7b
+```
+
+### 容错策略
+
+Live client 在 `HTTP 5xx` 与 `transport_unavailable` 错误上重试三次（指数退避 1s / 2s / 4s），耗尽后 fallback 到 bounded local heuristic。`4xx` 错误和响应解析失败立即 fallback（不重试，重试也不会改变结果）。Fallback 原因追加到 advisory 的 `reasoning_trace` 中，便于审计。
+
+### Anthropic Messages API
+
+**本轮不支持。** Anthropic 原生协议结构差异较大（`x-api-key` 鉴权、content block-list 形式），需要 per-vendor 代码路径，与 vendor-neutral 抽象冲突。如需访问 Claude 模型，请通过提供 OpenAI Chat Completions 兼容接口的中转层（OpenRouter / Helicone / Portkey 等）路由。

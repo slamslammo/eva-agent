@@ -4,82 +4,46 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 from urllib import error, request
 
 MODEL_CLIENT_MODE_INERT = "inert"
 MODEL_CLIENT_MODE_HEURISTIC = "heuristic"
-MODEL_CLIENT_MODE_ANTHROPIC = "anthropic"
-MODEL_CLIENT_MODE_DEEPSEEK = "deepseek"
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
-# DeepSeek surfaces two concrete models on /v1/models:
-#   - ``deepseek-v4-flash`` — reasoning model (returns ``reasoning_content``
-#     separate from ``content``; uses CoT tokens before emitting JSON;
-#     needs ``max_tokens`` ≥ ~800 or content is truncated to empty)
-#   - ``deepseek-v4-pro``   — stronger model
-#
-# DeepSeek ALSO accepts the ``deepseek-chat`` model name. Despite not
-# appearing in /v1/models, requests with ``deepseek-chat`` are served
-# WITHOUT the reasoning step: ``content`` is populated directly, no
-# ``reasoning_content`` field, and ``max_tokens=220`` is sufficient for
-# our JSON-only advisory output.
-#
-# For our advisory task (simple JSON, no CoT needed) ``deepseek-chat`` is
-# the right pin — it's faster and consumes ~30-50× fewer completion
-# tokens than ``deepseek-v4-flash`` when both produce the same JSON.
-# Empirically verified across a 5min Crafter run (158/158 successful
-# advisory_attached). Callers wanting CoT reasoning can override with
-# ``--working-memory-model-client-model deepseek-v4-flash`` plus a
-# larger ``--working-memory-model-client-timeout-sec`` and a wider
-# ``max_tokens`` budget.
-DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
-ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
-DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
-DEEPSEEK_API_BASE_URL_ENV = "DEEPSEEK_API_BASE_URL"
-DEFAULT_DEEPSEEK_API_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_CHAT_COMPLETIONS_API_PATH = "/v1/chat/completions"
-
-
-def _resolve_deepseek_chat_url() -> str:
-    """Resolve the DeepSeek chat-completions URL, honoring the env override."""
-
-    base = os.environ.get(DEEPSEEK_API_BASE_URL_ENV) or DEFAULT_DEEPSEEK_API_BASE_URL
-    base = base.rstrip("/")
-    if base.endswith(DEEPSEEK_CHAT_COMPLETIONS_API_PATH):
-        return base
-    return base + DEEPSEEK_CHAT_COMPLETIONS_API_PATH
-ANTHROPIC_API_BASE_URL_ENV = "ANTHROPIC_API_BASE_URL"
-DEFAULT_ANTHROPIC_API_BASE_URL = "https://api.anthropic.com"
-ANTHROPIC_MESSAGES_API_PATH = "/v1/messages"
-
-
-def _resolve_anthropic_messages_url() -> str:
-    """Resolve the Anthropic Messages API URL, honoring the env override.
-
-    When ``ANTHROPIC_API_BASE_URL`` is set, it replaces the production base
-    (``https://api.anthropic.com``). This supports validation runs through
-    an enterprise relay / proxy without committing endpoint config. The
-    ``/v1/messages`` path is appended unless the env value already targets
-    that path explicitly.
-    """
-
-    base = os.environ.get(ANTHROPIC_API_BASE_URL_ENV) or DEFAULT_ANTHROPIC_API_BASE_URL
-    base = base.rstrip("/")
-    if base.endswith(ANTHROPIC_MESSAGES_API_PATH):
-        return base
-    return base + ANTHROPIC_MESSAGES_API_PATH
+# Vendor-neutral live mode — speaks OpenAI Chat Completions against any
+# base_url resolved from env. Vendor-private body fields travel opaquely
+# through EVA_LLM_EXTRA_PARAMS_JSON. Round 1.7-c removed the legacy
+# anthropic / deepseek mode strings; the live mode now covers any
+# OpenAI-compatible endpoint (DeepSeek, OpenAI, Moonshot, Qwen, Ollama,
+# vLLM, OpenRouter, Together, ...). Re-introducing Anthropic native
+# Messages API would be a separate, deliberate slice.
+MODEL_CLIENT_MODE_LIVE = "live"
+EVA_LLM_API_BASE_URL_ENV = "EVA_LLM_API_BASE_URL"
+EVA_LLM_API_KEY_ENV = "EVA_LLM_API_KEY"
+EVA_LLM_MODEL_ENV = "EVA_LLM_MODEL"
+EVA_LLM_EXTRA_PARAMS_JSON_ENV = "EVA_LLM_EXTRA_PARAMS_JSON"
+OPENAI_COMPATIBLE_CHAT_COMPLETIONS_PATH = "/chat/completions"
 ALLOWED_CANDIDATE_SUGGESTIONS = frozenset({"observe_first", "stabilize_first", "escalate_first"})
 
-AnthropicTransport = Callable[[dict[str, Any], str, float], dict[str, Any]]
+# Transport signature for the OpenAI-compatible live client.
+# Takes ``(payload, api_key, timeout_sec, base_url)`` — base_url is per-client
+# so the same transport function serves any OpenAI-compatible endpoint.
+OpenAICompatibleTransport = Callable[[dict[str, Any], str, float, str], dict[str, Any]]
 
 
 @dataclass(frozen=True)
 class WorkingMemoryModelClientConfig:
-    """Bounded config for working-memory advisory model clients."""
+    """Bounded config for working-memory advisory model clients.
 
-    provider: str = "anthropic"
-    model: str = DEFAULT_ANTHROPIC_MODEL
+    Provider / model fields are used by the heuristic client for its
+    reasoning trace and for ``request_timeout_sec`` passthrough into the
+    live client. The live client otherwise reads its real model name and
+    base URL from ``EVA_LLM_*`` env vars at construction time.
+    """
+
+    provider: str = "heuristic"
+    model: str = "bounded-local-placeholder"
     request_timeout_sec: float = 5.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -90,6 +54,29 @@ class WorkingMemoryModelClientConfig:
             "model": self.model,
             "request_timeout_sec": max(0.1, float(self.request_timeout_sec)),
         }
+
+
+@dataclass(frozen=True)
+class OpenAICompatibleWorkingMemoryModelClientConfig:
+    """Resolved config for one OpenAI Chat Completions endpoint.
+
+    Built by ``_load_live_config_from_env`` from ``EVA_LLM_*`` environment
+    variables; the framework knows nothing about which vendor backs the
+    base_url. Vendor-private body fields (e.g. DeepSeek ``thinking.disabled``)
+    travel opaquely through ``extra_params``.
+
+    Round 1.7-a: ``max_retries`` and ``retry_backoff_base_sec`` fields are
+    declared now for forward stability; the actual retry wrapper is added
+    in 1.7-b. Defaults (``max_retries=0``) keep 1.7-a single-shot.
+    """
+
+    base_url: str
+    api_key: str
+    model: str
+    extra_params: dict[str, Any]
+    timeout_sec: float = 5.0
+    max_retries: int = 0
+    retry_backoff_base_sec: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -147,15 +134,14 @@ class HeuristicWorkingMemoryModelClient:
             provider="heuristic",
             model="bounded-local-placeholder",
         )
+        # Normalize legacy / placeholder provider labels onto "heuristic" so
+        # audit logs are consistent regardless of how the config was built.
         provider = base_config.provider
-        if provider in {"placeholder", "anthropic"}:
+        if provider in {"placeholder", "anthropic", "deepseek"}:
             provider = "heuristic"
-        model = base_config.model
-        if model == DEFAULT_ANTHROPIC_MODEL:
-            model = "bounded-local-placeholder"
         self.config = WorkingMemoryModelClientConfig(
             provider=provider,
-            model=model,
+            model=base_config.model,
             request_timeout_sec=base_config.request_timeout_sec,
         )
 
@@ -208,94 +194,92 @@ class HeuristicWorkingMemoryModelClient:
         )
 
 
-class AnthropicWorkingMemoryModelClient:
-    """Anthropic-backed bounded advisory client for Stage E working memory."""
+class OpenAICompatibleWorkingMemoryModelClient:
+    """OpenAI Chat Completions advisory client driven by env-resolved config.
 
-    def __init__(
-        self,
-        config: WorkingMemoryModelClientConfig | None = None,
-        *,
-        transport: AnthropicTransport | None = None,
-    ) -> None:
-        base_config = config or WorkingMemoryModelClientConfig(
-            provider="anthropic",
-            model=DEFAULT_ANTHROPIC_MODEL,
-        )
-        provider = base_config.provider if base_config.provider not in {"placeholder", "heuristic"} else "anthropic"
-        model = str(base_config.model or DEFAULT_ANTHROPIC_MODEL)
-        self.config = WorkingMemoryModelClientConfig(
-            provider=provider,
-            model=model,
-            request_timeout_sec=base_config.request_timeout_sec,
-        )
-        self.transport = transport or _post_anthropic_messages
+    Vendor-neutral: speaks the OpenAI Chat Completions protocol against any
+    base URL provided via ``EVA_LLM_API_BASE_URL`` (DeepSeek, OpenAI,
+    Moonshot, Qwen, Ollama, vLLM, OpenRouter, ...). Vendor-private body
+    fields travel opaquely through
+    ``OpenAICompatibleWorkingMemoryModelClientConfig.extra_params`` —
+    the framework does not validate, interpret, or rewrite those fields.
 
-    def build_working_memory_advisory(
-        self,
-        request: WorkingMemoryModelClientRequest,
-    ) -> WorkingMemoryModelClientResponse | None:
-        """Call Anthropic Messages API and return one bounded advisory payload."""
-
-        api_key = os.environ.get(ANTHROPIC_API_KEY_ENV)
-        if not api_key:
-            raise RuntimeError("anthropic_api_key_missing")
-        response_payload = self.transport(
-            _anthropic_request_payload(request, model=self.config.model),
-            api_key,
-            self.config.request_timeout_sec,
-        )
-        response_text = _anthropic_text_response(response_payload)
-        advisory_payload = _extract_advisory_payload(response_text)
-        return WorkingMemoryModelClientResponse(payload=advisory_payload)
-
-
-
-class DeepSeekWorkingMemoryModelClient:
-    """DeepSeek-backed bounded advisory client (OpenAI-compatible protocol).
-
-    DeepSeek's API at ``https://api.deepseek.com/v1/chat/completions`` uses
-    the OpenAI chat-completions shape with Bearer auth. The advisory
-    prompt and response-sanitization logic are shared with Anthropic via
-    ``_extract_advisory_payload``; only the transport and request /
-    response envelope differ.
+    Round 1.7-b adds transparent retry with exponential backoff for
+    transient transport errors (HTTP 5xx, transport_unavailable) and a
+    fallback to ``HeuristicWorkingMemoryModelClient`` on exhaustion or
+    non-retryable failure. Long-run scenarios must not crash on a flaky
+    upstream; the fallback keeps advisory available with degraded quality.
     """
 
     def __init__(
         self,
-        config: WorkingMemoryModelClientConfig | None = None,
+        config: OpenAICompatibleWorkingMemoryModelClientConfig,
         *,
-        transport: AnthropicTransport | None = None,
+        fallback: WorkingMemoryModelClient | None = None,
+        transport: OpenAICompatibleTransport | None = None,
     ) -> None:
-        base_config = config or WorkingMemoryModelClientConfig(
-            provider="deepseek",
-            model=DEFAULT_DEEPSEEK_MODEL,
-        )
-        provider = base_config.provider if base_config.provider not in {"placeholder", "heuristic", "anthropic"} else "deepseek"
-        model = str(base_config.model or DEFAULT_DEEPSEEK_MODEL)
-        self.config = WorkingMemoryModelClientConfig(
-            provider=provider,
-            model=model,
-            request_timeout_sec=base_config.request_timeout_sec,
-        )
-        self.transport = transport or _post_deepseek_chat
+        self.config = config
+        # Round 1.7-b: when no fallback is supplied, construct a heuristic
+        # one with a recognizable provider label so audit logs make the
+        # fallback path visible in ``reasoning_trace``.
+        if fallback is None:
+            fallback = HeuristicWorkingMemoryModelClient(
+                WorkingMemoryModelClientConfig(
+                    provider="openai-compatible-fallback",
+                    model=config.model,
+                    request_timeout_sec=config.timeout_sec,
+                )
+            )
+        self.fallback = fallback
+        self.transport = transport or _post_openai_compatible_chat
 
     def build_working_memory_advisory(
         self,
         request: WorkingMemoryModelClientRequest,
     ) -> WorkingMemoryModelClientResponse | None:
-        """Call DeepSeek chat completions API and return one bounded advisory payload."""
+        """Call the configured endpoint with retry + fallback discipline.
 
-        api_key = os.environ.get(DEEPSEEK_API_KEY_ENV)
-        if not api_key:
-            raise RuntimeError("deepseek_api_key_missing")
-        response_payload = self.transport(
-            _deepseek_request_payload(request, model=self.config.model),
-            api_key,
-            self.config.request_timeout_sec,
-        )
-        response_text = _deepseek_text_response(response_payload)
-        advisory_payload = _extract_advisory_payload(response_text)
-        return WorkingMemoryModelClientResponse(payload=advisory_payload)
+        Retry path: HTTP 5xx and ``openai_compatible_transport_unavailable``
+        are retried up to ``config.max_retries`` times with exponential
+        backoff (``retry_backoff_base_sec * 2**attempt``).
+
+        Fallback path: on retry exhaustion or any non-retryable error
+        (4xx, response-parsing errors), delegate to ``self.fallback``.
+        The fallback reason is appended to the response's
+        ``reasoning_trace`` so the audit log records the degraded path.
+        """
+
+        last_error_label = "unknown"
+        for attempt in range(self.config.max_retries + 1):
+            try:
+                response_payload = self.transport(
+                    _openai_compatible_request_payload(
+                        request,
+                        model=self.config.model,
+                        extra_params=self.config.extra_params,
+                    ),
+                    self.config.api_key,
+                    self.config.timeout_sec,
+                    self.config.base_url,
+                )
+                response_text = _openai_compatible_text_response(response_payload)
+                advisory_payload = _extract_advisory_payload(response_text)
+                return WorkingMemoryModelClientResponse(payload=advisory_payload)
+            except RuntimeError as exc:
+                last_error_label = str(exc)
+                if not _is_retryable_openai_compatible_error(last_error_label):
+                    # Non-retryable (4xx / response-parsing / config). Skip
+                    # remaining attempts; go straight to fallback.
+                    break
+                if attempt < self.config.max_retries:
+                    time.sleep(
+                        max(0.0, self.config.retry_backoff_base_sec * (2 ** attempt))
+                    )
+                # Otherwise: this was the last attempt; the for-loop will
+                # exit naturally and fall through to the fallback below.
+
+        fallback_response = self.fallback.build_working_memory_advisory(request)
+        return _attach_fallback_reason(fallback_response, last_error_label)
 
 
 
@@ -303,15 +287,24 @@ def build_builtin_working_memory_model_client(
     mode: str,
     config: WorkingMemoryModelClientConfig | None = None,
 ) -> WorkingMemoryModelClient:
-    """Build one built-in working-memory model client."""
+    """Build one built-in working-memory model client.
+
+    Three modes are supported:
+    - ``inert`` — never emits advisory (default; safe for any deployment)
+    - ``heuristic`` — local rule-based client; no external calls
+    - ``live`` — OpenAI Chat Completions client driven by ``EVA_LLM_*`` env
+      vars; retries on 5xx / transport errors, falls back to heuristic on
+      exhaustion. Vendor identity (DeepSeek / OpenAI / Moonshot / Ollama
+      / etc.) is determined entirely by the configured ``base_url``.
+    """
 
     normalized = str(mode or MODEL_CLIENT_MODE_INERT)
     if normalized == MODEL_CLIENT_MODE_HEURISTIC:
         return HeuristicWorkingMemoryModelClient(config)
-    if normalized == MODEL_CLIENT_MODE_ANTHROPIC:
-        return AnthropicWorkingMemoryModelClient(config)
-    if normalized == MODEL_CLIENT_MODE_DEEPSEEK:
-        return DeepSeekWorkingMemoryModelClient(config)
+    if normalized == MODEL_CLIENT_MODE_LIVE:
+        return OpenAICompatibleWorkingMemoryModelClient(
+            _load_live_config_from_env(config),
+        )
     return NullWorkingMemoryModelClient()
 
 
@@ -331,223 +324,6 @@ def _coerce_drive_level(value: Any) -> float:
 
 
 
-def _anthropic_request_payload(
-    request_payload: WorkingMemoryModelClientRequest,
-    *,
-    model: str,
-) -> dict[str, Any]:
-    """Build the bounded Anthropic request payload for one advisory turn."""
-
-    prompt = (
-        "Return only a JSON object with these optional keys: "
-        "candidate_suggestions, prediction_hints, reasoning_trace, confidence. "
-        "candidate_suggestions, if present, must contain only these strings: "
-        '"observe_first", "stabilize_first", "escalate_first". '
-        "Do not propose actions outside those candidate profiles. "
-        "prediction_hints and reasoning_trace must be short string lists. "
-        "confidence must be a number between 0 and 1. "
-        "If uncertain, return empty lists and a low confidence. "
-        "Request payload:\n"
-        f"{json.dumps(request_payload.to_dict(), ensure_ascii=False, sort_keys=True)}"
-    )
-    return {
-        "model": model,
-        "max_tokens": 220,
-        "temperature": 0,
-        "system": (
-            "You are a bounded EVA working-memory advisory model. "
-            "You are not allowed to release actions, choose external side effects, or invent new action domains. "
-            "Respond with JSON only."
-        ),
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-
-
-def _post_anthropic_messages(payload: dict[str, Any], api_key: str, timeout_sec: float) -> dict[str, Any]:
-    """Post one Anthropic Messages request through the stdlib HTTP client."""
-
-    body = json.dumps(payload).encode("utf-8")
-    http_request = request.Request(
-        _resolve_anthropic_messages_url(),
-        data=body,
-        headers={
-            "content-type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
-    try:
-        with request.urlopen(http_request, timeout=max(0.1, float(timeout_sec))) as response:
-            raw_body = response.read().decode("utf-8")
-    except error.HTTPError as exc:
-        raise RuntimeError(_anthropic_http_error_label(exc)) from exc
-    except error.URLError as exc:
-        raise RuntimeError("anthropic_transport_unavailable") from exc
-    payload_dict = json.loads(raw_body)
-    if not isinstance(payload_dict, dict):
-        raise RuntimeError("anthropic_response_not_object")
-    return payload_dict
-
-
-def _post_deepseek_chat(payload: dict[str, Any], api_key: str, timeout_sec: float) -> dict[str, Any]:
-    """Post one DeepSeek chat-completions request through the stdlib HTTP client.
-
-    DeepSeek's API is OpenAI-compatible: ``POST /v1/chat/completions`` with
-    a ``Authorization: Bearer <key>`` header and a JSON body containing
-    ``model``, ``messages``, ``max_tokens``, etc. The response shape is the
-    OpenAI ``choices[0].message.content`` envelope.
-    """
-
-    body = json.dumps(payload).encode("utf-8")
-    http_request = request.Request(
-        _resolve_deepseek_chat_url(),
-        data=body,
-        headers={
-            "content-type": "application/json",
-            "authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-    try:
-        with request.urlopen(http_request, timeout=max(0.1, float(timeout_sec))) as response:
-            raw_body = response.read().decode("utf-8")
-    except error.HTTPError as exc:
-        raise RuntimeError(_deepseek_http_error_label(exc)) from exc
-    except error.URLError as exc:
-        raise RuntimeError("deepseek_transport_unavailable") from exc
-    payload_dict = json.loads(raw_body)
-    if not isinstance(payload_dict, dict):
-        raise RuntimeError("deepseek_response_not_object")
-    return payload_dict
-
-
-def _deepseek_http_error_label(exc: error.HTTPError) -> str:
-    """Return a compact, audit-safe DeepSeek HTTP error label."""
-
-    try:
-        body = exc.read().decode("utf-8", errors="ignore")
-        payload = json.loads(body)
-    except Exception:
-        payload = {}
-    error_payload = payload.get("error") if isinstance(payload, dict) else {}
-    if isinstance(error_payload, dict):
-        error_type = str(error_payload.get("type") or error_payload.get("code") or "").strip()
-        if error_type:
-            return f"deepseek_http_{exc.code}_{error_type}"
-    return f"deepseek_http_{exc.code}"
-
-
-def _deepseek_request_payload(
-    request_payload: WorkingMemoryModelClientRequest,
-    *,
-    model: str,
-) -> dict[str, Any]:
-    """Build the bounded DeepSeek chat-completions request payload.
-
-    OpenAI-compatible: system prompt becomes a ``{"role": "system"}`` message,
-    user prompt becomes a ``{"role": "user"}`` message. Token cap is shared
-    with Anthropic to keep advisory output bounded.
-    """
-
-    user_prompt = (
-        "Return only a JSON object with these optional keys: "
-        "candidate_suggestions, prediction_hints, reasoning_trace, confidence. "
-        "candidate_suggestions, if present, must contain only these strings: "
-        '"observe_first", "stabilize_first", "escalate_first". '
-        "Do not propose actions outside those candidate profiles. "
-        "prediction_hints and reasoning_trace must be short string lists. "
-        "confidence must be a number between 0 and 1. "
-        "If uncertain, return empty lists and a low confidence. "
-        "Request payload:\n"
-        f"{json.dumps(request_payload.to_dict(), ensure_ascii=False, sort_keys=True)}"
-    )
-    return {
-        "model": model,
-        "max_tokens": 220,
-        "temperature": 0,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a bounded EVA working-memory advisory model. "
-                    "You are not allowed to release actions, choose external side effects, or invent new action domains. "
-                    "Respond with JSON only."
-                ),
-            },
-            {"role": "user", "content": user_prompt},
-        ],
-    }
-
-
-def _deepseek_text_response(payload: dict[str, Any]) -> str:
-    """Extract the assistant text content from an OpenAI-style payload.
-
-    Robust to ``content`` being either a plain string (the common case) or a
-    list of ``{"type": "text", "text": ...}`` blocks (some OpenAI-compatible
-    proxies emit this richer shape).
-    """
-
-    choices = payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        raise RuntimeError("deepseek_response_missing_choices")
-    message = choices[0].get("message") if isinstance(choices[0], dict) else None
-    if not isinstance(message, dict):
-        raise RuntimeError("deepseek_response_missing_message")
-    content = message.get("content")
-    if isinstance(content, str):
-        if not content.strip():
-            raise RuntimeError("deepseek_response_empty_content")
-        return content
-    if isinstance(content, list):
-        parts = [
-            str(block.get("text") or "")
-            for block in content
-            if isinstance(block, dict) and str(block.get("type") or "") in {"text", ""}
-        ]
-        joined = "\n".join(p for p in parts if p)
-        if joined:
-            return joined
-    raise RuntimeError("deepseek_response_missing_content")
-
-
-
-def _anthropic_http_error_label(exc: error.HTTPError) -> str:
-    """Return a compact, audit-safe HTTP error label."""
-
-    try:
-        body = exc.read().decode("utf-8", errors="ignore")
-        payload = json.loads(body)
-    except Exception:
-        payload = {}
-    error_payload = payload.get("error") if isinstance(payload, dict) else {}
-    if isinstance(error_payload, dict):
-        error_type = str(error_payload.get("type") or "").strip()
-        if error_type:
-            return f"anthropic_http_{exc.code}_{error_type}"
-    return f"anthropic_http_{exc.code}"
-
-
-
-def _anthropic_text_response(payload: dict[str, Any]) -> str:
-    """Extract the concatenated text response from one Anthropic payload."""
-
-    content = payload.get("content")
-    if not isinstance(content, list):
-        raise RuntimeError("anthropic_response_missing_content")
-    text_blocks = [
-        str(block.get("text") or "")
-        for block in content
-        if isinstance(block, dict) and str(block.get("type") or "") == "text"
-    ]
-    response_text = "\n".join(block for block in text_blocks if block)
-    if not response_text:
-        raise RuntimeError("anthropic_response_missing_text")
-    return response_text
-
-
-
 def _extract_advisory_payload(response_text: str) -> dict[str, Any]:
     """Extract one bounded JSON advisory payload from a model text response."""
 
@@ -561,7 +337,7 @@ def _extract_advisory_payload(response_text: str) -> dict[str, Any]:
             continue
         if isinstance(payload, dict):
             return _sanitize_advisory_payload(payload)
-    raise RuntimeError("anthropic_response_not_json")
+    raise RuntimeError("openai_compatible_response_not_json")
 
 
 
@@ -630,3 +406,265 @@ def _as_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
+
+
+# ---------------------------------------------------------------------------
+# OpenAI-compatible live client helpers — the only HTTP / payload / response
+# code path in the module after Round 1.7-c removed the legacy Anthropic /
+# DeepSeek vendor helpers.
+# ---------------------------------------------------------------------------
+
+
+def _load_live_config_from_env(
+    config: WorkingMemoryModelClientConfig | None,
+) -> OpenAICompatibleWorkingMemoryModelClientConfig:
+    """Resolve ``OpenAICompatibleWorkingMemoryModelClientConfig`` from env vars.
+
+    Required env: ``EVA_LLM_API_BASE_URL``, ``EVA_LLM_API_KEY``, ``EVA_LLM_MODEL``.
+    Optional env: ``EVA_LLM_EXTRA_PARAMS_JSON`` (JSON object merged into the
+    request body — carries vendor-private fields opaquely).
+
+    ``timeout_sec`` is sourced from the passed ``WorkingMemoryModelClientConfig``
+    (i.e. the ``--working-memory-model-client-timeout-sec`` CLI flag) so the
+    runtime configuration plumbing remains consistent with the legacy vendor
+    modes.
+
+    Fail-fast on missing or invalid values — silently falling back to a
+    heuristic client would mask config errors in long-run scenarios.
+    """
+
+    base_url = os.environ.get(EVA_LLM_API_BASE_URL_ENV)
+    if not base_url:
+        raise RuntimeError(f"eva_llm_env_missing:{EVA_LLM_API_BASE_URL_ENV}")
+    api_key = os.environ.get(EVA_LLM_API_KEY_ENV)
+    if not api_key:
+        raise RuntimeError(f"eva_llm_env_missing:{EVA_LLM_API_KEY_ENV}")
+    model = os.environ.get(EVA_LLM_MODEL_ENV)
+    if not model:
+        raise RuntimeError(f"eva_llm_env_missing:{EVA_LLM_MODEL_ENV}")
+
+    extra_params_raw = os.environ.get(EVA_LLM_EXTRA_PARAMS_JSON_ENV)
+    if extra_params_raw is None or extra_params_raw.strip() == "":
+        extra_params: dict[str, Any] = {}
+    else:
+        try:
+            parsed = json.loads(extra_params_raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("eva_llm_extra_params_json_invalid:not_json") from exc
+        if not isinstance(parsed, dict):
+            raise RuntimeError("eva_llm_extra_params_json_invalid:not_object")
+        extra_params = parsed
+
+    timeout_sec = 5.0
+    if config is not None:
+        timeout_sec = max(0.1, float(config.request_timeout_sec))
+
+    return OpenAICompatibleWorkingMemoryModelClientConfig(
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        extra_params=extra_params,
+        timeout_sec=timeout_sec,
+        # Round 1.7-b: default to 3 retries with 1s base backoff (sleeps
+        # 1s, 2s, 4s between attempts) for transient HTTP 5xx / transport
+        # errors. Sub-second timeouts on the long-run path can override
+        # these by constructing the config directly.
+        max_retries=3,
+        retry_backoff_base_sec=1.0,
+    )
+
+
+def _resolve_openai_compatible_chat_url(base_url: str) -> str:
+    """Resolve the chat-completions URL from a base URL.
+
+    The base URL is expected to include the API version segment (e.g. ``/v1``);
+    only ``/chat/completions`` is appended. Trailing slash on the base URL is
+    tolerated. If the base URL already ends with ``/chat/completions``
+    (some relays expose it that way), no path is appended.
+    """
+
+    base = base_url.rstrip("/")
+    if base.endswith(OPENAI_COMPATIBLE_CHAT_COMPLETIONS_PATH):
+        return base
+    return base + OPENAI_COMPATIBLE_CHAT_COMPLETIONS_PATH
+
+
+def _openai_compatible_request_payload(
+    request_payload: WorkingMemoryModelClientRequest,
+    *,
+    model: str,
+    extra_params: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the OpenAI-compatible chat-completions request body.
+
+    Standard shape: system + user message, bounded token cap, deterministic
+    temperature. Any vendor-private fields from ``extra_params`` are merged
+    into the body — the framework has no understanding of what those fields
+    mean (e.g. DeepSeek ``thinking.disabled``); they pass through opaquely.
+    """
+
+    user_prompt = (
+        "Return only a JSON object with these optional keys: "
+        "candidate_suggestions, prediction_hints, reasoning_trace, confidence. "
+        "candidate_suggestions, if present, must contain only these strings: "
+        '"observe_first", "stabilize_first", "escalate_first". '
+        "Do not propose actions outside those candidate profiles. "
+        "prediction_hints and reasoning_trace must be short string lists. "
+        "confidence must be a number between 0 and 1. "
+        "If uncertain, return empty lists and a low confidence. "
+        "Request payload:\n"
+        f"{json.dumps(request_payload.to_dict(), ensure_ascii=False, sort_keys=True)}"
+    )
+    body: dict[str, Any] = {
+        "model": model,
+        "max_tokens": 220,
+        "temperature": 0,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a bounded EVA working-memory advisory model. "
+                    "You are not allowed to release actions, choose external side effects, or invent new action domains. "
+                    "Respond with JSON only."
+                ),
+            },
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+    # Merge extra_params LAST. The framework does not validate which keys are
+    # passed through — that is intentional. Callers who configure an
+    # invalid extra-params shape get the backend's error verbatim.
+    if extra_params:
+        body.update(extra_params)
+    return body
+
+
+def _openai_compatible_text_response(payload: dict[str, Any]) -> str:
+    """Extract assistant content from an OpenAI-compatible response payload.
+
+    Handles both ``choices[0].message.content`` shapes:
+    - plain string (the common case)
+    - list of ``{"type": "text", "text": ...}`` blocks (some OpenAI-compatible
+      proxies emit this richer shape).
+
+    Error labels use the ``openai_compatible_*`` prefix to keep framework
+    logs vendor-neutral.
+    """
+
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError("openai_compatible_response_missing_choices")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    if not isinstance(message, dict):
+        raise RuntimeError("openai_compatible_response_missing_message")
+    content = message.get("content")
+    if isinstance(content, str):
+        if not content.strip():
+            raise RuntimeError("openai_compatible_response_empty_content")
+        return content
+    if isinstance(content, list):
+        parts = [
+            str(block.get("text") or "")
+            for block in content
+            if isinstance(block, dict) and str(block.get("type") or "") in {"text", ""}
+        ]
+        joined = "\n".join(p for p in parts if p)
+        if joined:
+            return joined
+    raise RuntimeError("openai_compatible_response_missing_content")
+
+
+def _post_openai_compatible_chat(
+    payload: dict[str, Any],
+    api_key: str,
+    timeout_sec: float,
+    base_url: str,
+) -> dict[str, Any]:
+    """Post one OpenAI-compatible chat-completions request via stdlib HTTP.
+
+    ``base_url`` should already include the API version segment (e.g. ``/v1``);
+    ``/chat/completions`` is appended. Auth uses Bearer header — the de facto
+    standard for OpenAI-compatible endpoints (DeepSeek, OpenAI, Moonshot,
+    Qwen, Together, Fireworks, Ollama, vLLM, OpenRouter).
+    """
+
+    body = json.dumps(payload).encode("utf-8")
+    http_request = request.Request(
+        _resolve_openai_compatible_chat_url(base_url),
+        data=body,
+        headers={
+            "content-type": "application/json",
+            "authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(http_request, timeout=max(0.1, float(timeout_sec))) as response:
+            raw_body = response.read().decode("utf-8")
+    except error.HTTPError as exc:
+        raise RuntimeError(_openai_compatible_http_error_label(exc)) from exc
+    except error.URLError as exc:
+        raise RuntimeError("openai_compatible_transport_unavailable") from exc
+    payload_dict = json.loads(raw_body)
+    if not isinstance(payload_dict, dict):
+        raise RuntimeError("openai_compatible_response_not_object")
+    return payload_dict
+
+
+def _openai_compatible_http_error_label(exc: error.HTTPError) -> str:
+    """Return a compact, audit-safe OpenAI-compatible HTTP error label."""
+
+    try:
+        body = exc.read().decode("utf-8", errors="ignore")
+        payload = json.loads(body)
+    except Exception:
+        payload = {}
+    error_payload = payload.get("error") if isinstance(payload, dict) else {}
+    if isinstance(error_payload, dict):
+        error_type = str(error_payload.get("type") or error_payload.get("code") or "").strip()
+        if error_type:
+            return f"openai_compatible_http_{exc.code}_{error_type}"
+    return f"openai_compatible_http_{exc.code}"
+
+
+def _is_retryable_openai_compatible_error(label: str) -> bool:
+    """Return True iff the error label denotes a transient failure worth retrying.
+
+    Retryable:
+    - ``openai_compatible_http_5*`` — server error, often transient
+    - ``openai_compatible_transport_unavailable`` — URLError (connection refused,
+      DNS failure, etc.)
+
+    Not retryable (fall back immediately):
+    - HTTP 4xx — config / auth / quota errors that won't fix on retry
+    - Response-parsing errors (``openai_compatible_response_*``) — the backend
+      returned 200 but the payload was malformed; retrying yields the same
+      malformed payload
+    """
+
+    if label == "openai_compatible_transport_unavailable":
+        return True
+    if label.startswith("openai_compatible_http_5"):
+        return True
+    return False
+
+
+def _attach_fallback_reason(
+    response: WorkingMemoryModelClientResponse | None,
+    reason: str,
+) -> WorkingMemoryModelClientResponse | None:
+    """Append a fallback-reason marker to the response's ``reasoning_trace``.
+
+    Audit visibility: when the live client falls back to the heuristic, the
+    reason (last error label) is recorded so post-run analysis can
+    distinguish "agent advisory was bounded heuristic by design" from
+    "agent advisory was bounded heuristic because the upstream API failed".
+    """
+
+    if response is None:
+        return None
+    payload = response.to_dict()
+    reasoning = list(payload.get("reasoning_trace") or [])
+    reasoning.append(f"live_client_fallback:{reason}")
+    payload["reasoning_trace"] = reasoning
+    return WorkingMemoryModelClientResponse(payload=payload)

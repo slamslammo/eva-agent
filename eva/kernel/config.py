@@ -137,7 +137,7 @@ def build_runtime_config(
     working_memory_backend: str = "local_rule_based",
     working_memory_adapter: Any | None = None,
     working_memory_adapter_mode: str = "inert",
-    working_memory_model_client_mode: str = "anthropic",
+    working_memory_model_client_mode: str = "inert",
     working_memory_model_client_config: Any | None = None,
     inherited_priors_path: str | None = None,
 ) -> RuntimeConfig:

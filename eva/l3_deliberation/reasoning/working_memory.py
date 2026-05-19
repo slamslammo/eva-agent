@@ -33,6 +33,9 @@ from ..memory.working_memory_adapter import (
     WorkingMemoryAdapterRequest,
     WorkingMemoryAdapterResponse,
 )
+from ..memory.working_memory_model_client import (
+    OpenAICompatibleWorkingMemoryModelClient,
+)
 
 AUTO_WORKING_MEMORY_BACKEND = "auto"
 MIN_AUTO_LLM_CONFIDENCE = 0.6
@@ -603,13 +606,29 @@ def _append_llm_advisory_audit(
 
 
 def _adapter_client_metadata(llm_adapter: WorkingMemoryAdapter, *, advisory_source: str) -> tuple[str, str, float]:
-    """Return compact provider/model/timeout metadata for advisory audit."""
+    """Return compact provider/model/timeout metadata for advisory audit.
+
+    Round 1.7-c: the live client uses ``OpenAICompatibleWorkingMemoryModelClientConfig``
+    which has ``timeout_sec`` (not ``request_timeout_sec``) and no ``provider``
+    field by design. Read both field names and synthesize a provider label
+    from the client class when the config is vendor-neutral.
+    """
 
     client = getattr(llm_adapter, "client", None)
     config = getattr(client, "config", None)
     provider = str(getattr(config, "provider", "") or "")
     model = str(getattr(config, "model", "") or "")
-    timeout_sec = float(getattr(config, "request_timeout_sec", 0.0) or 0.0)
+    # Try both timeout field names. Live client's config uses ``timeout_sec``;
+    # the heuristic client's config uses ``request_timeout_sec``.
+    timeout_sec = float(
+        getattr(config, "request_timeout_sec", None)
+        or getattr(config, "timeout_sec", 0.0)
+        or 0.0
+    )
+    # Vendor-neutral live client has no provider attribute; synthesize one
+    # so audit logs still record a meaningful label.
+    if not provider and isinstance(client, OpenAICompatibleWorkingMemoryModelClient):
+        provider = "openai-compatible"
     if provider or model or timeout_sec > 0.0:
         return provider or "unknown", model or "unknown", timeout_sec
     provider, model = _provider_and_model_from_source(advisory_source)
@@ -620,8 +639,8 @@ def _adapter_client_metadata(llm_adapter: WorkingMemoryAdapter, *, advisory_sour
 def _provider_and_model_from_source(advisory_source: str) -> tuple[str, str]:
     """Infer a compact provider/model pair for advisory audit records."""
 
-    if advisory_source.startswith("client_backed_anthropic"):
-        return "anthropic", "claude-sonnet-4-6"
+    if advisory_source.startswith("client_backed_live_openai_compatible"):
+        return "openai-compatible", "unknown"
     if advisory_source.startswith("client_backed_model_shell"):
         return "model_shell", "unknown"
     if advisory_source.startswith("builtin_heuristic_adapter"):
@@ -652,9 +671,8 @@ def _default_advisory_source_for_adapter(llm_adapter: WorkingMemoryAdapter | Non
     if isinstance(llm_adapter, HeuristicWorkingMemoryAdapter):
         return "builtin_heuristic_adapter"
     if isinstance(llm_adapter, ClientBackedWorkingMemoryAdapter):
-        provider = getattr(getattr(llm_adapter, "client", None), "config", None)
-        provider_name = str(getattr(provider, "provider", "") or "")
-        if provider_name == "anthropic":
-            return "client_backed_anthropic"
+        client = getattr(llm_adapter, "client", None)
+        if isinstance(client, OpenAICompatibleWorkingMemoryModelClient):
+            return "client_backed_live_openai_compatible"
         return "client_backed_model_shell"
     return "explicit_adapter"

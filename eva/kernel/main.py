@@ -18,18 +18,14 @@ from ..l3_deliberation import (
     ADAPTER_MODE_HEURISTIC,
     ADAPTER_MODE_INERT,
     ClientBackedWorkingMemoryAdapter,
-    DEFAULT_ANTHROPIC_MODEL,
-    DEFAULT_DEEPSEEK_MODEL,
     HeuristicWorkingMemoryAdapter,
-    MODEL_CLIENT_MODE_ANTHROPIC,
-    MODEL_CLIENT_MODE_DEEPSEEK,
     MODEL_CLIENT_MODE_HEURISTIC,
     MODEL_CLIENT_MODE_INERT,
+    MODEL_CLIENT_MODE_LIVE,
     NullWorkingMemoryAdapter,
+    OpenAICompatibleWorkingMemoryModelClient,
     WorkingMemoryAdapter,
     WorkingMemoryModelClientConfig,
-    AnthropicWorkingMemoryModelClient,
-    DeepSeekWorkingMemoryModelClient,
     build_builtin_working_memory_adapter,
 )
 
@@ -264,8 +260,8 @@ def _working_memory_advisory_source(
             return "builtin_heuristic_adapter"
         if isinstance(resolved_adapter, ClientBackedWorkingMemoryAdapter):
             client = getattr(resolved_adapter, "client", None)
-            if isinstance(client, AnthropicWorkingMemoryModelClient):
-                return "client_backed_anthropic"
+            if isinstance(client, OpenAICompatibleWorkingMemoryModelClient):
+                return "client_backed_live_openai_compatible"
             return "client_backed_model_shell"
         if isinstance(resolved_adapter, NullWorkingMemoryAdapter):
             return "auto_no_adapter"
@@ -276,8 +272,8 @@ def _working_memory_advisory_source(
         return "builtin_heuristic_adapter"
     if isinstance(resolved_adapter, ClientBackedWorkingMemoryAdapter):
         client = getattr(resolved_adapter, "client", None)
-        if isinstance(client, AnthropicWorkingMemoryModelClient):
-            return "client_backed_anthropic"
+        if isinstance(client, OpenAICompatibleWorkingMemoryModelClient):
+            return "client_backed_live_openai_compatible"
         return "client_backed_model_shell"
     if isinstance(resolved_adapter, NullWorkingMemoryAdapter):
         return "null_adapter"
@@ -307,13 +303,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--working-memory-adapter-mode", choices=[ADAPTER_MODE_INERT, ADAPTER_MODE_HEURISTIC], default=ADAPTER_MODE_INERT)
     parser.add_argument(
         "--working-memory-model-client-mode",
-        choices=[MODEL_CLIENT_MODE_INERT, MODEL_CLIENT_MODE_HEURISTIC, MODEL_CLIENT_MODE_ANTHROPIC, MODEL_CLIENT_MODE_DEEPSEEK],
-        default=MODEL_CLIENT_MODE_ANTHROPIC,
+        choices=[
+            MODEL_CLIENT_MODE_INERT,
+            MODEL_CLIENT_MODE_HEURISTIC,
+            # Vendor-neutral live mode reading EVA_LLM_* env vars
+            # (EVA_LLM_API_BASE_URL / EVA_LLM_API_KEY / EVA_LLM_MODEL /
+            # optional EVA_LLM_EXTRA_PARAMS_JSON). Speaks OpenAI Chat
+            # Completions to any compatible endpoint.
+            MODEL_CLIENT_MODE_LIVE,
+        ],
+        default=MODEL_CLIENT_MODE_INERT,
     )
     parser.add_argument("--working-memory-model-client-provider", default=None,
-                        help="Provider label (default: derived from mode — 'anthropic' or 'deepseek').")
+                        help="Provider label for audit/observability only. Live mode's actual provider is determined by EVA_LLM_API_BASE_URL.")
     parser.add_argument("--working-memory-model-client-model", default=None,
-                        help="Model id (default: derived from mode — Anthropic default or DeepSeek default).")
+                        help="Audit-only model id label. Live mode's actual model is set via EVA_LLM_MODEL env var.")
     parser.add_argument("--working-memory-model-client-timeout-sec", type=float, default=5.0)
     parser.add_argument("--inherited-priors-path")
     # Round 1.D: long-run validation snapshot + tripwire CLI options.
@@ -372,12 +376,17 @@ def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     # user did not override them. This lets ``--working-memory-model-client-mode deepseek``
     # work without forcing the user to also set ``--working-memory-model-client-model``.
     client_mode = args.working_memory_model_client_mode
-    if client_mode == MODEL_CLIENT_MODE_DEEPSEEK:
-        default_provider = "deepseek"
-        default_model = DEFAULT_DEEPSEEK_MODEL
+    if client_mode == MODEL_CLIENT_MODE_LIVE:
+        # Live mode reads provider / model from EVA_LLM_* env vars at
+        # client-construction time. CLI placeholder values are audit-only;
+        # only request_timeout_sec from the WorkingMemoryModelClientConfig
+        # is actually consulted by the live client.
+        default_provider = "openai-compatible"
+        default_model = "env-resolved"
     else:
-        default_provider = "anthropic"
-        default_model = DEFAULT_ANTHROPIC_MODEL
+        # Heuristic / inert: provider + model are pure audit labels.
+        default_provider = "heuristic"
+        default_model = "bounded-local-placeholder"
     resolved_provider = args.working_memory_model_client_provider or default_provider
     resolved_model = args.working_memory_model_client_model or default_model
 

@@ -47,9 +47,12 @@ class MainLoopTests(unittest.TestCase):
             self.assertEqual(config.working_memory_backend, "auto")
             self.assertIsNone(config.working_memory_adapter)
             self.assertEqual(config.working_memory_adapter_mode, "inert")
-            self.assertEqual(config.working_memory_model_client_mode, "anthropic")
-            self.assertEqual(config.working_memory_model_client_config.provider, "anthropic")
-            self.assertEqual(config.working_memory_model_client_config.model, "claude-sonnet-4-6")
+            # Round 1.7-c: default model client mode is "inert" (was "anthropic").
+            # No external API call happens unless the user explicitly opts into
+            # live mode via --working-memory-model-client-mode live + EVA_LLM_* env.
+            self.assertEqual(config.working_memory_model_client_mode, "inert")
+            self.assertEqual(config.working_memory_model_client_config.provider, "heuristic")
+            self.assertEqual(config.working_memory_model_client_config.model, "bounded-local-placeholder")
             self.assertIsNone(config.append_only_artifacts.rotation_max_bytes)
             self.assertTrue(str(config.paths.append_only_archive_dir).endswith("archive"))
 
@@ -528,43 +531,13 @@ class MainLoopTests(unittest.TestCase):
             self.assertGreaterEqual(len(patrol_turns), 1)
             self.assertEqual(patrol_turns[0]["details"]["signal_summary"]["status_signal_count"], 1)
 
-    def test_runtime_defaults_to_anthropic_client_shell_and_falls_back_locally_when_unavailable(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            config = build_runtime_config(
-                temp_dir,
-                lifecycle=LifecycleConfig(
-                    heartbeat_interval_sec=0.2,
-                    lease_duration_sec=1.0,
-                    recovering_window_sec=0.05,
-                    turn_guard_window_sec=0.01,
-                ),
-                external_life=ExternalLifeConfig(
-                    shallow_patrol_interval_sec=0.01,
-                    deep_patrol_interval_sec=0.02,
-                    full_report_interval_sec=0.03,
-                    recent_event_window_sec=60.0,
-                ),
-                control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
-                working_memory_backend="llm_assisted",
-                working_memory_model_client_config=WorkingMemoryModelClientConfig(request_timeout_sec=1.5),
-            )
-            with patch.dict(os.environ, {}, clear=True):
-                run_runtime(config)
-            store = StateStore(config.paths)
-            audits = store.read_deliberation_audit()
-            llm_audits = store.read_llm_advisory_audit()
-            self.assertGreaterEqual(len(audits), 1)
-            self.assertGreaterEqual(len(llm_audits), 1)
-            working_memory_context = audits[0]["deliberation_input"]["working_memory_context"]
-            self.assertEqual(working_memory_context["source_backend"], "local_rule_based")
-            self.assertEqual(working_memory_context["advisory_source"], "client_backed_anthropic:fallback")
-            self.assertEqual(working_memory_context["advisory_context"], {})
-            self.assertTrue(working_memory_context["advisory_fallback"])
-            self.assertEqual(llm_audits[0]["provider"], "anthropic")
-            self.assertEqual(llm_audits[0]["model"], "claude-sonnet-4-6")
-            self.assertEqual(llm_audits[0]["request_timeout_sec"], 1.5)
-            self.assertEqual(llm_audits[0]["outcome"], "fallback_local")
-            self.assertEqual(llm_audits[0]["error"], "anthropic_api_key_missing")
+    # Round 1.7-c removed the legacy
+    # ``test_runtime_defaults_to_anthropic_client_shell_and_falls_back_locally_when_unavailable``
+    # test. The default model client mode is now ``inert`` (no external call),
+    # and the live-mode fallback-to-heuristic path is unit-tested at
+    # ``tests/l3_deliberation/memory/test_openai_compatible_client.py``
+    # (OpenAICompatibleRetryFallbackTests). Re-introducing an integration-level
+    # version would duplicate that coverage without adding signal.
 
     def test_runtime_uses_explicit_working_memory_adapter_when_provided(self) -> None:
         adapter = CapturingRuntimeWorkingMemoryAdapter()

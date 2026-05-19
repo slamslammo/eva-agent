@@ -70,7 +70,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | RPE-like learning as internal update signal | `eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |
 | Habit shaping and skill crystallization through habit track | `eva/l3_deliberation/peer_circuit/habit_track.py`, `eva/l3_deliberation/memory/skill_library.py` | production | — | — |
 | Advisory-only working-memory assembly | `eva/l3_deliberation/reasoning/working_memory.py` | production | — | — |
-| Model-backed working-memory advisory path with bounded fallback | `eva/kernel/main.py`, `eva/l3_deliberation/reasoning/working_memory.py` | production | — | — |
+| Model-backed working-memory advisory path with bounded fallback | `eva/l3_deliberation/memory/working_memory_model_client.py`, `eva/l3_deliberation/memory/working_memory_adapter.py`, `eva/kernel/main.py` | production | Round 1.7 generalized the live client to a single vendor-neutral OpenAI Chat Completions implementation (`OpenAICompatibleWorkingMemoryModelClient`) configured by `EVA_LLM_*` env vars; legacy Anthropic + DeepSeek vendor classes deleted. Includes transparent retry (5xx / transport_unavailable, exponential backoff) and fallback to local heuristic on exhaustion or 4xx errors. | — |
 | Episodic retrieval over append-only artifacts | `eva/l3_deliberation/memory/episodic.py`, `eva/l3_deliberation/memory/retrieval.py` | production | — | — |
 | Semantic memory — first-class storage + exact query + bounded L3 participation | `eva/l3_deliberation/memory/semantic.py`, `eva/skills/__init__.py` | production | Store-side indexing landed in Round 1.C-1 (W4): process-local in-memory cache keyed on `StateStore.paths.runtime_dir`, eliminating disk re-reads; inverted buckets over `(scenario, situation_key) / (scenario, top_drive) / (scenario, pressure_reason) / topic / scenario`; new `query_semantic_memory_for_situation` helper returns a candidate superset. The semantic → L2 drive-weight path landed in Round 1.B-3 (W5). | Long-run validation in Round 1.D |
 | Semantic memory → L2 drive-weight semantics | `eva/l3_deliberation/reasoning/value_judgment.py` | production | Safe-path implementation: bounded amplification overlay on positive entries of `drive_impact_schema` (cap `MAX_SEMANTIC_OVERLAY_BLEND=0.15`, threshold `MIN_SEMANTIC_OVERLAY_CONFIDENCE=0.7`). Drive read-only broadcast preserved — overlay never modifies drive_levels and never weakens negative impacts. Round 1.B-3 (W5). | Long-run validation in Round 1.D |
@@ -155,6 +155,7 @@ The following items are confirmed as carry-forward follow-ups, not accidental ga
 | Semantic memory store-side windowing / indexing | Stage I follow-up #1 | resolved (Round 1.C-1 / W4) |
 | Semantic memory → L2 drive-weight semantics safe path evaluation | Stage I follow-up #2 | resolved (Round 1.B-3 / W5) |
 | Working-memory interface signature review threshold | Stage I follow-up #3 | addressed (Round 1.C-2 / W6) |
+| LLM client generalization to OpenAI Chat Completions (vendor-neutral) | Phase 1.7 | resolved (Round 1.7 a–e) |
 
 ---
 

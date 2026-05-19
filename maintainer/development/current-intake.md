@@ -9,16 +9,16 @@
 
 > 这是本地单-Claude 开发阶段的轻量工作入口，不是长期归档文档。
 
-## Round 1.B-4 — Signal Classification De-coupling — COMPLETE
+## Round 1.7 — LLM Client Generalization — COMPLETE
 
 ### Status
-- **implementation complete**
-- 397 / 397 tests pass for this slice (1 pre-existing failure on `main` unrelated to 1.B-4)
-- Crafter exploration drive verified working post-fix (smoke: max=1.0 mean=0.40 nonzero=55%)
-- 6h long-run now meaningful (previously would have captured buggy framework behavior)
-- progress: `maintainer/development/round-1b-4-progress.md`
+- **all sub-slices landed**: 1.7-a (additive) → 1.7-b (retry+fallback) → 1.7-c (delete vendor) → 1.7-d (env + docs) → 1.7-e (smoke + closeout)
+- 414 / 415 tests pass (1 pre-existing l2_drive failure on `main`, unrelated)
+- 27 new tests in `tests/l3_deliberation/memory/test_openai_compatible_client.py`
+- 5min Crafter smoke (live mode + DeepSeek v4-flash + thinking.disabled): **211 calls / 100% success / 0 errors / 0 fallbacks**
+- progress: `maintainer/development/round-1.7-progress.md`
 
 ### What's next
-- Phase 2: HTML viewer (validation_viewer/) for monitoring 6h run
-- Phase 3: actual 6h Crafter long-run (real LLM or local)
-- D-6: post-run report + parameter tuning recommendations
+- Phase 2: `validation_viewer/` HTML viewer — design drafted in `maintainer/development/round-2-validation-viewer-design.md`; design discussion still pending before implementation
+- Phase 3: 6h Crafter long-run (user-driven; infrastructure ready)
+- D-6: post-run report after Phase 3 produces durable data

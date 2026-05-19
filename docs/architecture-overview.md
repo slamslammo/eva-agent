@@ -300,3 +300,59 @@ This overview connects to the rest of the documentation:
 - **`scenarios/crafter/SPEC.md`** — concrete design of the bounded validation runtime
 
 For the theory behind these design choices, read the [eva-theory repository](https://github.com/slamslammo/eva-theory) — v0.5 for the core architecture and four engineering contributions, v0.6 for active persistence, rate sensing, memory layering, and inherited priors.
+
+---
+
+## 9. LLM advisory configuration
+
+The working-memory layer can optionally invoke an LLM for bounded advisory generation. Advisory is **never required** for runtime forward progress — the kernel and L3 mediator continue to operate under default inhibition without it.
+
+The framework speaks **OpenAI Chat Completions** to any compatible endpoint (DeepSeek, OpenAI, Moonshot, Qwen via DashScope, Together, Fireworks, Groq, OpenRouter, local Ollama / vLLM / LM Studio). No vendor-specific code path exists; "which vendor" is determined entirely by the configured base URL.
+
+### Enabling live advisory
+
+Pass these CLI flags and set four environment variables:
+
+```bash
+python -m runners.run_crafter \
+  --working-memory-backend llm_assisted \
+  --working-memory-model-client-mode live \
+  ...
+```
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `EVA_LLM_API_BASE_URL` | yes | Base URL including `/v1` segment (e.g. `https://api.deepseek.com/v1`) |
+| `EVA_LLM_API_KEY` | yes | Bearer token sent as `Authorization: Bearer <key>` |
+| `EVA_LLM_MODEL` | yes | Model name passed in request body |
+| `EVA_LLM_EXTRA_PARAMS_JSON` | no | JSON object merged into request body; carries vendor-private fields (e.g. DeepSeek `thinking.disabled`) |
+
+Missing or malformed values raise `RuntimeError` at startup; the runtime does not silently fall back, which would mask config errors in long-run scenarios.
+
+### Reference configurations
+
+```bash
+# DeepSeek v4-flash, non-thinking mode (recommended for advisory)
+export EVA_LLM_API_BASE_URL=https://api.deepseek.com/v1
+export EVA_LLM_API_KEY=<your-deepseek-key>
+export EVA_LLM_MODEL=deepseek-v4-flash
+export EVA_LLM_EXTRA_PARAMS_JSON='{"thinking":{"type":"disabled"}}'
+
+# OpenAI (gpt-4o-mini)
+export EVA_LLM_API_BASE_URL=https://api.openai.com/v1
+export EVA_LLM_API_KEY=<your-openai-key>
+export EVA_LLM_MODEL=gpt-4o-mini
+
+# Local Ollama
+export EVA_LLM_API_BASE_URL=http://localhost:11434/v1
+export EVA_LLM_API_KEY=ollama
+export EVA_LLM_MODEL=qwen2.5:7b
+```
+
+### Resilience
+
+The live client retries `HTTP 5xx` and `transport_unavailable` errors three times with exponential backoff (1s, 2s, 4s) before falling back to the bounded local heuristic. `4xx` errors and response-parsing failures fall back immediately. The fallback reason is appended to the advisory's `reasoning_trace` for audit visibility.
+
+### Anthropic Messages API
+
+**Not supported in this round.** Anthropic's native protocol differs (`x-api-key` auth, content block-list format) and would require a per-vendor code path that contradicts the vendor-neutral abstraction. To access Claude models, route through a relay that exposes OpenAI Chat Completions compatibility (OpenRouter, Helicone, Portkey, or similar).
