@@ -156,6 +156,7 @@ The following items are confirmed as carry-forward follow-ups, not accidental ga
 | Semantic memory → L2 drive-weight semantics safe path evaluation | Stage I follow-up #2 | resolved (Round 1.B-3 / W5) |
 | Working-memory interface signature review threshold | Stage I follow-up #3 | addressed (Round 1.C-2 / W6) |
 | LLM client generalization to OpenAI Chat Completions (vendor-neutral) | Phase 1.7 | resolved (Round 1.7 a–e) |
+| EVA black-box viewer (`observation_tools/`, runtime trace introspection) | Phase 2 V0 | delivered (independent auxiliary tool; reads JSONL trace, no impact on framework / scenarios) |
 
 ---
 

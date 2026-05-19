@@ -158,6 +158,7 @@
 | Semantic memory → L2 drive-weight semantics 最小安全路径评估 | Stage I follow-up #2 | resolved (Round 1.B-3 / W5) |
 | Working-memory 接口签名复审阈值 | Stage I follow-up #3 | addressed (Round 1.C-2 / W6) |
 | LLM client 通用化收敛到 OpenAI Chat Completions（vendor-neutral） | Phase 1.7 | resolved (Round 1.7 a–e) |
+| EVA 黑盒子查看器（`observation_tools/`，runtime trace 内省工具） | Phase 2 V0 | delivered（独立辅助工具；只读 JSONL trace，不影响框架 / 场景） |
 
 ---
 

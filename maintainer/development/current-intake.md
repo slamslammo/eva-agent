@@ -9,16 +9,24 @@
 
 > 这是本地单-Claude 开发阶段的轻量工作入口，不是长期归档文档。
 
-## Round 1.7 — LLM Client Generalization — COMPLETE
+## Phase 2 V0 — observation_tools 黑盒子查看器 — 已完成
 
-### Status
-- **all sub-slices landed**: 1.7-a (additive) → 1.7-b (retry+fallback) → 1.7-c (delete vendor) → 1.7-d (env + docs) → 1.7-e (smoke + closeout)
-- 414 / 415 tests pass (1 pre-existing l2_drive failure on `main`, unrelated)
-- 27 new tests in `tests/l3_deliberation/memory/test_openai_compatible_client.py`
-- 5min Crafter smoke (live mode + DeepSeek v4-flash + thinking.disabled): **211 calls / 100% success / 0 errors / 0 fallbacks**
-- progress: `maintainer/development/round-1.7-progress.md`
+### 状态
+- **全部 7 个子切片落地**：V0-a（骨架）→ V0-b（reader+builder）→ V0-c（HTTP server）→ V0-d（前端骨架）→ V0-e（链路详情）→ V0-f（时间轴 + drive 折线）→ V0-g（smoke + closeout）
+- 回归：**445 / 446 测试通过**（1 个 pre-existing `l2_drive` 失败，在 `main` 上也存在，无关）
+- 新增 31 个测试，全部通过
+- E2E smoke：用 `validation-runs/phase1.7-live-smoke/runtime/`（211 turns）启动 viewer，链路、详情、时间轴全部正常
+- 完整 progress 报告：`maintainer/development/v0-progress.md`
 
-### What's next
-- Phase 2: `validation_viewer/` HTML viewer — design drafted in `maintainer/development/round-2-validation-viewer-design.md`; design discussion still pending before implementation
-- Phase 3: 6h Crafter long-run (user-driven; infrastructure ready)
-- D-6: post-run report after Phase 3 produces durable data
+### 启动方式
+```bash
+python -m observation_tools \
+  --runtime-dir validation-runs/phase1.7-live-smoke/runtime \
+  --port 8080
+```
+浏览器打开 `http://127.0.0.1:8080`。
+
+### 下一步
+- **Phase 3** —— 6h Crafter 长跑（用户驱动；现在 viewer 也已就绪，长跑时可实时观察）
+- **D-6** —— 长跑数据出来后的 post-run 分析
+- **V1 候选**（待长跑反馈决定）：Crafter plugin（9×7 grid + 生命条 + inventory）、跨 turn 趋势页、events 链路集成

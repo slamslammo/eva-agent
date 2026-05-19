@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EVA Black Box</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header id="top-bar">
+    <div class="brand">EVA Black Box</div>
+    <div class="run-info">
+      <span class="label">Run</span>
+      <span id="run-name" class="value">—</span>
+    </div>
+    <div class="run-info">
+      <span class="label">当前 Turn</span>
+      <span id="selected-turn" class="value">—</span>
+    </div>
+    <div class="run-info">
+      <span class="label">生命态</span>
+      <span id="selected-life-state" class="value">—</span>
+    </div>
+    <div class="run-info">
+      <span class="label">Turns</span>
+      <span id="turn-count" class="value">0</span>
+    </div>
+    <div class="live-indicator" id="live-indicator" title="数据加载状态">
+      <span class="dot"></span>
+      <span class="text">—</span>
+    </div>
+  </header>
+
+  <!-- V0-f 会填充顶部迷你时间轴 + drive 折线 -->
+  <section id="timeline-strip">
+    <div class="placeholder">顶部时间轴 + drive 折线 (V0-f 待实现)</div>
+  </section>
+
+  <main id="main-grid">
+    <aside id="turn-list-pane">
+      <div class="pane-header">
+        <h2>Turn 列表</h2>
+        <div class="filter-row">
+          <label>
+            生命态
+            <select id="filter-life-state">
+              <option value="">全部</option>
+            </select>
+          </label>
+          <label>
+            Advisory
+            <select id="filter-advisory">
+              <option value="">全部</option>
+              <option value="advisory_attached">advisory_attached</option>
+              <option value="fallback_local">fallback_local</option>
+              <option value="no_advisory">无</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="turn-list" class="turn-list" aria-live="polite">
+        <div class="placeholder">尚未载入 turn 数据</div>
+      </div>
+    </aside>
+
+    <section id="detail-pane">
+      <div class="pane-header">
+        <h2 id="detail-title">链路详情</h2>
+      </div>
+      <div id="detail-body">
+        <div class="placeholder">选择左侧任一 turn 查看链路（L1 → L2 → L3 → 动作）。详情视图将在 V0-e 完整填充。</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

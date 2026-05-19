@@ -1,0 +1,314 @@
+/* EVA Black Box — V0 dark theme.
+   纯 stdlib HTML/CSS/JS，无 CDN，无第三方依赖。
+   配色参考 GitHub dark：背景 #0d1117，正文 #c9d1d9，强调 #58a6ff。 */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+body {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ===== 顶部 bar ===== */
+
+#top-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 18px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+}
+
+#top-bar .brand {
+  font-weight: 600;
+  font-size: 15px;
+  color: #58a6ff;
+}
+
+#top-bar .run-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+#top-bar .run-info .label {
+  color: #8b949e;
+}
+
+#top-bar .run-info .value {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: #c9d1d9;
+}
+
+#top-bar .live-indicator {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8b949e;
+}
+
+#top-bar .live-indicator .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6e7681;
+}
+
+#top-bar .live-indicator.live .dot {
+  background: #3fb950;
+  box-shadow: 0 0 6px #3fb950;
+}
+
+#top-bar .live-indicator.stale .dot {
+  background: #d29922;
+}
+
+#top-bar .live-indicator.error .dot {
+  background: #f85149;
+}
+
+/* ===== 时间轴条 ===== */
+
+#timeline-strip {
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  min-height: 110px;
+  overflow: hidden;
+}
+
+#timeline-strip .placeholder {
+  color: #6e7681;
+  font-size: 12px;
+  text-align: center;
+  padding: 36px 0;
+}
+
+/* ===== 主区域 ===== */
+
+#main-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  overflow: hidden;
+}
+
+.pane-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid #30363d;
+  background: #161b22;
+}
+
+.pane-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #c9d1d9;
+}
+
+.filter-row {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.filter-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-row select {
+  background: #0d1117;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+/* ===== 左侧 turn 列表 ===== */
+
+#turn-list-pane {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-right: 1px solid #30363d;
+  overflow: hidden;
+}
+
+.turn-list {
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.turn-list .placeholder {
+  padding: 16px;
+  text-align: center;
+  color: #6e7681;
+  font-size: 12px;
+}
+
+.turn-card {
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: #0d1117;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+
+.turn-card:hover {
+  background: #161b22;
+  border-color: #30363d;
+}
+
+.turn-card.selected {
+  background: #1f2937;
+  border-color: #58a6ff;
+}
+
+.turn-card .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.turn-card .turn-idx {
+  color: #58a6ff;
+  font-weight: 600;
+}
+
+.turn-card .recorded-at {
+  color: #6e7681;
+  font-size: 11px;
+}
+
+.turn-card .body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  color: #8b949e;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  border: 1px solid #30363d;
+}
+
+.badge.life-stable     { color: #3fb950; border-color: #3fb950; }
+.badge.life-recovering { color: #d29922; border-color: #d29922; }
+.badge.life-critical   { color: #f85149; border-color: #f85149; }
+.badge.life-unknown    { color: #6e7681; border-color: #30363d; }
+
+.badge.advisory-ok       { color: #3fb950; border-color: #3fb950; }
+.badge.advisory-fallback { color: #d29922; border-color: #d29922; }
+.badge.advisory-none     { color: #6e7681; border-color: #30363d; }
+
+/* ===== 右侧详情 ===== */
+
+#detail-pane {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+#detail-body {
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+#detail-body .placeholder {
+  color: #6e7681;
+  font-size: 13px;
+  padding: 24px;
+  text-align: center;
+}
+
+/* V0-e 会填充实际的链路展开样式 */
+.chain-section {
+  margin-bottom: 18px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #0d1117;
+}
+
+.chain-section .section-header {
+  padding: 8px 12px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  border-radius: 6px 6px 0 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: #58a6ff;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chain-section .section-header .summary {
+  font-weight: normal;
+  color: #8b949e;
+  font-size: 12px;
+}
+
+.chain-section .section-body {
+  padding: 10px 14px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chain-section.collapsed .section-body {
+  display: none;
+}
+
+.kv-table {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+
+.kv-table .k { color: #8b949e; }
+.kv-table .v { color: #c9d1d9; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+.raw-json {
+  background: #161b22;
+  padding: 8px;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre;
+  overflow-x: auto;
+  color: #c9d1d9;
+}
