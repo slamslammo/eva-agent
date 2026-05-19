@@ -38,11 +38,20 @@ DEFAULT_DRIVE_UPDATE_POLICY = DriveUpdatePolicy(
     severity_degraded_delta=0.16,
     severity_critical_delta=0.32,
     threat_bonus=0.08,
-    # Round 1.B-2: enable curiosity-style recovery / suppression for the
-    # exploration drive. Values match Linux defaults; tune in Round 1.D
-    # long-run validation if needed.
-    curiosity_recovery=0.05,
-    curiosity_suppression=0.12,
+    # Round 1.B-2 → Phase-1.5 tuning (post-10min validation):
+    # Linux defaults (0.05 / 0.12) produce exploration drive level == 0
+    # across all 96 turns of a 10min Crafter run because the framework's
+    # curiosity-suppression branch fires on EVERY degraded/critical
+    # overall_status — and the Crafter avatar's food/water/energy keep it
+    # in degraded territory almost continuously. Recovery doubled and
+    # suppression halved, but more importantly the
+    # ``curiosity_suppress_on_degraded_status`` flag is OFF so suppression
+    # fires only on actual threat signals, leaving sustained sub-critical
+    # avatar pressure as a window where exploration drive can accumulate.
+    # Re-tune via Round 1.D long-run data.
+    curiosity_recovery=0.10,
+    curiosity_suppression=0.06,
+    curiosity_suppress_on_degraded_status=False,
 )
 
 CRAFTER_DRIVE_PRESET = DrivePreset(

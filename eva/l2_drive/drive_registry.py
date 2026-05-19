@@ -18,6 +18,14 @@ class DriveUpdatePolicy:
     threat_bonus: float = 0.04
     curiosity_recovery: float = 0.08
     curiosity_suppression: float = 0.12
+    # Phase-1.5 tuning: whether ``_curiosity_delta`` suppression fires when
+    # ``overall_status`` is degraded/critical (in addition to firing on
+    # threat). Linux semantics keep this True so curiosity is dampened
+    # whenever the runtime is in any degraded state. Crafter sets this to
+    # False because the avatar is in degraded state almost continuously
+    # (food/water/energy slowly tick down), making suppression dominate over
+    # recovery and pinning exploration drive level at 0 indefinitely.
+    curiosity_suppress_on_degraded_status: bool = True
 
 
 @dataclass(frozen=True)

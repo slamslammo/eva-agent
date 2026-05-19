@@ -198,12 +198,20 @@ def _curiosity_suppression_delta(
     contributors: list[str],
     policy: DriveUpdatePolicy,
 ) -> float:
-    """Suppress curiosity under threat or degraded overall conditions."""
+    """Suppress curiosity under threat or degraded overall conditions.
+
+    Phase-1.5: the degraded/critical overall_status check is gated by
+    ``policy.curiosity_suppress_on_degraded_status`` (default True for
+    Linux equivalence). Scenarios where the avatar is in a persistently
+    degraded state (e.g. Crafter) can opt out via the policy flag so
+    exploration drive can accumulate during sub-critical sustained
+    pressure rather than being pinned at 0.
+    """
 
     if threat_present:
         contributors.append("threat_suppression")
         return -policy.curiosity_suppression
-    if snapshot.overall_status in {"degraded", "critical"}:
+    if policy.curiosity_suppress_on_degraded_status and snapshot.overall_status in {"degraded", "critical"}:
         contributors.append(f"overall_status.{snapshot.overall_status}")
         return -policy.curiosity_suppression
     return 0.0

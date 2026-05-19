@@ -241,9 +241,14 @@ class CrafterExplorationDriveUpdateTests(unittest.TestCase):
             ),
         )
 
-    def test_exploration_suppressed_under_degraded_overall_status(self) -> None:
-        """Overall status 'degraded' (no threat) → exploration drive falls
-        by curiosity_suppression."""
+    def test_exploration_NOT_suppressed_under_degraded_overall_status_for_crafter(self) -> None:
+        """Phase-1.5: Crafter explicitly opts out of degraded-status suppression
+        (``curiosity_suppress_on_degraded_status=False`` in its preset) because
+        Crafter's avatar is in degraded state almost continuously — making
+        suppression dominate and pinning exploration drive at 0. The new
+        behavior: degraded overall_status alone (no threat) is no longer a
+        suppression trigger for Crafter, so exploration accumulates by
+        ``curiosity_recovery`` per tick instead."""
 
         now = utc_now()
         starting_level = 0.5
@@ -253,14 +258,19 @@ class CrafterExplorationDriveUpdateTests(unittest.TestCase):
         table, summary = update_drive_state(previous, snapshot, [])
         by_type = {drive.drive_type: drive for drive in table.drives}
 
-        suppression = CRAFTER_DRIVE_PRESET.default_policy.curiosity_suppression
+        recovery = CRAFTER_DRIVE_PRESET.default_policy.curiosity_recovery
+        self.assertFalse(
+            CRAFTER_DRIVE_PRESET.default_policy.curiosity_suppress_on_degraded_status,
+            "Crafter preset must opt out of degraded-status curiosity suppression.",
+        )
+        # Recovery branch fires (degraded does not trigger suppression for Crafter).
         self.assertAlmostEqual(
             by_type["exploration"].level,
-            starting_level - suppression,
+            starting_level + recovery,
             places=4,
             msg=(
-                f"Exploration must suppress under degraded overall status. "
-                f"Got {by_type['exploration'].level}, expected {starting_level - suppression}"
+                f"Exploration must recover (not suppress) under degraded for Crafter. "
+                f"Got {by_type['exploration'].level}, expected {starting_level + recovery}"
             ),
         )
 
