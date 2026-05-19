@@ -4,10 +4,9 @@
 
 ## 1. Semantic memory 读路径需要 store-side windowing / indexing
 
-- **Status**: open
+- **Status**: resolved (Round 1.C-1 / W4)
 - **Why it matters**: 当前 working-memory 装配会读取并扫描 `semantic_memory.jsonl`，在小规模数据下可接受，但随着 semantic 记忆累积，读放大和排序成本会逐步进入 deliberation 热路径。
-- **Current limitation**: `semantic_memory.jsonl` 已是 Stage I 的一等 append-only 轨，但 working-memory 读取还没有 store-side windowing / indexing，仍偏向全量读后再做 bounded retrieval。
-- **Suggested direction**: 在后续阶段为 semantic memory 引入 store-side windowing、按 scope/topic 的轻量索引，或等价的 bounded read seam，同时保持 append-only artifact discipline 不变。
+- **Resolution**: Round 1.C-1 在 `eva/l3_deliberation/memory/semantic.py` 加入 process-local 内存索引（keyed on `StateStore.paths.runtime_dir`），消除每次 `read_semantic_memory` 调用的磁盘 re-read；并提供 `query_semantic_memory_for_situation(store, *, scenario, situation_key, top_drive, pressure_reason)` helper，基于倒排桶（`(scenario, situation_key) / (scenario, top_drive) / (scenario, pressure_reason) / topic / scenario`）返回候选 superset。append-only `.jsonl` artifact discipline 保持——索引纯派生于内存，未引入新持久化文件。详见 `maintainer/development/round-1c-1-progress.md`。
 
 ## 2. semantic memory → L2 drive weights 仍是显式 defer 项
 
