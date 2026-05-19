@@ -39,7 +39,7 @@ It answers one question: **for each blueprint commitment, where is its tracking 
 | Model-backed working-memory advisory path | 1.4 `Model-backed working-memory advisory path with bounded fallback` | landed | — |
 | Episodic retrieval over append-only artifacts | 1.4 `Episodic retrieval over append-only artifacts` | landed | — |
 | Semantic memory as first-class storage and bounded L3 participant | 1.4 `Semantic memory — first-class storage + exact query + bounded L3 participation` | partial | Store-side windowing / indexing not implemented. |
-| Semantic memory → L2 safe path | 1.4 `Semantic memory → L2 drive-weight semantics` | deferred | Safe path preserved but not implemented. |
+| Semantic memory → L2 safe path | 1.4 `Semantic memory → L2 drive-weight semantics` | production | Safe-path landed in Round 1.B-3 (W5): bounded amplification overlay on `drive_impact_schema` (cap 0.15, confidence threshold 0.7); drive read-only boundary preserved. |
 | Procedural memory via habit-backed substrate | 1.4 `Procedural memory via existing habit-track substrate` | partial | Explicit surface landed, but not a dedicated procedural store. |
 | Working-memory interface review threshold | 1.4 `Working-memory interface signature` | partial | Interface still accumulating parameters. |
 | Anchor pre-generative restriction | 1.5 `Framework-owned action domain and pre-generative restriction surface` | landed | — |
@@ -51,7 +51,7 @@ It answers one question: **for each blueprint commitment, where is its tracking 
 | Same-scenario inherited-prior loading and bounded participation | 1.6 `Same-scenario inherited-prior loading and bounded deliberation participation` | landed | — |
 | Capability provenance-carrying skill registries | 1.6 `Capability provenance-carrying skill registries` | partial | Provenance is explicit, but the broader theory-side source taxonomy is not yet active as separate runtime sources. |
 | Cross-scenario inherited-prior transmission | 1.6 `Cross-scenario inherited-prior transmission` | deferred | Explicitly deferred. |
-| Exploration as growth driver | 1.7 `Exploration as growth driver` | deferred | Blueprint commitment exists; runtime mechanism not started. |
+| Exploration as growth driver | 1.7 `Exploration as growth driver` | partial | Framework's curiosity-style update path is the mechanism; Crafter scenario landed via Round 1.B-2 (`scenarios/crafter/drive_preset.py` registers ``exploration`` drive; ``COMPATIBILITY_RELEASE_IMPACT`` wires it into candidate scoring). Linux already used the same mechanism via its `curiosity` drive. Cross-scenario hardening and long-run parameter tuning remain. |
 | L4 self-model runtime | 1.7 `L4 self-model runtime` | deferred | Reserved only. |
 | L5 social-layer runtime | 1.7 `L5 social-layer runtime` | deferred | Reserved only. |
 | Generic scenario loader / validator | 1.7 `Generic scenario loader / validator` | deferred | Explicit runner assembly remains the current shape. |

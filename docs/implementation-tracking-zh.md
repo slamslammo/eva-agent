@@ -66,14 +66,15 @@
 | Mediator 作为独立 peer circuit（default inhibition + 选择性 release） | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | 运行时独属 release token 边界 | `eva/l3_deliberation/contracts.py` | production | — | — |
 | 带有界 learned overlay 的 drive 加权 candidate 评估 | `eva/l3_deliberation/reasoning/value_judgment.py`、`eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |
+| scenario-neutral 的 reasoning / routing / pressure projection | `eva/l3_deliberation/reasoning/value_judgment.py`、`eva/l3_deliberation/reasoning/conflict_detection.py`、`eva/l3_deliberation/memory/working_memory_adapter.py`、`eva/l3_deliberation/memory/working_memory_model_client.py`、`eva/kernel/state.py` | production | — | Round 1.B-1 移除 reasoning + memory routing 中硬编码的 ``top_drive == "integrity"`` 判断；drive 加权评分与 projection 阈值现在以 drive level 为准而非 drive 名 |
 | 带规范 `OutcomeVector` 支持的 append-only learning outcome 记录 | `eva/l3_deliberation/contracts.py`、`eva/l3_deliberation/peer_circuit/rpe.py`、场景 outcome observers | production | — | — |
 | RPE -like learning 作为内部更新信号 | `eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |
 | 通过 habit track 的 habit shaping 和 skill crystallization | `eva/l3_deliberation/peer_circuit/habit_track.py`、`eva/l3_deliberation/memory/skill_library.py` | production | — | — |
 | Advisory-only working-memory 装配 | `eva/l3_deliberation/reasoning/working_memory.py` | production | — | — |
 | 带有界 fallback 的 model-backed working-memory advisory 路径 | `eva/kernel/main.py`、`eva/l3_deliberation/reasoning/working_memory.py` | production | — | — |
 | 基于 append-only artifact 的 episodic retrieval | `eva/l3_deliberation/memory/episodic.py`、`eva/l3_deliberation/memory/retrieval.py` | production | — | — |
-| Semantic memory — 一等存储 + 精确查询 + 有界 L3 参与 | `eva/l3_deliberation/memory/semantic.py`、`eva/skills/__init__.py` | partial | Store-side windowing / indexing 未实现；semantic → L2 drive-weight semantics 未实现 | Stage I follow-up #1、#2 |
-| Semantic memory → L2 drive-weight semantics | — | deferred | 保留以维护 drive read-only boundary；最小安全路径评估 deferred | Stage I follow-up #2 |
+| Semantic memory — 一等存储 + 精确查询 + 有界 L3 参与 | `eva/l3_deliberation/memory/semantic.py`、`eva/skills/__init__.py` | partial | Store-side windowing / indexing 未实现（Stage I follow-up #1 — Round 1.C / W4）；semantic → L2 drive-weight 路径已在 Round 1.B-3 (W5) 落地。 | Stage I follow-up #1 / Round 1.C |
+| Semantic memory → L2 drive-weight semantics | `eva/l3_deliberation/reasoning/value_judgment.py` | production | 安全路径实现：对 `drive_impact_schema` 正向值做有界放大 overlay（cap `MAX_SEMANTIC_OVERLAY_BLEND=0.15`，阈值 `MIN_SEMANTIC_OVERLAY_CONFIDENCE=0.7`）。drive read-only broadcast 保持——overlay 不动 drive_levels，也不削弱负向 impact。Round 1.B-3 (W5)。 | Round 1.D 长跑验证 |
 | 通过现有 habit-track substrate 的 procedural memory | `eva/l3_deliberation/peer_circuit/habit_track.py`、`eva/skills/__init__.py` | partial | Surface 是显式的，但 backing track 仍是 `habit_bias.jsonl` 而非独立 procedural store | 后续评估 |
 | Working-memory 接口签名 | `eva/l3_deliberation/reasoning/working_memory.py` | partial | 多参数装配在累积；接口复审阈值接近 | Watch（Stage I follow-up #3） |
 
@@ -100,7 +101,7 @@
 
 | 组件 | 理论章节 | 完成度 | 已知限制 | 计划演进 |
 |---|---|---|---|---|
-| Exploration as growth driver | v0.6 §1.4 | deferred | 理论已指定；runtime 机制未实现 | 中期 |
+| Exploration as growth driver | v0.6 §1.4 / v0.6.1 §4 | partial | Framework 的 curiosity-style 更新路径 Phase A 起就存在；Crafter scenario 通过 Round 1.B-2 落地 exploration drive。Linux 保留既有 ``curiosity`` drive。跨 scenario 加固与长跑参数调优待 Round 1.D 处理。 | Round 1.D 长跑验证 |
 | L4 self-model runtime | v0.5 §9、v0.6 §7.2 | deferred | 预留接口；实现 deferred | 后期 |
 | L5 social-layer runtime | v0.5 §10、v0.6 §7.2 | deferred | 预留接口；实现 deferred | 后期 |
 | 通用场景 loader / validator | — | deferred | 仓库使用显式 runner 装配 | 后续评估 |
@@ -141,7 +142,7 @@
 | 项目 | 状态 | 参考 |
 |---|---|---|
 | 通过共享框架循环的有界端到端 Crafter runtime | partial | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) — 是真实的已落地 second scenario，但文档化为有意识地限制在 bounded scope 内 |
-| Crafter 特定 drives、sensors、有界 action bridge、anchors、outcome observers、persistence hierarchy、prior-skill policy | production（bounded scope 内） | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
+| Crafter 特定 drives、sensors、context-aware 解析的 action bridge、anchors、outcome observers、persistence hierarchy、prior-skill policy | production（bounded scope 内） | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) — Round 1.A 把 compatibility bridge 扩成在既有 3-profile vocabulary 内按上下文解析到具体动作 |
 | 对 required-tier dimensions 的 trajectory-aware sensing 和有界 anticipatory pressure | production | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
 
 ---
@@ -153,7 +154,7 @@
 | 项目 | 来源 | 状态 |
 |---|---|---|
 | Semantic memory store-side windowing / indexing | Stage I follow-up #1 | open |
-| Semantic memory → L2 drive-weight semantics 最小安全路径评估 | Stage I follow-up #2 | open |
+| Semantic memory → L2 drive-weight semantics 最小安全路径评估 | Stage I follow-up #2 | resolved (Round 1.B-3 / W5) |
 | Working-memory 接口签名复审阈值 | Stage I follow-up #3 | watch |
 
 ---

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .candidate_generation import current_anchor_profiles
 from .conflict_detection import build_candidate_conflict_context
 from ..contracts import Candidate, CandidateAssessment, DeliberationInput
@@ -105,6 +107,78 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
     return assessments
 
 
+# Round 1.B-3 (W5): bounded semantic-memory contribution to drive_impact_schema.
+# Smaller than ``MAX_LEARNED_IMPACT_BLEND`` (see rpe.py) because semantic
+# patterns are inferential summaries of episodic history rather than direct
+# outcome reinforcement. Threshold of 0.7 confidence keeps low-evidence
+# patterns from leaking into the impact schema.
+MIN_SEMANTIC_OVERLAY_CONFIDENCE = 0.7
+MAX_SEMANTIC_OVERLAY_BLEND = 0.15
+
+
+def build_semantic_drive_impact_overlay(
+    working_memory_context: dict[str, Any] | None,
+    *,
+    candidate_profile: str,
+    drive_impact_schema: dict[str, float],
+) -> tuple[dict[str, float], float]:
+    """Round 1.B-3 (W5): return a bounded amplification overlay derived from
+    semantic memory patterns matching the current candidate profile.
+
+    Semantic memory's contribution to drive_impact_schema is intentionally
+    weaker than RPE/habit-driven learning because semantic patterns are
+    inferential summaries of episodic history, not direct outcome
+    reinforcement. The overlay only amplifies positive drive impacts — it
+    never flips signs and never weakens negative impacts (those represent
+    safety / cost concerns that must persist regardless of semantic
+    guidance).
+
+    Returns ``({}, 0.0)`` when no qualifying pattern exists.
+    """
+
+    if not isinstance(working_memory_context, dict):
+        return {}, 0.0
+    semantic_patterns = working_memory_context.get("semantic_patterns")
+    if not isinstance(semantic_patterns, list) or not semantic_patterns:
+        return {}, 0.0
+
+    matched_confidences: list[float] = []
+    for pattern in semantic_patterns:
+        if not isinstance(pattern, dict):
+            continue
+        preferred = pattern.get("preferred_candidate_profiles")
+        if not isinstance(preferred, list) or candidate_profile not in preferred:
+            continue
+        confidence = float(pattern.get("confidence", 0.0))
+        if confidence < MIN_SEMANTIC_OVERLAY_CONFIDENCE:
+            continue
+        matched_confidences.append(confidence)
+
+    if not matched_confidences:
+        return {}, 0.0
+
+    avg_confidence = sum(matched_confidences) / len(matched_confidences)
+
+    # Amplify only positive impacts; preserve negative impacts unchanged so
+    # safety / cost signals are never weakened by semantic guidance.
+    overlay: dict[str, float] = {}
+    for drive_name, impact in drive_impact_schema.items():
+        impact_value = float(impact)
+        if impact_value > 0.0:
+            overlay[drive_name] = impact_value * (1.0 + avg_confidence)
+
+    if not overlay:
+        return {}, 0.0
+
+    # Blend factor grows mildly with the number of independent confirming
+    # patterns, capped by ``MAX_SEMANTIC_OVERLAY_BLEND``.
+    raw_blend = 0.05 * len(matched_confidences) * avg_confidence
+    blend_factor = round(min(MAX_SEMANTIC_OVERLAY_BLEND, raw_blend), 3)
+    if blend_factor <= 0.0:
+        return {}, 0.0
+    return overlay, blend_factor
+
+
 def _effective_drive_impact_schema(
     deliberation_input: DeliberationInput,
     *,
@@ -112,22 +186,42 @@ def _effective_drive_impact_schema(
     top_drive: str,
     drive_impact_schema: dict[str, float],
 ) -> tuple[dict[str, float], list[str]]:
-    """Return the effective impact schema after any bounded learned overlay."""
+    """Return the effective impact schema after any bounded learned overlay
+    and semantic-memory overlay (Round 1.B-3)."""
 
     effective_schema = dict(drive_impact_schema)
+    applied_reasons: list[str] = []
+
     learned_overlay, blend_factor = build_learned_impact_overlay(
         deliberation_input.working_memory_context,
         candidate_profile=candidate_profile,
         top_drive=top_drive,
     )
-    if not learned_overlay or blend_factor <= 0.0:
-        return effective_schema, []
-    for drive_name, learned_signal in learned_overlay.items():
-        baseline = float(effective_schema.get(drive_name, 0.0))
-        effective_schema[drive_name] = _bounded_drive_impact_value(
-            ((1.0 - blend_factor) * baseline) + (blend_factor * float(learned_signal))
-        )
-    return effective_schema, ["learned_impact_overlay"]
+    if learned_overlay and blend_factor > 0.0:
+        for drive_name, learned_signal in learned_overlay.items():
+            baseline = float(effective_schema.get(drive_name, 0.0))
+            effective_schema[drive_name] = _bounded_drive_impact_value(
+                ((1.0 - blend_factor) * baseline) + (blend_factor * float(learned_signal))
+            )
+        applied_reasons.append("learned_impact_overlay")
+
+    # Round 1.B-3 (W5): semantic-memory contribution layered on top of the
+    # learned overlay. Same blend math, smaller cap, restricted to amplifying
+    # already-positive impacts.
+    semantic_overlay, semantic_blend = build_semantic_drive_impact_overlay(
+        deliberation_input.working_memory_context,
+        candidate_profile=candidate_profile,
+        drive_impact_schema=effective_schema,
+    )
+    if semantic_overlay and semantic_blend > 0.0:
+        for drive_name, semantic_signal in semantic_overlay.items():
+            baseline = float(effective_schema.get(drive_name, 0.0))
+            effective_schema[drive_name] = _bounded_drive_impact_value(
+                ((1.0 - semantic_blend) * baseline) + (semantic_blend * float(semantic_signal))
+            )
+        applied_reasons.append("semantic_impact_overlay")
+
+    return effective_schema, applied_reasons
 
 
 def _drive_weighted_score(

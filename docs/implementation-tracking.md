@@ -64,14 +64,15 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Mediator as independent peer circuit (default inhibition + selective release) | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | Runtime-only release token boundary | `eva/l3_deliberation/contracts.py` | production | — | — |
 | Drive-weighted candidate assessment with bounded learned overlays | `eva/l3_deliberation/reasoning/value_judgment.py`, `eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |
+| Scenario-neutral reasoning, routing, and pressure projection | `eva/l3_deliberation/reasoning/value_judgment.py`, `eva/l3_deliberation/reasoning/conflict_detection.py`, `eva/l3_deliberation/memory/working_memory_adapter.py`, `eva/l3_deliberation/memory/working_memory_model_client.py`, `eva/kernel/state.py` | production | — | Round 1.B-1 de-Linuxified hardcoded ``top_drive == "integrity"`` checks in reasoning + memory routing; drive-weighted scoring and projection thresholds now consult drive levels, not drive names. |
 | Append-only learning outcome records with canonical `OutcomeVector` support | `eva/l3_deliberation/contracts.py`, `eva/l3_deliberation/peer_circuit/rpe.py`, scenario outcome observers | production | — | — |
 | RPE-like learning as internal update signal | `eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |
 | Habit shaping and skill crystallization through habit track | `eva/l3_deliberation/peer_circuit/habit_track.py`, `eva/l3_deliberation/memory/skill_library.py` | production | — | — |
 | Advisory-only working-memory assembly | `eva/l3_deliberation/reasoning/working_memory.py` | production | — | — |
 | Model-backed working-memory advisory path with bounded fallback | `eva/kernel/main.py`, `eva/l3_deliberation/reasoning/working_memory.py` | production | — | — |
 | Episodic retrieval over append-only artifacts | `eva/l3_deliberation/memory/episodic.py`, `eva/l3_deliberation/memory/retrieval.py` | production | — | — |
-| Semantic memory — first-class storage + exact query + bounded L3 participation | `eva/l3_deliberation/memory/semantic.py`, `eva/skills/__init__.py` | partial | Store-side windowing / indexing not implemented; semantic → L2 drive-weight semantics not implemented | Stage I follow-up #1, #2 |
-| Semantic memory → L2 drive-weight semantics | — | deferred | Preserved to maintain drive read-only boundary; minimal safe path evaluation deferred | Stage I follow-up #2 |
+| Semantic memory — first-class storage + exact query + bounded L3 participation | `eva/l3_deliberation/memory/semantic.py`, `eva/skills/__init__.py` | partial | Store-side windowing / indexing not implemented (Stage I follow-up #1 — Round 1.C / W4); the semantic → L2 drive-weight path landed in Round 1.B-3 (W5). | Stage I follow-up #1 / Round 1.C |
+| Semantic memory → L2 drive-weight semantics | `eva/l3_deliberation/reasoning/value_judgment.py` | production | Safe-path implementation: bounded amplification overlay on positive entries of `drive_impact_schema` (cap `MAX_SEMANTIC_OVERLAY_BLEND=0.15`, threshold `MIN_SEMANTIC_OVERLAY_CONFIDENCE=0.7`). Drive read-only broadcast preserved — overlay never modifies drive_levels and never weakens negative impacts. Round 1.B-3 (W5). | Long-run validation in Round 1.D |
 | Procedural memory via existing habit-track substrate | `eva/l3_deliberation/peer_circuit/habit_track.py`, `eva/skills/__init__.py` | partial | Surface is explicit but backing track remains `habit_bias.jsonl` rather than a dedicated procedural store | Future evaluation |
 | Working-memory interface signature | `eva/l3_deliberation/reasoning/working_memory.py` | partial | Multi-parameter assembly is accumulating; interface review threshold approaching | Watch (Stage I follow-up #3) |
 
@@ -98,7 +99,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 
 | Component | Theory reference | Completeness | Known limitation | Planned evolution |
 |---|---|---|---|---|
-| Exploration as growth driver | v0.6 §1.4 | deferred | Theory is specified; runtime mechanism not implemented | Medium-term |
+| Exploration as growth driver | v0.6 §1.4 / v0.6.1 §4 | partial | Framework mechanism (curiosity-style update path) has existed since Phase A; Crafter scenario landed via Round 1.B-2. Linux retains its existing ``curiosity`` drive. Cross-scenario hardening + parameter tuning under long-run validation remain. | Round 1.D long-run validation |
 | L4 self-model runtime | v0.5 §9, v0.6 §7.2 | deferred | Reserved interfaces; implementation deferred | Later phase |
 | L5 social-layer runtime | v0.5 §10, v0.6 §7.2 | deferred | Reserved interfaces; implementation deferred | Later phase |
 | Generic scenario loader / validator | — | deferred | Repository uses explicit runner assembly | Future evaluation |
@@ -139,7 +140,7 @@ Tracks the cross-scenario integration contract. For the full contract specificat
 | Item | Status | Reference |
 |---|---|---|
 | Bounded end-to-end Crafter runtime through shared framework loop | partial | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) — a real landed second scenario but documented as intentionally bounded in scope |
-| Crafter-specific drives, sensors, bounded action bridge, anchors, outcome observers, persistence hierarchy, prior-skill policy | production (within bounded scope) | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
+| Crafter-specific drives, sensors, action bridge with context-aware resolution, anchors, outcome observers, persistence hierarchy, prior-skill policy | production (within bounded scope) | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) — Round 1.A widened the compatibility bridge to resolve concrete actions per profile context within the existing 3-profile vocabulary |
 | Trajectory-aware sensing and bounded anticipatory pressure for required-tier dimensions | production | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
 
 ---
@@ -151,7 +152,7 @@ The following items are confirmed as carry-forward follow-ups, not accidental ga
 | Item | Source | Status |
 |---|---|---|
 | Semantic memory store-side windowing / indexing | Stage I follow-up #1 | open |
-| Semantic memory → L2 drive-weight semantics safe path evaluation | Stage I follow-up #2 | open |
+| Semantic memory → L2 drive-weight semantics safe path evaluation | Stage I follow-up #2 | resolved (Round 1.B-3 / W5) |
 | Working-memory interface signature review threshold | Stage I follow-up #3 | watch |
 
 ---

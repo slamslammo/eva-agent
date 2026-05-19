@@ -11,10 +11,9 @@
 
 ## 2. semantic memory → L2 drive weights 仍是显式 defer 项
 
-- **Status**: open
+- **Status**: resolved (Round 1.B-3 / W5)
 - **Why it matters**: v0.6.1-rev1 §2.5 的集成表把 semantic memory 对 drive update weights 的影响列为目标能力。Stage I 为保留现有 drive-boundary invariant，合理地将其 defer，但这一项属于后续应继续兑现的理论承诺，而不是永久放弃。
-- **Current limitation**: Stage I 已完成 semantic memory → L3 bounded candidate prior modifier，但未让 semantic memory 进入 L2 drive-weight semantics。
-- **Suggested direction**: 在后续阶段单独评估 semantic memory 影响 drive 权重的最小安全路径，确保不会破坏 drive read-only boundary 与 mediator / anchor ownership。
+- **Resolution**: Round 1.B-3 在 `eva/l3_deliberation/reasoning/value_judgment.py` 新增 `build_semantic_drive_impact_overlay`，并扩展 `_effective_drive_impact_schema` 在已有 learned overlay 之上叠加 semantic overlay。安全路径：`MAX_SEMANTIC_OVERLAY_BLEND=0.15`（小于 RPE/habit overlay 的 cap），`MIN_SEMANTIC_OVERLAY_CONFIDENCE=0.7`，只放大正向 impact，绝不削弱负向（不破坏安全/cost 信号），不动 drive_levels（drive read-only broadcast 保留）。详见 `maintainer/development/round-1b-3-progress.md`。
 
 ## 3. Working-memory 接口签名需要持续观察
 
