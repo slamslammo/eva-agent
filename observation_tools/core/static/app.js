@@ -63,6 +63,7 @@
   }
 
   async function loadTurns() {
+    const previousLength = state.turns.length;
     const data = await fetchJson("/api/turns");
     state.turns = data.turns || [];
     renderTurnList();
@@ -70,6 +71,13 @@
     if (state.selectedTurnIdx !== null && state.selectedTurnIdx >= state.turns.length) {
       state.selectedTurnIdx = null;
       renderDetail(null);
+    }
+    // 首次加载时默认选最新 turn（off-by-one 末位若 response=null 也无妨，
+    // 链路展开能容忍部分 source 缺失）。已有选中则不改动。
+    if (state.selectedTurnIdx === null && state.turns.length > 0 && previousLength === 0) {
+      // 选倒数第 2 个（最末若是末段 off-by-one 会缺 response）
+      const defaultIdx = state.turns.length >= 2 ? state.turns.length - 2 : state.turns.length - 1;
+      selectTurn(defaultIdx);
     }
   }
 
@@ -188,7 +196,10 @@
       body.innerHTML = `<div class="placeholder">选择左侧任一 turn 查看链路（L1 → L2 → L3 → 动作）。</div>`;
       return;
     }
+    // 顺序：场景观察先于框架机制展开 —— 用户先看到"agent 在哪里、状态如何"，
+    // 再深入"L1 → L2 → L3 → 动作"的机制链路。框架层 section 在场景之后。
     const sections = [
+      renderCrafterSection(turn.crafter),
       renderL1Section(turn.deliberation),
       renderL2Section(turn.deliberation),
       renderL3Section(turn.deliberation),
@@ -198,6 +209,191 @@
     ];
     body.innerHTML = sections.join("");
     bindSectionToggles(body);
+  }
+
+  // ========= Crafter 场景 plugin (V1) =========
+
+  function renderCrafterSection(crafter) {
+    if (!crafter) return "";
+
+    const vitals = crafter.vitals || {};
+    const inv = crafter.inventory || {};
+    const lv = crafter.local_view || {};
+    const deltas = crafter.deltas || {};
+
+    // Summary：health/food/water/energy + 威胁数
+    const summary = `<span class="badge ${statusBadgeClass(vitals.status_safety)}">${escapeHtml(vitals.status_safety || "?")}</span> · ` +
+      `HP ${fmtVital(vitals.health)} · ` +
+      `Food ${fmtVital(vitals.food)} · ` +
+      `Water ${fmtVital(vitals.water)} · ` +
+      `Energy ${fmtVital(vitals.energy)} · ` +
+      `Threats ${vitals.threat_count !== undefined ? vitals.threat_count : "—"}`;
+
+    const body = renderCrafterVitals(vitals, crafter.rate_context) +
+      renderCrafterInventory(inv) +
+      renderCrafterLocalView(lv) +
+      renderCrafterDeltas(deltas) +
+      renderCrafterStatuses(crafter.statuses) +
+      rawJsonBlock(crafter);
+
+    return section("场景观察 (Crafter)", summary, body);
+  }
+
+  function fmtVital(value) {
+    if (value === null || value === undefined) return "—";
+    return String(Number(value));
+  }
+
+  function vitalBarColor(value) {
+    if (value === null || value === undefined) return "#6e7681";
+    const v = Number(value);
+    if (isNaN(v)) return "#6e7681";
+    if (v >= 7) return "#3fb950";       // 绿
+    if (v >= 4) return "#d29922";       // 黄
+    if (v >= 1) return "#ff9b4a";       // 橙
+    return "#f85149";                    // 红
+  }
+
+  function vitalBar(label, value, max) {
+    const m = max || 9;
+    const v = value === null || value === undefined ? 0 : Math.max(0, Math.min(m, Number(value)));
+    const ratio = m > 0 ? v / m : 0;
+    const color = vitalBarColor(value);
+    const display = value === null || value === undefined ? "—" : `${Number(value)} / ${m}`;
+    return `
+      <div class="vital-row">
+        <div class="vital-label">${escapeHtml(label)}</div>
+        <div class="vital-bar-track">
+          <div class="vital-bar-fill" style="width:${(ratio * 100).toFixed(1)}%;background:${color}"></div>
+        </div>
+        <div class="vital-value">${escapeHtml(display)}</div>
+      </div>
+    `;
+  }
+
+  function renderCrafterVitals(vitals, rateContext) {
+    let html = `<div class="crafter-subhead">生命体征</div>`;
+    html += `<div class="vitals-grid">
+      ${vitalBar("HP",     vitals.health, 9)}
+      ${vitalBar("Food",   vitals.food,   9)}
+      ${vitalBar("Water",  vitals.water,  9)}
+      ${vitalBar("Energy", vitals.energy, 9)}
+    </div>`;
+    const rc = rateContext || {};
+    if (rc.available) {
+      const dir = rc.health_direction || "—";
+      const dirColor = dir === "decreasing" ? "#f85149" : dir === "increasing" ? "#3fb950" : "#8b949e";
+      html += `<div style="font-size:11px;color:#8b949e;margin-top:6px">
+        rate: health <span style="color:${dirColor}">${escapeHtml(dir)}</span>
+        (${fmtNum(rc.health_change_per_sec, 3)}/s),
+        threats ${escapeHtml(rc.threat_count_direction || "—")},
+        magnitude ${fmtNum(rc.magnitude, 3)}
+      </div>`;
+    }
+    return html;
+  }
+
+  function renderCrafterInventory(inv) {
+    const items = inv.items || {};
+    const tools = inv.tools || {};
+    const availableTools = inv.available_tools || [];
+
+    // 区分：tools（独立显示）；items（去除生命字段如 health/food/drink/energy，去除已在 tools 里的）
+    const toolKeys = new Set(Object.keys(tools));
+    const vitalKeys = new Set(["health", "food", "drink", "energy"]);
+    const nonToolItems = Object.fromEntries(
+      Object.entries(items).filter(([k]) => !toolKeys.has(k) && !vitalKeys.has(k))
+    );
+
+    let html = `<div class="crafter-subhead">库存</div>`;
+
+    // Items 网格（非零优先，零的灰色）
+    const itemEntries = Object.entries(nonToolItems).sort();
+    if (itemEntries.length > 0) {
+      html += `<div class="inv-grid">`;
+      for (const [name, count] of itemEntries) {
+        const c = Number(count) || 0;
+        const cls = c > 0 ? "inv-item have" : "inv-item zero";
+        html += `<div class="${cls}"><span class="inv-name">${escapeHtml(name)}</span><span class="inv-count">×${c}</span></div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div style="color:#6e7681;font-size:12px">无 item 数据</div>`;
+    }
+
+    // Tools 网格
+    const toolEntries = Object.entries(tools).sort();
+    if (toolEntries.length > 0) {
+      html += `<div style="margin-top:8px;font-size:11px;color:#8b949e">工具</div><div class="inv-grid">`;
+      for (const [name, count] of toolEntries) {
+        const c = Number(count) || 0;
+        const cls = c > 0 ? "inv-tool have" : "inv-tool zero";
+        html += `<div class="${cls}"><span class="inv-name">${escapeHtml(name)}</span><span class="inv-count">×${c}</span></div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (availableTools.length > 0) {
+      html += `<div style="margin-top:6px;font-size:11px;color:#3fb950">已可用: ${availableTools.map(escapeHtml).join(", ")}</div>`;
+    }
+    if ((inv.scarce_resources || []).length > 0) {
+      html += `<div style="font-size:11px;color:#d29922">紧缺资源: ${inv.scarce_resources.map(escapeHtml).join(", ")}</div>`;
+    }
+    return html;
+  }
+
+  function renderCrafterLocalView(lv) {
+    let html = `<div class="crafter-subhead">视野感知 (local_view)</div>`;
+    const rows = [
+      ["威胁数 (threat_total)", `${fmtNum(lv.threat_total, 0)} <span class="badge ${statusBadgeClass(lv.threat_status)}">${escapeHtml(lv.threat_status || "—")}</span>`],
+      ["资源数 (resource_total)", `${fmtNum(lv.resource_total, 0)} <span class="badge ${statusBadgeClass(lv.resource_status)}">${escapeHtml(lv.resource_status || "—")}</span>`],
+      ["紧缺资源", lv.scarce_resources && lv.scarce_resources.length > 0 ? escapeHtml(lv.scarce_resources.join(", ")) : "—"],
+      ["可用工具数 (utility_total)", `${fmtNum(lv.utility_total, 0)} <span class="badge ${statusBadgeClass(lv.utility_status)}">${escapeHtml(lv.utility_status || "—")}</span>`],
+      ["视野内可用工具", lv.available_tools && lv.available_tools.length > 0 ? escapeHtml(lv.available_tools.join(", ")) : "—"],
+      ["能力差距 (capability_gap)", lv.capability_gap === null || lv.capability_gap === undefined ? "—" : escapeHtml(JSON.stringify(lv.capability_gap))],
+    ];
+    html += kvTable(rows);
+    return html;
+  }
+
+  function renderCrafterDeltas(deltas) {
+    if (!deltas || Object.keys(deltas).length === 0) return "";
+    const items = [];
+    const ad = deltas.achievement_delta;
+    if (ad !== null && ad !== undefined) {
+      const cls = Number(ad) > 0 ? "color:#3fb950;font-weight:600" : "color:#8b949e";
+      items.push(["achievement_delta", `<span style="${cls}">${fmtNum(ad, 2)}${Number(ad) > 0 ? " 🏆" : ""}</span>`]);
+    }
+    if (deltas.visible_threat_count !== null && deltas.visible_threat_count !== undefined) {
+      items.push(["visible_threat_count", String(deltas.visible_threat_count)]);
+    }
+    if (deltas.life_delta && Object.keys(deltas.life_delta).length > 0) {
+      items.push(["life_delta", escapeHtml(JSON.stringify(deltas.life_delta))]);
+    }
+    if (deltas.inventory_delta && Object.keys(deltas.inventory_delta).length > 0) {
+      items.push(["inventory_delta", escapeHtml(JSON.stringify(deltas.inventory_delta))]);
+    }
+    if (items.length === 0) return "";
+    return `<div class="crafter-subhead">本 turn 变化</div>${kvTable(items)}`;
+  }
+
+  function renderCrafterStatuses(statuses) {
+    if (!statuses || Object.keys(statuses).length === 0) return "";
+    let html = `<div class="crafter-subhead">维度状态</div><div class="status-row">`;
+    for (const [name, status] of Object.entries(statuses).sort()) {
+      const cls = statusBadgeClass(status);
+      html += `<span class="badge ${cls}" title="${escapeHtml(name)}: ${escapeHtml(status || "?")}">${escapeHtml(name)}: ${escapeHtml(status || "?")}</span>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  function statusBadgeClass(status) {
+    const s = (status || "").toLowerCase();
+    if (s === "healthy") return "advisory-ok";
+    if (s === "degraded") return "advisory-fallback";
+    if (s === "critical") return "life-critical";
+    return "advisory-none";
   }
 
   // ----- 节通用辅助 -----

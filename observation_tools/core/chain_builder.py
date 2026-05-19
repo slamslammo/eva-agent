@@ -21,6 +21,14 @@ from typing import Any
 
 from .trace_reader import read_jsonl, read_jsonl_count
 
+# Plugin hook —— 让场景特定 extractor 在 ChainView.to_dict() 时注入额外字段。
+# 单独 import 防止循环依赖，且 plugins 子包 import 失败时不影响 core。
+try:
+    from ..plugins import apply_plugins_to_chain as _apply_plugins
+except ImportError:  # pragma: no cover —— plugins 缺失时 core 仍能工作
+    def _apply_plugins(chain_dict):
+        return chain_dict
+
 
 # 与 EVA 运行时 ``StateStore`` 写出的文件名对齐。
 DELIBERATION_AUDIT_FILE = "deliberation_audit.jsonl"
@@ -49,7 +57,7 @@ class ChainView:
     habit: dict[str, Any] | None = None             # habit_bias 当 turn 新增项
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        chain_dict = {
             "turn_idx": self.turn_idx,
             "recorded_at": self.recorded_at,
             "deliberation": self.deliberation,
@@ -58,6 +66,8 @@ class ChainView:
             "outcome": self.outcome,
             "habit": self.habit,
         }
+        # 让场景 plugin 注入特定字段（如 chain_dict["crafter"]）
+        return _apply_plugins(chain_dict)
 
 
 def build_chains(runtime_dir: Path | str) -> list[ChainView]:
