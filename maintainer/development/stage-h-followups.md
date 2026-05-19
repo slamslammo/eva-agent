@@ -29,3 +29,11 @@
 - **Why it matters**: `local_view_state` 同时携带 threat / resource / utility 信息，但当前 drive mapping 与 pressure-type mapping 都把它压到 `safety`，这是一种有意但狭窄的简化。
 - **Current limitation**: acquisition / capability 相关的 local-view 信号不会直接作为独立 drive feed 进入当前 Crafter shaping。
 - **Suggested direction**: 后续若扩展 Crafter scenario richness，可把 local-view 拆成更细的 dimension 或明确引入多-drive projection 语义。
+
+## 5. Crafter compatibility bridge candidate widening — identified post-Stage-H, resolved in Round 1.A
+
+- **Status**: resolved (Round 1.A)
+- **Why it matters**: Stage H intentionally narrowed the Crafter compatibility bridge to emit a fixed 3-candidate set (`noop` / `sleep` / `do`) to focus the stage on framework-boundary validation. This narrowing was correct for Stage H's goal but was **not scheduled** as a Stage H followup — it became a forgotten constraint after Stage I closed.
+- **Symptom surfaced**: post-Stage-I, the Crafter agent could not unlock any of the 22 Crafter achievements because it had no path to `chop` / `place_*` / `make_*` actions, and the existing `CRAFTER_STARTUP_PRIOR_DEFINITIONS` priors were effectively dead code in the selection path.
+- **Resolution**: Round 1.A widened the compatibility bridge to resolve concrete actions inside the existing 3-profile vocabulary, wired inherited priors and habit bias into selection, and surfaced profile provenance via the scenario-owned `posture` token. See `maintainer/development/round-1a-progress.md` for the full slice-by-slice record.
+- **Related observation**: a follow-up identified during Round 1.A — the L3 mediator's profile choice under sustained avatar degradation is stabilize-dominated. Round 1.A's widening is structurally complete but runtime expression of the wider escalate / observe surfaces depends on Round 1.B (exploration drive / v0.6.1 §4) to unlock non-stabilize profile selection.

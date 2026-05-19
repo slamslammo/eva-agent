@@ -129,10 +129,19 @@ Current outcome-observer owners:
 - `scenarios/crafter/outcome_observers/compatibility.py`
 - `scenarios/crafter/outcome_observers/__init__.py`
 
-The landed action surface is intentionally narrow:
+The landed action surface (post Round 1.A widening) resolves to context-appropriate concrete actions within the existing framework profile vocabulary:
 - the shared 17-action enum remains the canonical Crafter vocabulary
-- the bounded compatibility bridge currently selects only `noop`, `sleep`, and `do`
-- release still stays inside the existing framework compatibility surface
+- the bounded compatibility bridge now resolves the L3-selected `candidate_profile` to one or more concrete actions per the `PROFILE_ELIGIBLE_ACTIONS` table:
+  - `observe_first` → `noop` and the four `move_*` actions
+  - `stabilize_first` → `sleep` and `noop`
+  - `escalate_first` → `do` plus the four `place_*` and the six `make_*` actions
+- inside each profile, the resolution reads `pressure.evidence["reason"]` and any `candidate_context["inherited_priors"]` to pick concrete actions:
+  - `escalate_first` + `inventory_sparse` / `tooling_missing` → `do` plus pickaxes and table / furnace placement
+  - `escalate_first` + `health_critical` / `threat_visible` → `do` plus swords
+  - `observe_first` + acquisition pressure → `noop` plus all four movements
+- candidate-profile provenance is encoded in the scenario-owned `posture` token (`crafter_candidate_observe` / `crafter_candidate_stabilize` / `crafter_candidate_escalate`)
+- `select_response_action` consults `bridge_policy["selection_context"]` for habit and inherited-prior bias, then picks the highest-scoring candidate; without bias the first context-resolved candidate of the active profile is chosen
+- release still stays inside the existing framework compatibility surface and does not widen release authority
 
 The landed anchor policy is also intentionally narrow:
 - higher safety pressure can admit `escalate_first`
@@ -312,7 +321,8 @@ In the current local Python 3.11 environment, live Crafter loading is now valida
 ## Current limits
 
 The Crafter scenario is still intentionally bounded:
-- the compatibility bridge still uses a narrow release vocabulary
+- the compatibility bridge resolves concrete actions inside the existing 3-profile vocabulary (Round 1.A); it does not introduce new candidate profiles
+- runtime selection of widened actions depends on the L3 mediator picking a non-stabilize profile, which under sustained avatar degradation requires the exploration drive (Round 1.B / v0.6.1 §4) to land before agent behavior fully exercises the widened surface
 - the runner still depends on a locally installable `crafter` package for live env execution
 - there is no broader Crafter tool or planner ecosystem yet
 - Crafter is currently a validation scenario for the framework seam, not a broad second deployment target

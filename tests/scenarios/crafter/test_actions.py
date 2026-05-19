@@ -59,7 +59,26 @@ class CrafterActionTests(unittest.TestCase):
         )
         runtime_state = RuntimeState(life_state="STABLE", instance_valid=True)
         candidates = build_integrity_response_candidates(pressure, runtime_state)
-        self.assertEqual([candidate.action for candidate in candidates], ["noop", "sleep", "do"])
+
+        # Round 1.A widening: under ``health_critical`` pressure the candidate
+        # set resolves to one observe candidate (noop) + one stabilize
+        # candidate (sleep) + defensive escalate candidates (do plus sword
+        # crafting). The set is still bounded — it does not include resource
+        # acquisition actions like ``place_table`` because those are only
+        # eligible under inventory / tooling pressure.
+        self.assertEqual(
+            [candidate.action for candidate in candidates],
+            ["noop", "sleep", "do", "make_wood_sword", "make_stone_sword"],
+        )
+
+        # Profile-aware posture is encoded on each candidate so downstream
+        # selection / traces can attribute the choice to a candidate profile.
+        action_to_posture = {candidate.action: candidate.posture for candidate in candidates}
+        self.assertEqual(action_to_posture["noop"], "crafter_candidate_observe")
+        self.assertEqual(action_to_posture["sleep"], "crafter_candidate_stabilize")
+        self.assertEqual(action_to_posture["do"], "crafter_candidate_escalate")
+        self.assertEqual(action_to_posture["make_wood_sword"], "crafter_candidate_escalate")
+
         decisions = filter_response_candidates(pressure, runtime_state, candidates)
         self.assertTrue(all(decision.result == "allow" for decision in decisions))
 

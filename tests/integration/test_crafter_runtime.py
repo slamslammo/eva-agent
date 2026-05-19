@@ -153,6 +153,71 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(len(response_history), 1)
             self.assertIn(response_history[-1]["pressure_type"], {"safety", "metabolic", "recovery", "acquisition", "capability"})
 
+    def test_widened_candidates_surface_in_runtime_response_history(self) -> None:
+        """Round 1.A: at runtime, the bridge restricts widening to the
+        candidate_profile L3 selected and produces a candidate_actions list
+        that reflects context-driven widening. Without habit/prior bias the
+        selected action is the first widened candidate (e.g., ``do`` rather
+        than ``noop``), but the bridge's candidate_actions documents the
+        wider set reaching runtime."""
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
+            )
+            stub_session = StubCrafterSession()
+            with patch.object(CrafterRuntimeSession, "start", return_value=stub_session):
+                run_crafter_runtime(config)
+            store = StateStore(config.paths)
+            response_history = store.read_response_history()
+            self.assertGreaterEqual(len(response_history), 1)
+
+            # The last response_history entry must record a non-trivial
+            # candidate_actions list. Stage H pinned exactly 3 hardcoded
+            # candidates regardless of pressure; Round 1.A makes the bridge
+            # produce context-resolved candidates whose count and content
+            # vary with the L3-chosen candidate_profile.
+            last_response = response_history[-1]
+            candidate_actions = last_response.get("candidate_actions")
+            self.assertIsInstance(candidate_actions, list)
+            self.assertGreaterEqual(
+                len(candidate_actions),
+                1,
+                f"Bridge must produce at least one widened candidate; got {candidate_actions}",
+            )
+
+            # The selected action must always be one of the produced candidates.
+            self.assertIn(
+                last_response["selected_action"],
+                candidate_actions,
+                f"selected_action {last_response['selected_action']!r} must appear in candidate_actions {candidate_actions!r}",
+            )
+
+            # Profile-aware posture is carried into response_history through
+            # selected_posture so traces can attribute the choice to a profile.
+            selected_posture = last_response.get("selected_posture", "")
+            self.assertTrue(
+                any(selected_posture == token for token in (
+                    "crafter_candidate_observe",
+                    "crafter_candidate_stabilize",
+                    "crafter_candidate_escalate",
+                )),
+                f"selected_posture must carry profile provenance after Round 1.A; got {selected_posture!r}",
+            )
+
     def test_crafter_runtime_surfaces_loaded_inherited_priors_in_working_memory(self) -> None:
         bundle = {
             "scenario": "crafter",
