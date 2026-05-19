@@ -9,25 +9,28 @@
 
 > 这是本地单-Claude 开发阶段的轻量工作入口，不是长期归档文档。
 
-## Round 1.C-2 — Working-Memory Assembly Limits Dataclass (W6) — COMPLETE
+## Round 1.D — Long-Run Validation Infrastructure — COMPLETE (architect side)
 
 ### Status
-- **implementation complete**
-- 371 / 371 tests pass
-- Stage I follow-up #3 addressed
-- progress: `maintainer/development/round-1c-2-progress.md`
+- **D-1 / D-2 / D-3 implementation complete**
+- 384 / 384 tests pass
+- progress: `maintainer/development/round-1d-progress.md`
+- pending: user-driven D-5 (6h+ long-run) and post-run D-6 (validation report)
 
 ### Round 1 cumulative status
 
-All capability landing slices complete (1.A through 1.C-2). All three Stage I follow-ups closed. Round 1.D (long-run validation + Crafter exploration parameter tuning) remains as the structural validation step.
+Architect-side Round 1 complete. All capability landing + infrastructure slices done.
 
-| Slice | Status | Stage I followup |
+| Slice | Status | Notes |
 |---|---|---|
-| 1.A — Crafter action widening | ✅ landed | — |
-| 1.B-1 — Framework de-Linuxification | ✅ landed | — |
-| 1.B-2 — Crafter exploration drive (W3) | ✅ landed | — |
-| 1.B-3 — Semantic → drive overlay (W5) | ✅ landed | #2 resolved |
-| 1.C-1 — Semantic memory indexing (W4) | ✅ landed | #1 resolved |
-| 1.C-2 — Limits dataclass (W6) | ✅ landed | #3 addressed |
+| 1.A — Crafter action widening | ✅ landed | foundation (new, not in original W1-W8) |
+| 1.B-1 — Framework de-Linuxification | ✅ landed | new (not in original W1-W8) |
+| 1.B-2 — Crafter exploration drive (W3) | ✅ landed | |
+| 1.B-3 — Semantic → drive overlay (W5) | ✅ landed | Stage I followup #2 resolved |
+| 1.C-1 — Semantic memory indexing (W4) | ✅ landed | Stage I followup #1 resolved |
+| 1.C-2 — Working-memory limits dataclass (W6) | ✅ landed | Stage I followup #3 addressed |
+| 1.D-1/2/3 — Long-run validation infrastructure (W1 redefined) | ✅ landed | architect side complete |
+| 1.D-5 — Actual long-run execution | pending | user-driven machine time |
+| 1.D-6 — Validation report | pending | post-D-5 |
 
-Pending: Round 1.D long-run validation. Awaiting architect direction.
+All Stage I follow-ups closed. Awaiting user direction for D-5 launch or other priorities (e.g. push to origin / open PR / Round 2 baseline planning / etc.).

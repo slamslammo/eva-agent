@@ -35,6 +35,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Scenario-owned activation of lower persistence levels | `scenarios/linux_runtime/persistence/`, `scenarios/crafter/persistence/` | production | — | — |
 | Persistence target Levels 5–7 | — | deferred | Theoretical placeholder; mechanisms reserved for future versions | Later phase |
 | Architecture-neutral stability profile calculation from trace files | `stability_metrics/` | production | — | — |
+| Long-run validation infrastructure (graceful interrupt + periodic hook + validation hook factory) | `eva/kernel/main.py`, `runners/longrun_validation.py` | production | Round 1.D-1/2/3 landed: `RunSummary.exit_reason`, `run_runtime(periodic_hook=...)`, `LongrunTripwire` dataclass + `build_longrun_validation_hook` factory. Closes the blueprint §13.2 long-run invariant validation obligation at the infrastructure level; actual 6h+ runs are user-driven follow-up. | Round 1.D-5/6 (user-driven long runs + report) |
 | Comparative Stability Hypothesis evaluation program | — | deferred | Measurement surface exists; comparative experiment program not yet landed | Later phase |
 
 ### 1.2 L1 homeostatic sensing

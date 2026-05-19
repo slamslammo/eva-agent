@@ -37,6 +37,7 @@
 | 场景所有者在 shipped 场景中激活 lower persistence levels | `scenarios/linux_runtime/persistence/`、`scenarios/crafter/persistence/` | production | — | — |
 | Persistence target Levels 5–7 | — | deferred | 理论 placeholder；机制预留至未来版本 | 后期 |
 | 基于 trace 文件的架构无关稳定性 profile 计算 | `stability_metrics/` | production | — | — |
+| 长跑验证基础设施（graceful interrupt + 周期 hook + validation hook factory） | `eva/kernel/main.py`、`runners/longrun_validation.py` | production | Round 1.D-1/2/3 落地：`RunSummary.exit_reason`、`run_runtime(periodic_hook=...)`、`LongrunTripwire` dataclass + `build_longrun_validation_hook` 工厂。在基础设施层关闭蓝图 §13.2 长跑 invariant 验证义务；6h+ 实际跑由用户启动。 | Round 1.D-5/6（用户驱动长跑 + 报告） |
 | Comparative Stability Hypothesis 评估程序 | — | deferred | 测量 surface 已落地；比较实验程序未实现 | 后期 |
 
 ### 1.2 L1  homeostatic sensing

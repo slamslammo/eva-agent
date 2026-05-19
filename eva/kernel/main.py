@@ -49,6 +49,7 @@ class RunSummary:
     final_life_state: str
     instance_valid: bool
     runtime_dir: str
+    exit_reason: str = "normal"
 
 
 def run_runtime(
@@ -58,8 +59,23 @@ def run_runtime(
     sensor_registry: SensorRegistry | None = None,
     extra_shared_facts_provider: Callable[[], dict[str, Any] | None] | None = None,
     action_runtime: ExternalActionRuntime | None = None,
+    periodic_hook: Callable[..., tuple[bool, str | None]] | None = None,
+    hook_interval_sec: float = 1800.0,
 ) -> RunSummary:
-    """Run the lifecycle loop until one of the configured bounds is reached."""
+    """Run the lifecycle loop until one of the configured bounds is reached.
+
+    Round 1.D-1: KeyboardInterrupt during the loop is caught; the shutdown
+    event is always written before returning. ``RunSummary.exit_reason``
+    reports the termination cause (``"normal"`` / ``"max_ticks"`` /
+    ``"max_turns"`` / ``"max_runtime_sec"`` / ``"keyboard_interrupt"`` /
+    ``"periodic_hook_stop"`` plus optional reason suffix from the hook).
+
+    Round 1.D-2: ``periodic_hook`` (if supplied) is called at most every
+    ``hook_interval_sec`` seconds with kwargs ``(runtime_dir,
+    elapsed_since_start, ticks, turns)``. Hook returns
+    ``(should_stop, reason)``. Hook errors are caught and logged but do
+    not crash the loop.
+    """
 
     store = StateStore(
         config.paths,
@@ -99,42 +115,100 @@ def run_runtime(
     )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()
+    last_hook_at = started_at
     ticks = 0
     turns = 0
+    exit_reason = "normal"
 
     try:
-        while True:
-            now = utc_now()
-            runtime.queue_due_patrols(now)
-            if now >= next_heartbeat_at:
-                runtime.run_tick(state, now=now)
-                ticks += 1
-                next_heartbeat_at = now + timedelta(seconds=config.lifecycle.heartbeat_interval_sec)
-            elif runtime.has_pending_work():
-                turn = runtime.run_turn(state, next_heartbeat_at=next_heartbeat_at, now=now)
-                if turn.executed:
-                    turns += 1
-                time.sleep(config.control.idle_sleep_sec)
-            else:
-                sleep_for = min(config.control.idle_sleep_sec, max((next_heartbeat_at - now).total_seconds(), 0.0))
-                time.sleep(sleep_for)
+        try:
+            while True:
+                now = utc_now()
+                runtime.queue_due_patrols(now)
+                if now >= next_heartbeat_at:
+                    runtime.run_tick(state, now=now)
+                    ticks += 1
+                    next_heartbeat_at = now + timedelta(seconds=config.lifecycle.heartbeat_interval_sec)
+                elif runtime.has_pending_work():
+                    turn = runtime.run_turn(state, next_heartbeat_at=next_heartbeat_at, now=now)
+                    if turn.executed:
+                        turns += 1
+                    time.sleep(config.control.idle_sleep_sec)
+                else:
+                    sleep_for = min(config.control.idle_sleep_sec, max((next_heartbeat_at - now).total_seconds(), 0.0))
+                    time.sleep(sleep_for)
 
-            if config.control.max_ticks is not None and ticks >= config.control.max_ticks:
-                break
-            if config.control.max_turns is not None and turns >= config.control.max_turns:
-                break
-            if config.control.max_runtime_sec is not None and (time.monotonic() - started_at) >= config.control.max_runtime_sec:
-                break
+                if config.control.max_ticks is not None and ticks >= config.control.max_ticks:
+                    exit_reason = "max_ticks"
+                    break
+                if config.control.max_turns is not None and turns >= config.control.max_turns:
+                    exit_reason = "max_turns"
+                    break
+                if config.control.max_runtime_sec is not None and (time.monotonic() - started_at) >= config.control.max_runtime_sec:
+                    exit_reason = "max_runtime_sec"
+                    break
 
-        final_state = store.read_runtime_state()
-        store.append_event(EventRecord(event_type="shutdown", timestamp=utc_now(), instance_id=active_record.instance_id, generation=active_record.generation, life_state=final_state.life_state, details={"ticks": ticks, "turns": turns}))
-        emit_log_line("shutdown", instance=active_record.instance_id, generation=active_record.generation, state=final_state.life_state, ticks=ticks, turns=turns, instance_valid=final_state.instance_valid)
+                # Round 1.D-2: periodic hook for snapshots / tripwires.
+                if periodic_hook is not None:
+                    monotonic_now = time.monotonic()
+                    if monotonic_now - last_hook_at >= hook_interval_sec:
+                        last_hook_at = monotonic_now
+                        try:
+                            should_stop, hook_reason = periodic_hook(
+                                runtime_dir=config.paths.runtime_dir,
+                                elapsed_since_start=monotonic_now - started_at,
+                                ticks=ticks,
+                                turns=turns,
+                            )
+                        except Exception as exc:
+                            # Defensive: a buggy hook must not crash a long-run.
+                            emit_log_line(
+                                "periodic_hook_error",
+                                instance=active_record.instance_id,
+                                generation=active_record.generation,
+                                error=type(exc).__name__,
+                                message=str(exc),
+                            )
+                            should_stop, hook_reason = False, None
+                        if should_stop:
+                            exit_reason = hook_reason or "periodic_hook_stop"
+                            break
+        except KeyboardInterrupt:
+            # Round 1.D-1: catch and proceed to clean shutdown rather than
+            # short-circuiting past the shutdown event write.
+            exit_reason = "keyboard_interrupt"
+
+        try:
+            final_state = store.read_runtime_state()
+        except Exception:
+            # If state cannot be re-read, fall back to the in-memory state
+            # we've been mutating in the loop.
+            final_state = state
+        store.append_event(EventRecord(
+            event_type="shutdown",
+            timestamp=utc_now(),
+            instance_id=active_record.instance_id,
+            generation=active_record.generation,
+            life_state=final_state.life_state,
+            details={"ticks": ticks, "turns": turns, "exit_reason": exit_reason},
+        ))
+        emit_log_line(
+            "shutdown",
+            instance=active_record.instance_id,
+            generation=active_record.generation,
+            state=final_state.life_state,
+            ticks=ticks,
+            turns=turns,
+            instance_valid=final_state.instance_valid,
+            exit_reason=exit_reason,
+        )
         return RunSummary(
             ticks=ticks,
             turns=turns,
             final_life_state=final_state.life_state,
             instance_valid=final_state.instance_valid,
             runtime_dir=str(config.paths.runtime_dir),
+            exit_reason=exit_reason,
         )
     finally:
         instance_guard.release()
