@@ -13,6 +13,26 @@ MODEL_CLIENT_MODE_HEURISTIC = "heuristic"
 MODEL_CLIENT_MODE_ANTHROPIC = "anthropic"
 MODEL_CLIENT_MODE_DEEPSEEK = "deepseek"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
+# DeepSeek surfaces two concrete models on /v1/models:
+#   - ``deepseek-v4-flash`` — reasoning model (returns ``reasoning_content``
+#     separate from ``content``; uses CoT tokens before emitting JSON;
+#     needs ``max_tokens`` ≥ ~800 or content is truncated to empty)
+#   - ``deepseek-v4-pro``   — stronger model
+#
+# DeepSeek ALSO accepts the ``deepseek-chat`` model name. Despite not
+# appearing in /v1/models, requests with ``deepseek-chat`` are served
+# WITHOUT the reasoning step: ``content`` is populated directly, no
+# ``reasoning_content`` field, and ``max_tokens=220`` is sufficient for
+# our JSON-only advisory output.
+#
+# For our advisory task (simple JSON, no CoT needed) ``deepseek-chat`` is
+# the right pin — it's faster and consumes ~30-50× fewer completion
+# tokens than ``deepseek-v4-flash`` when both produce the same JSON.
+# Empirically verified across a 5min Crafter run (158/158 successful
+# advisory_attached). Callers wanting CoT reasoning can override with
+# ``--working-memory-model-client-model deepseek-v4-flash`` plus a
+# larger ``--working-memory-model-client-timeout-sec`` and a wider
+# ``max_tokens`` budget.
 DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
 ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
 DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
