@@ -263,13 +263,20 @@ def _pressure_driven_actions_for_profile(
             actions.append(action_name)
 
     if profile == "observe_first":
-        _add(NOOP_ACTION)
-        if pressure_reason in {"inventory_sparse", "tooling_missing", ""}:
+        # Fix-2A ordering note: under exploration-relevant pressures, list
+        # movement before NOOP so the un-biased ``candidates[0]`` default
+        # picks an actually-exploratory action instead of stagnating at
+        # noop. Under other pressures (e.g. threat) keep NOOP first so the
+        # default stays cautious.
+        if pressure_reason in {"inventory_sparse", "tooling_missing", "resource_visible", ""}:
             # Movement surfaces new tiles for resource / utility discovery.
             _add(MOVE_LEFT_ACTION)
             _add(MOVE_RIGHT_ACTION)
             _add(MOVE_UP_ACTION)
             _add(MOVE_DOWN_ACTION)
+            _add(NOOP_ACTION)
+        else:
+            _add(NOOP_ACTION)
         return actions
 
     if profile == "stabilize_first":

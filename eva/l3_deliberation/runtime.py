@@ -56,7 +56,10 @@ def run_deliberation(now: datetime, deliberation_input: DeliberationInput) -> tu
     action_domain = build_action_domain(deliberation_input)
     candidates = build_candidates(action_domain)
     assessments = assess_candidates(candidates, deliberation_input)
-    release_decision = decide_release(assessments)
+    release_decision = decide_release(
+        assessments,
+        working_memory_context=deliberation_input.working_memory_context,
+    )
     memory_stub = build_memory_stub(recorded_at, deliberation_input, release_decision)
     audit_record = build_deliberation_audit_record(
         recorded_at,

@@ -45,15 +45,55 @@ def build_release_context(
     *,
     bridge_target: str = "pressure_led_compatibility",
     response_mode: str = "pressure_led_compatibility",
+    working_memory_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the compatibility release-context payload for one candidate profile."""
+    """Build the compatibility release-context payload for one candidate profile.
 
+    Fix-2B: ``working_memory_context`` (when supplied) is folded into a
+    ``bridge_policy["selection_context"]`` payload so scenario action
+    bridges (e.g. ``select_response_action`` in Crafter) can honor habit
+    bias, inherited prior bias, and situation_key. Without this plumbing
+    the bridge had no access to working-memory at runtime and Round 1.A's
+    selection-bias machinery was structurally written but never fed real
+    inputs — producing the "candidates[0] always wins" behavior observed
+    in Phase 1.5 v2.
+    """
+
+    bridge_policy = _bridge_policy_for_candidate_profile(candidate_profile)
+    selection_context = _build_selection_context(working_memory_context)
+    if selection_context:
+        bridge_policy = dict(bridge_policy)
+        bridge_policy["selection_context"] = selection_context
     return {
         "bridge_target": bridge_target,
         "response_mode": response_mode,
         "candidate_profile": candidate_profile,
-        "bridge_policy": _bridge_policy_for_candidate_profile(candidate_profile),
+        "bridge_policy": bridge_policy,
     }
+
+
+def _build_selection_context(working_memory_context: dict[str, Any] | None) -> dict[str, Any]:
+    """Extract a selection-context payload from working_memory_context.
+
+    Returns a dict with keys consumed by ``select_response_action``-style
+    scenario bridges: ``situation_key``, ``habit_summaries`` (from
+    ``bias_summaries``), and ``inherited_priors``. Empty dict if no
+    working_memory_context supplied.
+    """
+
+    if not isinstance(working_memory_context, dict):
+        return {}
+    payload: dict[str, Any] = {}
+    situation_key = working_memory_context.get("situation_key")
+    if isinstance(situation_key, str) and situation_key:
+        payload["situation_key"] = situation_key
+    bias_summaries = working_memory_context.get("bias_summaries")
+    if isinstance(bias_summaries, list) and bias_summaries:
+        payload["habit_summaries"] = list(bias_summaries)
+    inherited_priors = working_memory_context.get("inherited_priors")
+    if isinstance(inherited_priors, list) and inherited_priors:
+        payload["inherited_priors"] = list(inherited_priors)
+    return payload
 
 
 def expected_outcome_for_release(outcome: str, candidate_profile: str | None) -> str:

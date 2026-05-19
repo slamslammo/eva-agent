@@ -9,8 +9,21 @@ from .selection import select_allowed_assessment, select_deferred_assessment, se
 __all__ = ["decide_release", "mint_reflex_release", "validate_release_token"]
 
 
-def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
-    """Apply default inhibition and return one mediator decision."""
+def decide_release(
+    assessments: list[CandidateAssessment],
+    *,
+    working_memory_context: dict[str, object] | None = None,
+) -> ReleaseDecision:
+    """Apply default inhibition and return one mediator decision.
+
+    Fix-2B: ``working_memory_context`` (optional) is propagated through to
+    ``build_release_context`` so the resulting ``release_context`` carries
+    a ``selection_context`` payload (habit / inherited-prior bias +
+    situation_key). Scenario action bridges that consume
+    ``release_context["bridge_policy"]["selection_context"]`` finally get
+    real working-memory inputs in production runtime, not just in unit
+    tests that fed the payload manually.
+    """
 
     selected = select_allowed_assessment(assessments)
     if selected is not None:
@@ -20,7 +33,10 @@ def decide_release(assessments: list[CandidateAssessment]) -> ReleaseDecision:
             selected_action=selected.action,
             selected_candidate_id=selected.candidate_id,
             rationale=selected.reasons,
-            release_context=build_release_context(candidate_profile),
+            release_context=build_release_context(
+                candidate_profile,
+                working_memory_context=working_memory_context,
+            ),
             expected_outcome=expected_outcome_for_release("compatibility_release", candidate_profile),
             learning_context=build_learning_context(selected),
             release_token=ReleaseToken(
