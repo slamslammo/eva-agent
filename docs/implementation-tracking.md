@@ -74,7 +74,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Semantic memory — first-class storage + exact query + bounded L3 participation | `eva/l3_deliberation/memory/semantic.py`, `eva/skills/__init__.py` | production | Store-side indexing landed in Round 1.C-1 (W4): process-local in-memory cache keyed on `StateStore.paths.runtime_dir`, eliminating disk re-reads; inverted buckets over `(scenario, situation_key) / (scenario, top_drive) / (scenario, pressure_reason) / topic / scenario`; new `query_semantic_memory_for_situation` helper returns a candidate superset. The semantic → L2 drive-weight path landed in Round 1.B-3 (W5). | Long-run validation in Round 1.D |
 | Semantic memory → L2 drive-weight semantics | `eva/l3_deliberation/reasoning/value_judgment.py` | production | Safe-path implementation: bounded amplification overlay on positive entries of `drive_impact_schema` (cap `MAX_SEMANTIC_OVERLAY_BLEND=0.15`, threshold `MIN_SEMANTIC_OVERLAY_CONFIDENCE=0.7`). Drive read-only broadcast preserved — overlay never modifies drive_levels and never weakens negative impacts. Round 1.B-3 (W5). | Long-run validation in Round 1.D |
 | Procedural memory via existing habit-track substrate | `eva/l3_deliberation/peer_circuit/habit_track.py`, `eva/skills/__init__.py` | partial | Surface is explicit but backing track remains `habit_bias.jsonl` rather than a dedicated procedural store | Future evaluation |
-| Working-memory interface signature | `eva/l3_deliberation/reasoning/working_memory.py` | partial | Multi-parameter assembly is accumulating; interface review threshold approaching | Watch (Stage I follow-up #3) |
+| Working-memory interface signature | `eva/l3_deliberation/reasoning/working_memory.py` | production | Round 1.C-2 (W6) addressed Stage I follow-up #3: introduced `WorkingMemoryAssemblyLimits` dataclass bundling the four `max_*` output-size parameters; both assembly entry points accept the new `limits` parameter with legacy kwargs preserved for backward compatibility. | — |
 
 ### 1.5 Anchors and mediated release
 
@@ -153,7 +153,7 @@ The following items are confirmed as carry-forward follow-ups, not accidental ga
 |---|---|---|
 | Semantic memory store-side windowing / indexing | Stage I follow-up #1 | resolved (Round 1.C-1 / W4) |
 | Semantic memory → L2 drive-weight semantics safe path evaluation | Stage I follow-up #2 | resolved (Round 1.B-3 / W5) |
-| Working-memory interface signature review threshold | Stage I follow-up #3 | watch |
+| Working-memory interface signature review threshold | Stage I follow-up #3 | addressed (Round 1.C-2 / W6) |
 
 ---
 

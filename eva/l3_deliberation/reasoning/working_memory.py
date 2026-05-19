@@ -39,6 +39,50 @@ MIN_AUTO_LLM_CONFIDENCE = 0.6
 
 
 @dataclass(frozen=True)
+class WorkingMemoryAssemblyLimits:
+    """Round 1.C-2 (W6): output-size limits for working-memory assembly.
+
+    Groups the four ``max_*`` parameters that were accumulating on
+    ``build_working_memory_context`` and ``build_working_memory_context_from_store``.
+    Stage I follow-up #3 flagged the signature accumulation as approaching
+    the review threshold; bundling these limits keeps assembly call sites
+    readable while preserving backward compatibility with the legacy
+    ``max_*`` kwargs (which now forward into a synthesized limits object
+    when no explicit ``limits`` argument is supplied).
+    """
+
+    max_bias_summaries: int = 2
+    max_habit_skills: int = 2
+    max_recent_outcomes: int = 3
+    max_semantic_patterns: int = 2
+
+
+def _resolve_limits(
+    limits: WorkingMemoryAssemblyLimits | None,
+    *,
+    max_bias_summaries: int = 2,
+    max_habit_skills: int = 2,
+    max_recent_outcomes: int = 3,
+    max_semantic_patterns: int = 2,
+) -> WorkingMemoryAssemblyLimits:
+    """Resolve an effective limits object.
+
+    Priority: explicit ``limits`` argument > legacy individual ``max_*``
+    kwargs > dataclass defaults. Always returns a concrete
+    ``WorkingMemoryAssemblyLimits`` instance.
+    """
+
+    if limits is not None:
+        return limits
+    return WorkingMemoryAssemblyLimits(
+        max_bias_summaries=max_bias_summaries,
+        max_habit_skills=max_habit_skills,
+        max_recent_outcomes=max_recent_outcomes,
+        max_semantic_patterns=max_semantic_patterns,
+    )
+
+
+@dataclass(frozen=True)
 class WorkingMemoryContext:
     """Replaceable Phase C working-memory payload read by L3."""
 
@@ -93,12 +137,25 @@ def build_working_memory_context(
     response_history: list[dict[str, Any]] | None = None,
     memory_stubs: list[dict[str, Any]] | None = None,
     semantic_entries: list[dict[str, Any]] | None = None,
+    limits: WorkingMemoryAssemblyLimits | None = None,
     max_bias_summaries: int = 2,
     max_habit_skills: int = 2,
     max_recent_outcomes: int = 3,
     max_semantic_patterns: int = 2,
 ) -> WorkingMemoryContext:
     """Build a compact working-memory context from local append-only artifacts."""
+
+    effective_limits = _resolve_limits(
+        limits,
+        max_bias_summaries=max_bias_summaries,
+        max_habit_skills=max_habit_skills,
+        max_recent_outcomes=max_recent_outcomes,
+        max_semantic_patterns=max_semantic_patterns,
+    )
+    max_bias_summaries = effective_limits.max_bias_summaries
+    max_habit_skills = effective_limits.max_habit_skills
+    max_recent_outcomes = effective_limits.max_recent_outcomes
+    max_semantic_patterns = effective_limits.max_semantic_patterns
 
     situation_key = build_situation_key(deliberation_input)
     scenario_name = get_active_runtime_scenario().name
@@ -290,6 +347,7 @@ def build_working_memory_context_from_store(
     backend: str = "local_rule_based",
     llm_adapter: WorkingMemoryAdapter | None = None,
     advisory_source: str | None = None,
+    limits: WorkingMemoryAssemblyLimits | None = None,
     max_bias_summaries: int = 2,
     max_habit_skills: int = 2,
     max_recent_outcomes: int = 3,
@@ -297,6 +355,18 @@ def build_working_memory_context_from_store(
     response_history: list[dict[str, Any]] | None = None,
 ) -> WorkingMemoryContext:
     """Build working-memory context directly from the runtime store."""
+
+    effective_limits = _resolve_limits(
+        limits,
+        max_bias_summaries=max_bias_summaries,
+        max_habit_skills=max_habit_skills,
+        max_recent_outcomes=max_recent_outcomes,
+        max_semantic_patterns=max_semantic_patterns,
+    )
+    max_bias_summaries = effective_limits.max_bias_summaries
+    max_habit_skills = effective_limits.max_habit_skills
+    max_recent_outcomes = effective_limits.max_recent_outcomes
+    max_semantic_patterns = effective_limits.max_semantic_patterns
 
     learning_outcomes = read_learning_outcomes(store)
     habit_bias_entries = read_habit_bias(store)

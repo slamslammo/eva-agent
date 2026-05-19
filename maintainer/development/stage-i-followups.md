@@ -16,7 +16,6 @@
 
 ## 3. Working-memory 接口签名需要持续观察
 
-- **Status**: watch
+- **Status**: addressed (Round 1.C-2 / W6)
 - **Why it matters**: Stage I 为让 working / episodic / semantic / procedural / inherited inputs 同时进入 working-memory 装配，扩展了若干参数与 payload 字段。当前复杂度仍在可接受范围内，但继续累加会提高 schema drift 与维护成本。
-- **Current limitation**: `working_memory.py` 目前仍以多参数装配为主，接口数量和字段数已经接近应当复审的阈值。
-- **Suggested direction**: 后续若继续扩展 working-memory 输入，优先先做接口签名 review；必要时再评估是否引入参数对象，而不是在 Stage I closeout 时顺手重构。
+- **Resolution**: Round 1.C-2 在 `eva/l3_deliberation/reasoning/working_memory.py` 新增 `WorkingMemoryAssemblyLimits` dataclass，把四个 `max_*` output-size 参数收编为一个 limits 对象。`build_working_memory_context` 与 `build_working_memory_context_from_store` 接受可选的 `limits` 参数；为保持向后兼容，旧的单独 `max_*` kwargs 仍可使用——当二者同时出现时 `limits` 优先。数据源参数（`learning_outcomes` / `habit_bias_entries` / 等）保留为独立 kwargs 以方便测试注入。详见 `maintainer/development/round-1c-2-progress.md`。

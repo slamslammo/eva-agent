@@ -76,7 +76,7 @@
 | Semantic memory — 一等存储 + 精确查询 + 有界 L3 参与 | `eva/l3_deliberation/memory/semantic.py`、`eva/skills/__init__.py` | production | Store-side 索引在 Round 1.C-1 (W4) 落地：以 `StateStore.paths.runtime_dir` 为键的进程内内存索引消除每次 read 的磁盘 re-read；按 `(scenario, situation_key) / (scenario, top_drive) / (scenario, pressure_reason) / topic / scenario` 建立倒排桶；新增 `query_semantic_memory_for_situation` helper 返回候选 superset。semantic → L2 drive-weight 路径在 Round 1.B-3 (W5) 落地。 | Round 1.D 长跑验证 |
 | Semantic memory → L2 drive-weight semantics | `eva/l3_deliberation/reasoning/value_judgment.py` | production | 安全路径实现：对 `drive_impact_schema` 正向值做有界放大 overlay（cap `MAX_SEMANTIC_OVERLAY_BLEND=0.15`，阈值 `MIN_SEMANTIC_OVERLAY_CONFIDENCE=0.7`）。drive read-only broadcast 保持——overlay 不动 drive_levels，也不削弱负向 impact。Round 1.B-3 (W5)。 | Round 1.D 长跑验证 |
 | 通过现有 habit-track substrate 的 procedural memory | `eva/l3_deliberation/peer_circuit/habit_track.py`、`eva/skills/__init__.py` | partial | Surface 是显式的，但 backing track 仍是 `habit_bias.jsonl` 而非独立 procedural store | 后续评估 |
-| Working-memory 接口签名 | `eva/l3_deliberation/reasoning/working_memory.py` | partial | 多参数装配在累积；接口复审阈值接近 | Watch（Stage I follow-up #3） |
+| Working-memory 接口签名 | `eva/l3_deliberation/reasoning/working_memory.py` | production | Round 1.C-2 (W6) 处理 Stage I follow-up #3：引入 `WorkingMemoryAssemblyLimits` dataclass 收编 4 个 `max_*` 输出 size 参数；两个 assembly 入口都接受新的 `limits` 参数，旧 kwargs 保留向后兼容。 | — |
 
 ### 1.5 Anchor 和 mediated release
 
@@ -155,7 +155,7 @@
 |---|---|---|
 | Semantic memory store-side windowing / indexing | Stage I follow-up #1 | resolved (Round 1.C-1 / W4) |
 | Semantic memory → L2 drive-weight semantics 最小安全路径评估 | Stage I follow-up #2 | resolved (Round 1.B-3 / W5) |
-| Working-memory 接口签名复审阈值 | Stage I follow-up #3 | watch |
+| Working-memory 接口签名复审阈值 | Stage I follow-up #3 | addressed (Round 1.C-2 / W6) |
 
 ---
 
