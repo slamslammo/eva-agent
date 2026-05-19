@@ -15,11 +15,22 @@ SensorProviderFactory = Callable[[], tuple[SensorSpecBuilder, ...]]
 
 @dataclass(frozen=True)
 class SensorPolicyBundle:
-    """Scenario-owned concrete sensor provider bundle."""
+    """Scenario-owned concrete sensor provider bundle.
+
+    ``imminent_threat_pressure_types`` (Round 1.B-4): the subset of pressure
+    types whose active pressures warrant the ``class="threat"`` signal
+    classification — i.e. urgent / dangerous pressures that should suppress
+    exploration drive, route through protective lanes, and amplify memory
+    salience. Other active pressure types emit ``class="pressure"`` instead
+    so they still influence drive levels and candidate scoring without
+    triggering threat-response semantics. Default ``()`` keeps legacy
+    behavior for scenarios that have not opted into the distinction.
+    """
 
     sensor_providers: SensorProviderFactory
     dimension_specs: tuple["DimensionSpec", ...]
     pressure_types: tuple[str, ...]
+    imminent_threat_pressure_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

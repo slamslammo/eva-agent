@@ -62,6 +62,16 @@ CRAFTER_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         sensor_providers=crafter_sensor_providers,
         dimension_specs=CRAFTER_DIMENSION_SPECS,
         pressure_types=tuple(dict.fromkeys(spec.pressure_type for spec in CRAFTER_DIMENSION_SPECS)),
+        # Round 1.B-4: only ``safety`` pressures (zombies, threats in
+        # local_view) qualify as imminent threats in Crafter. The other
+        # pressure types (metabolic, recovery, acquisition, capability)
+        # are ongoing pressures that influence drive levels and candidate
+        # scoring but do not trigger threat-response semantics in routing
+        # / curiosity suppression / memory salience. Without this
+        # narrowing, an avatar with persistent food/water/energy drift
+        # would have every tick classed as a threat tick, pinning
+        # exploration drive at 0 and over-amplifying memory salience.
+        imminent_threat_pressure_types=("safety",),
     ),
     actions=ActionPolicyBundle(
         recheck_action=RECHECK_ACTION,

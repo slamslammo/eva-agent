@@ -62,6 +62,17 @@ LINUX_RUNTIME_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         sensor_providers=linux_runtime_sensor_providers,
         dimension_specs=LINUX_RUNTIME_DIMENSION_SPECS,
         pressure_types=tuple(dict.fromkeys(spec.pressure_type for spec in LINUX_RUNTIME_DIMENSION_SPECS)),
+        # Round 1.B-4: ALL Linux pressure types are imminent-threat
+        # category (runtime-integrity, continuity, resource-state, anomaly-
+        # accumulation are all "runtime is in trouble" signals). This
+        # keeps Linux behavior bit-equivalent to the pre-1.B-4 semantic
+        # where every active pressure produced class="threat" signals.
+        # Crafter is different because its pressure types span both
+        # imminent threats (safety) and ongoing optimization pressures
+        # (metabolic / acquisition / capability / recovery).
+        imminent_threat_pressure_types=tuple(
+            dict.fromkeys(spec.pressure_type for spec in LINUX_RUNTIME_DIMENSION_SPECS)
+        ),
     ),
     actions=ActionPolicyBundle(
         recheck_action=RECHECK_ACTION,

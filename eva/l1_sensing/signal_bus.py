@@ -35,13 +35,22 @@ class SignalRecord:
 
 @dataclass(frozen=True)
 class SignalDispatchSummary:
-    """Compact summary of one emitted signal batch by contract class."""
+    """Compact summary of one emitted signal batch by contract class.
+
+    Round 1.B-4: ``threat_signal_count`` now narrows to imminent threats
+    only (per scenario-declared ``imminent_threat_pressure_types``). The
+    new ``pressure_signal_count`` covers non-imminent active pressures
+    (metabolic / acquisition / capability / recovery for Crafter; non-
+    integrity pressure types for Linux). Together they cover the same
+    population the pre-1.B-4 ``threat_signal_count`` did.
+    """
 
     signal_count: int
     status_signal_count: int
     threat_signal_count: int
     background_signal_count: int
     has_threat_signal: bool
+    pressure_signal_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the batch summary for patrol and turn details."""
@@ -52,6 +61,7 @@ class SignalDispatchSummary:
             "threat_signal_count": self.threat_signal_count,
             "background_signal_count": self.background_signal_count,
             "has_threat_signal": self.has_threat_signal,
+            "pressure_signal_count": self.pressure_signal_count,
         }
 
 
@@ -65,12 +75,52 @@ def build_signal_batch_payload(signals: Sequence[SignalRecord]) -> dict[str, Any
 
 
 def build_patrol_signals(snapshot: ExternalLifeSnapshot, pressure_table: ActivePressureTable) -> list[SignalRecord]:
-    """Build the minimal signal batch emitted by one completed patrol."""
+    """Build the minimal signal batch emitted by one completed patrol.
+
+    Round 1.B-4: each active pressure is now classified as either an
+    imminent threat (class="threat") or a general pressure
+    (class="pressure") based on the active scenario's declared
+    ``imminent_threat_pressure_types``. The pre-1.B-4 behavior
+    indiscriminately emitted class="threat" for every pressure; that
+    behavior is preserved as the fallback when no scenario is activated
+    (e.g. low-level unit tests that bypass scenario_bundle).
+    """
 
     signals = [build_status_signal(snapshot)]
+    imminent_types = _imminent_threat_pressure_types()
     for pressure in pressure_table.pressures:
-        signals.append(build_threat_signal(snapshot, pressure))
+        # Legacy fallback (imminent_types is None) → all pressures emit
+        # class="threat", preserving bit-equivalence with pre-1.B-4 callers
+        # that do not activate a scenario bundle.
+        is_imminent = imminent_types is None or pressure.type in imminent_types
+        if is_imminent:
+            signals.append(build_threat_signal(snapshot, pressure))
+        else:
+            signals.append(build_pressure_signal(snapshot, pressure))
     return signals
+
+
+def _imminent_threat_pressure_types() -> frozenset[str] | None:
+    """Resolve the active scenario's imminent-threat pressure type set.
+
+    Returns ``None`` when no scenario is activated — caller treats that
+    as legacy behavior (every pressure type counts as imminent). Returns
+    a (possibly empty) ``frozenset`` when a scenario is active.
+    """
+
+    try:
+        from ..scenario_bundle import get_active_runtime_scenario
+        scenario = get_active_runtime_scenario()
+    except Exception:
+        # No scenario activated — preserve legacy "all pressures = threat"
+        # semantic so low-level unit tests don't have to activate scenarios.
+        return None
+    declared = tuple(getattr(scenario.sensors, "imminent_threat_pressure_types", ()) or ())
+    if not declared:
+        # Scenario activated but didn't opt in. Preserve legacy by treating
+        # every declared pressure type as imminent.
+        return frozenset(scenario.sensors.pressure_types or ())
+    return frozenset(declared)
 
 
 def build_patrol_signal_artifacts(
@@ -103,11 +153,34 @@ def build_status_signal(snapshot: ExternalLifeSnapshot) -> SignalRecord:
 
 
 def build_threat_signal(snapshot: ExternalLifeSnapshot, pressure: ActivePressure) -> SignalRecord:
-    """Build one normalized threat signal from an active pressure projection."""
+    """Build one normalized threat signal from an imminent-threat pressure projection.
+
+    Round 1.B-4: emitted only for pressure types the active scenario has
+    declared as imminent (``imminent_threat_pressure_types``). For
+    non-imminent active pressures, see ``build_pressure_signal``.
+    """
 
     return SignalRecord(
         source=snapshot.source_patrol,
         signal_class="threat",
+        payload=pressure.to_dict(),
+        captured_at=snapshot.captured_at,
+        rate_context=_rate_context_from_evidence(pressure.evidence),
+    )
+
+
+def build_pressure_signal(snapshot: ExternalLifeSnapshot, pressure: ActivePressure) -> SignalRecord:
+    """Round 1.B-4: build one general-pressure signal from a non-imminent pressure.
+
+    These signals still flow into deliberation (drive levels, candidate
+    scoring) but do NOT trigger threat-response semantics in routing /
+    curiosity suppression / memory salience. They represent ongoing
+    pressures whose response should be deliberated rather than reflexed.
+    """
+
+    return SignalRecord(
+        source=snapshot.source_patrol,
+        signal_class="pressure",
         payload=pressure.to_dict(),
         captured_at=snapshot.captured_at,
         rate_context=_rate_context_from_evidence(pressure.evidence),
@@ -120,12 +193,14 @@ def summarize_signal_dispatch(signals: Sequence[SignalRecord]) -> SignalDispatch
     status_signal_count = sum(1 for signal in signals if signal.signal_class == "status")
     threat_signal_count = sum(1 for signal in signals if signal.signal_class == "threat")
     background_signal_count = sum(1 for signal in signals if signal.signal_class == "background")
+    pressure_signal_count = sum(1 for signal in signals if signal.signal_class == "pressure")
     return SignalDispatchSummary(
         signal_count=len(signals),
         status_signal_count=status_signal_count,
         threat_signal_count=threat_signal_count,
         background_signal_count=background_signal_count,
         has_threat_signal=threat_signal_count > 0,
+        pressure_signal_count=pressure_signal_count,
     )
 
 

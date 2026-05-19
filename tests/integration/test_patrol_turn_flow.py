@@ -179,7 +179,10 @@ class PatrolTurnFlowTests(unittest.TestCase):
         pressure_table = self.store.read_active_pressures()
         self.assertEqual(len(pressure_table.pressures), 1)
         self.assertEqual(pressure_table.pressures[0].type, "integrity")
-        self.assertEqual(len(first.details["signal_summary"]), 5)
+        # Round 1.B-4: signal_summary gained ``pressure_signal_count`` for the
+        # imminent-vs-general signal classification, so the dict has 6 keys
+        # instead of 5.
+        self.assertEqual(len(first.details["signal_summary"]), 6)
         self.assertIn("response", first.details)
         self.assertEqual(
             first.details["response"],
