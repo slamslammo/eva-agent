@@ -6,7 +6,7 @@
 
 它回答的问题是：**对于某个理论承诺，它现在在代码哪里、完成度如何？**
 
-理论本身请阅读 [eva-theory](https://github.com/slamslammo/eva-theory)。架构鸟瞰请阅读 [`architecture-overview-zh.md`](architecture-overview-zh.md)（中文版）。目标态蓝图请阅读 [`architecture-implementation-blueprint-v0.6-zh.md`](architecture-implementation-blueprint-v0.6-zh.md)。当前框架落地情况请阅读 [`eva-framework-implementation.md`](eva-framework-implementation.md)。如果你想逐条查看 blueprint 承诺与 tracking 条目的对应关系，请阅读 [`blueprint-to-tracking-map-zh.md`](blueprint-to-tracking-map-zh.md)。
+理论本身请阅读 [eva-theory](https://github.com/slamslammo/eva-theory)。架构鸟瞰请阅读 [`architecture-overview-zh.md`](architecture-overview-zh.md)。目标态蓝图请阅读 [`architecture-implementation-blueprint-v0.6-zh.md`](architecture-implementation-blueprint-v0.6-zh.md)。当前框架落地情况请阅读 [`eva-framework-implementation-zh.md`](eva-framework-implementation-zh.md)。如果你想逐条查看 blueprint 承诺与 tracking 条目的对应关系，请阅读 [`blueprint-to-tracking-map-zh.md`](blueprint-to-tracking-map-zh.md)。
 
 ---
 
@@ -110,7 +110,7 @@
 
 ## 2. 场景契约追踪
 
-追踪跨场景集成契约。完整契约规范见 [`scenarios-SPEC.md`](scenarios-SPEC.md)。
+追踪跨场景集成契约。完整契约规范见 [`scenarios-SPEC-zh.md`](scenarios-SPEC-zh.md)。
 
 | 契约组件 | 代码位置 | 完成度 | 已知限制 |
 |---|---|---|---|

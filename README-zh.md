@@ -21,20 +21,20 @@ EVA-agent 不是从"任务优先的 agent + 逐步增加编排"开始，而是�
 根据你的需求选择入口：
 
 **想看“如果从零实现，应当怎么构建”的目标蓝图**
-→ [`docs/architecture-implementation-blueprint-v0.6.md`](docs/architecture-implementation-blueprint-v0.6.md)（英文）
+→ [`docs/architecture-implementation-blueprint-v0.6-zh.md`](docs/architecture-implementation-blueprint-v0.6-zh.md)
 
 **想快速了解整体架构**
-→ [`docs/architecture-overview.md`](docs/architecture-overview.md)（英文）
+→ [`docs/architecture-overview-zh.md`](docs/architecture-overview-zh.md)
 
 **想了解框架落地了什么**
-→ [`docs/eva-framework-implementation.md`](docs/eva-framework-implementation.md)（英文）
+→ [`docs/eva-framework-implementation-zh.md`](docs/eva-framework-implementation-zh.md)
 
 **想了解场景如何接入框架**
-→ [`docs/scenarios-SPEC.md`](docs/scenarios-SPEC.md)（英文）
+→ [`docs/scenarios-SPEC-zh.md`](docs/scenarios-SPEC-zh.md)
 → 具体场景文档：[`scenarios/linux_runtime/SPEC.md`](scenarios/linux_runtime/SPEC.md)、[`scenarios/crafter/SPEC.md`](scenarios/crafter/SPEC.md)
 
 **想查理论承诺的落地状态**
-→ [`docs/implementation-tracking.md`](docs/implementation-tracking.md)（英文）
+→ [`docs/implementation-tracking-zh.md`](docs/implementation-tracking-zh.md)
 
 **想读理论**
 → [eva-theory 仓库](https://github.com/slamslammo/eva-theory)（英文）

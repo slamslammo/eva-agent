@@ -2,9 +2,9 @@
 
 > 架构鸟瞰：EVA-Agent 的整体架构是什么、主要模块如何协作、核心结构承诺是什么。
 
-本文档不是理论重述——理论请阅读 [eva-theory](https://github.com/slamslammo/eva-theory)。本文档不是目标态蓝图——如果你想看“从零应如何构建”，请阅读 [`architecture-implementation-blueprint-v0.6.md`](architecture-implementation-blueprint-v0.6.md)。本文档不是实现日志——当前框架落地情况请阅读 [`eva-framework-implementation.md`](eva-framework-implementation.md)。本文档是架构粘合层：展示各部分如何组装在一起、哪些不变量在各部分之间恒成立。
+本文档不是理论重述——理论请阅读 [eva-theory](https://github.com/slamslammo/eva-theory)。本文档不是目标态蓝图——如果你想看“从零应如何构建”，请阅读 [`architecture-implementation-blueprint-v0.6-zh.md`](architecture-implementation-blueprint-v0.6-zh.md)。本文档不是实现日志——当前框架落地情况请阅读 [`eva-framework-implementation-zh.md`](eva-framework-implementation-zh.md)。本文档是架构粘合层：展示各部分如何组装在一起、哪些不变量在各部分之间恒成立。
 
-场景特定内容请阅读 [`scenarios-SPEC.md`](scenarios-SPEC.md) 和 `scenarios/` 下各场景的 `SPEC.md`。
+场景特定内容请阅读 [`scenarios-SPEC-zh.md`](scenarios-SPEC-zh.md) 和 `scenarios/` 下各场景的 `SPEC.md`。
 
 ---
 

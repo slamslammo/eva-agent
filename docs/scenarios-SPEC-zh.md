@@ -2,7 +2,7 @@
 
 **状态**：Stage G capability landing 和 Stage H second-scenario 验证后的落地场景契约  
 **范围**：`scenarios/` 下的场景包  
-**配套文档**：`docs/eva-framework-implementation.md`、`scenarios/linux_runtime/SPEC.md`、`scenarios/crafter/SPEC.md`
+**配套文档**：`docs/eva-framework-implementation-zh.md`、`scenarios/linux_runtime/SPEC.md`、`scenarios/crafter/SPEC.md`
 
 ---
 
