@@ -11,8 +11,24 @@ from urllib import error, request
 MODEL_CLIENT_MODE_INERT = "inert"
 MODEL_CLIENT_MODE_HEURISTIC = "heuristic"
 MODEL_CLIENT_MODE_ANTHROPIC = "anthropic"
+MODEL_CLIENT_MODE_DEEPSEEK = "deepseek"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
+DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
 ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
+DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
+DEEPSEEK_API_BASE_URL_ENV = "DEEPSEEK_API_BASE_URL"
+DEFAULT_DEEPSEEK_API_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_CHAT_COMPLETIONS_API_PATH = "/v1/chat/completions"
+
+
+def _resolve_deepseek_chat_url() -> str:
+    """Resolve the DeepSeek chat-completions URL, honoring the env override."""
+
+    base = os.environ.get(DEEPSEEK_API_BASE_URL_ENV) or DEFAULT_DEEPSEEK_API_BASE_URL
+    base = base.rstrip("/")
+    if base.endswith(DEEPSEEK_CHAT_COMPLETIONS_API_PATH):
+        return base
+    return base + DEEPSEEK_CHAT_COMPLETIONS_API_PATH
 ANTHROPIC_API_BASE_URL_ENV = "ANTHROPIC_API_BASE_URL"
 DEFAULT_ANTHROPIC_API_BASE_URL = "https://api.anthropic.com"
 ANTHROPIC_MESSAGES_API_PATH = "/v1/messages"
@@ -214,6 +230,55 @@ class AnthropicWorkingMemoryModelClient:
 
 
 
+class DeepSeekWorkingMemoryModelClient:
+    """DeepSeek-backed bounded advisory client (OpenAI-compatible protocol).
+
+    DeepSeek's API at ``https://api.deepseek.com/v1/chat/completions`` uses
+    the OpenAI chat-completions shape with Bearer auth. The advisory
+    prompt and response-sanitization logic are shared with Anthropic via
+    ``_extract_advisory_payload``; only the transport and request /
+    response envelope differ.
+    """
+
+    def __init__(
+        self,
+        config: WorkingMemoryModelClientConfig | None = None,
+        *,
+        transport: AnthropicTransport | None = None,
+    ) -> None:
+        base_config = config or WorkingMemoryModelClientConfig(
+            provider="deepseek",
+            model=DEFAULT_DEEPSEEK_MODEL,
+        )
+        provider = base_config.provider if base_config.provider not in {"placeholder", "heuristic", "anthropic"} else "deepseek"
+        model = str(base_config.model or DEFAULT_DEEPSEEK_MODEL)
+        self.config = WorkingMemoryModelClientConfig(
+            provider=provider,
+            model=model,
+            request_timeout_sec=base_config.request_timeout_sec,
+        )
+        self.transport = transport or _post_deepseek_chat
+
+    def build_working_memory_advisory(
+        self,
+        request: WorkingMemoryModelClientRequest,
+    ) -> WorkingMemoryModelClientResponse | None:
+        """Call DeepSeek chat completions API and return one bounded advisory payload."""
+
+        api_key = os.environ.get(DEEPSEEK_API_KEY_ENV)
+        if not api_key:
+            raise RuntimeError("deepseek_api_key_missing")
+        response_payload = self.transport(
+            _deepseek_request_payload(request, model=self.config.model),
+            api_key,
+            self.config.request_timeout_sec,
+        )
+        response_text = _deepseek_text_response(response_payload)
+        advisory_payload = _extract_advisory_payload(response_text)
+        return WorkingMemoryModelClientResponse(payload=advisory_payload)
+
+
+
 def build_builtin_working_memory_model_client(
     mode: str,
     config: WorkingMemoryModelClientConfig | None = None,
@@ -225,6 +290,8 @@ def build_builtin_working_memory_model_client(
         return HeuristicWorkingMemoryModelClient(config)
     if normalized == MODEL_CLIENT_MODE_ANTHROPIC:
         return AnthropicWorkingMemoryModelClient(config)
+    if normalized == MODEL_CLIENT_MODE_DEEPSEEK:
+        return DeepSeekWorkingMemoryModelClient(config)
     return NullWorkingMemoryModelClient()
 
 
@@ -302,6 +369,127 @@ def _post_anthropic_messages(payload: dict[str, Any], api_key: str, timeout_sec:
     if not isinstance(payload_dict, dict):
         raise RuntimeError("anthropic_response_not_object")
     return payload_dict
+
+
+def _post_deepseek_chat(payload: dict[str, Any], api_key: str, timeout_sec: float) -> dict[str, Any]:
+    """Post one DeepSeek chat-completions request through the stdlib HTTP client.
+
+    DeepSeek's API is OpenAI-compatible: ``POST /v1/chat/completions`` with
+    a ``Authorization: Bearer <key>`` header and a JSON body containing
+    ``model``, ``messages``, ``max_tokens``, etc. The response shape is the
+    OpenAI ``choices[0].message.content`` envelope.
+    """
+
+    body = json.dumps(payload).encode("utf-8")
+    http_request = request.Request(
+        _resolve_deepseek_chat_url(),
+        data=body,
+        headers={
+            "content-type": "application/json",
+            "authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(http_request, timeout=max(0.1, float(timeout_sec))) as response:
+            raw_body = response.read().decode("utf-8")
+    except error.HTTPError as exc:
+        raise RuntimeError(_deepseek_http_error_label(exc)) from exc
+    except error.URLError as exc:
+        raise RuntimeError("deepseek_transport_unavailable") from exc
+    payload_dict = json.loads(raw_body)
+    if not isinstance(payload_dict, dict):
+        raise RuntimeError("deepseek_response_not_object")
+    return payload_dict
+
+
+def _deepseek_http_error_label(exc: error.HTTPError) -> str:
+    """Return a compact, audit-safe DeepSeek HTTP error label."""
+
+    try:
+        body = exc.read().decode("utf-8", errors="ignore")
+        payload = json.loads(body)
+    except Exception:
+        payload = {}
+    error_payload = payload.get("error") if isinstance(payload, dict) else {}
+    if isinstance(error_payload, dict):
+        error_type = str(error_payload.get("type") or error_payload.get("code") or "").strip()
+        if error_type:
+            return f"deepseek_http_{exc.code}_{error_type}"
+    return f"deepseek_http_{exc.code}"
+
+
+def _deepseek_request_payload(
+    request_payload: WorkingMemoryModelClientRequest,
+    *,
+    model: str,
+) -> dict[str, Any]:
+    """Build the bounded DeepSeek chat-completions request payload.
+
+    OpenAI-compatible: system prompt becomes a ``{"role": "system"}`` message,
+    user prompt becomes a ``{"role": "user"}`` message. Token cap is shared
+    with Anthropic to keep advisory output bounded.
+    """
+
+    user_prompt = (
+        "Return only a JSON object with these optional keys: "
+        "candidate_suggestions, prediction_hints, reasoning_trace, confidence. "
+        "candidate_suggestions, if present, must contain only these strings: "
+        '"observe_first", "stabilize_first", "escalate_first". '
+        "Do not propose actions outside those candidate profiles. "
+        "prediction_hints and reasoning_trace must be short string lists. "
+        "confidence must be a number between 0 and 1. "
+        "If uncertain, return empty lists and a low confidence. "
+        "Request payload:\n"
+        f"{json.dumps(request_payload.to_dict(), ensure_ascii=False, sort_keys=True)}"
+    )
+    return {
+        "model": model,
+        "max_tokens": 220,
+        "temperature": 0,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a bounded EVA working-memory advisory model. "
+                    "You are not allowed to release actions, choose external side effects, or invent new action domains. "
+                    "Respond with JSON only."
+                ),
+            },
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+
+
+def _deepseek_text_response(payload: dict[str, Any]) -> str:
+    """Extract the assistant text content from an OpenAI-style payload.
+
+    Robust to ``content`` being either a plain string (the common case) or a
+    list of ``{"type": "text", "text": ...}`` blocks (some OpenAI-compatible
+    proxies emit this richer shape).
+    """
+
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError("deepseek_response_missing_choices")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    if not isinstance(message, dict):
+        raise RuntimeError("deepseek_response_missing_message")
+    content = message.get("content")
+    if isinstance(content, str):
+        if not content.strip():
+            raise RuntimeError("deepseek_response_empty_content")
+        return content
+    if isinstance(content, list):
+        parts = [
+            str(block.get("text") or "")
+            for block in content
+            if isinstance(block, dict) and str(block.get("type") or "") in {"text", ""}
+        ]
+        joined = "\n".join(p for p in parts if p)
+        if joined:
+            return joined
+    raise RuntimeError("deepseek_response_missing_content")
 
 
 

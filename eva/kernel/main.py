@@ -19,14 +19,17 @@ from ..l3_deliberation import (
     ADAPTER_MODE_INERT,
     ClientBackedWorkingMemoryAdapter,
     DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_DEEPSEEK_MODEL,
     HeuristicWorkingMemoryAdapter,
     MODEL_CLIENT_MODE_ANTHROPIC,
+    MODEL_CLIENT_MODE_DEEPSEEK,
     MODEL_CLIENT_MODE_HEURISTIC,
     MODEL_CLIENT_MODE_INERT,
     NullWorkingMemoryAdapter,
     WorkingMemoryAdapter,
     WorkingMemoryModelClientConfig,
     AnthropicWorkingMemoryModelClient,
+    DeepSeekWorkingMemoryModelClient,
     build_builtin_working_memory_adapter,
 )
 
@@ -302,9 +305,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--append-only-archive-dir-name", default="archive")
     parser.add_argument("--working-memory-backend", choices=["local_rule_based", "auto", "llm_assisted"], default="local_rule_based")
     parser.add_argument("--working-memory-adapter-mode", choices=[ADAPTER_MODE_INERT, ADAPTER_MODE_HEURISTIC], default=ADAPTER_MODE_INERT)
-    parser.add_argument("--working-memory-model-client-mode", choices=[MODEL_CLIENT_MODE_INERT, MODEL_CLIENT_MODE_HEURISTIC, MODEL_CLIENT_MODE_ANTHROPIC], default=MODEL_CLIENT_MODE_ANTHROPIC)
-    parser.add_argument("--working-memory-model-client-provider", default="anthropic")
-    parser.add_argument("--working-memory-model-client-model", default=DEFAULT_ANTHROPIC_MODEL)
+    parser.add_argument(
+        "--working-memory-model-client-mode",
+        choices=[MODEL_CLIENT_MODE_INERT, MODEL_CLIENT_MODE_HEURISTIC, MODEL_CLIENT_MODE_ANTHROPIC, MODEL_CLIENT_MODE_DEEPSEEK],
+        default=MODEL_CLIENT_MODE_ANTHROPIC,
+    )
+    parser.add_argument("--working-memory-model-client-provider", default=None,
+                        help="Provider label (default: derived from mode — 'anthropic' or 'deepseek').")
+    parser.add_argument("--working-memory-model-client-model", default=None,
+                        help="Model id (default: derived from mode — Anthropic default or DeepSeek default).")
     parser.add_argument("--working-memory-model-client-timeout-sec", type=float, default=5.0)
     parser.add_argument("--inherited-priors-path")
     # Round 1.D: long-run validation snapshot + tripwire CLI options.
@@ -359,6 +368,19 @@ def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
         rotation_max_bytes=args.append_only_rotation_max_bytes,
         archive_dir_name=args.append_only_archive_dir_name,
     )
+    # Derive provider / model defaults from the selected client mode if the
+    # user did not override them. This lets ``--working-memory-model-client-mode deepseek``
+    # work without forcing the user to also set ``--working-memory-model-client-model``.
+    client_mode = args.working_memory_model_client_mode
+    if client_mode == MODEL_CLIENT_MODE_DEEPSEEK:
+        default_provider = "deepseek"
+        default_model = DEFAULT_DEEPSEEK_MODEL
+    else:
+        default_provider = "anthropic"
+        default_model = DEFAULT_ANTHROPIC_MODEL
+    resolved_provider = args.working_memory_model_client_provider or default_provider
+    resolved_model = args.working_memory_model_client_model or default_model
+
     return build_runtime_config(
         args.runtime_dir,
         lifecycle=lifecycle,
@@ -369,8 +391,8 @@ def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
         working_memory_adapter_mode=args.working_memory_adapter_mode,
         working_memory_model_client_mode=args.working_memory_model_client_mode,
         working_memory_model_client_config=WorkingMemoryModelClientConfig(
-            provider=args.working_memory_model_client_provider,
-            model=args.working_memory_model_client_model,
+            provider=resolved_provider,
+            model=resolved_model,
             request_timeout_sec=args.working_memory_model_client_timeout_sec,
         ),
         inherited_priors_path=args.inherited_priors_path,

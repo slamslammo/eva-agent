@@ -24,9 +24,12 @@ from .working_memory_adapter import (
 )
 from .working_memory_model_client import (
     DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_DEEPSEEK_MODEL,
     AnthropicWorkingMemoryModelClient,
+    DeepSeekWorkingMemoryModelClient,
     HeuristicWorkingMemoryModelClient,
     MODEL_CLIENT_MODE_ANTHROPIC,
+    MODEL_CLIENT_MODE_DEEPSEEK,
     MODEL_CLIENT_MODE_HEURISTIC,
     MODEL_CLIENT_MODE_INERT,
     NullWorkingMemoryModelClient,
@@ -88,5 +91,8 @@ __all__ = [
     "MODEL_CLIENT_MODE_INERT",
     "MODEL_CLIENT_MODE_HEURISTIC",
     "MODEL_CLIENT_MODE_ANTHROPIC",
+    "MODEL_CLIENT_MODE_DEEPSEEK",
+    "DEFAULT_DEEPSEEK_MODEL",
+    "DeepSeekWorkingMemoryModelClient",
     "build_builtin_working_memory_model_client",
 ]
