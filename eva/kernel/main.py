@@ -307,6 +307,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--working-memory-model-client-model", default=DEFAULT_ANTHROPIC_MODEL)
     parser.add_argument("--working-memory-model-client-timeout-sec", type=float, default=5.0)
     parser.add_argument("--inherited-priors-path")
+    # Round 1.D: long-run validation snapshot + tripwire CLI options.
+    parser.add_argument(
+        "--longrun-snapshot-dir",
+        default=None,
+        help="If set, enable the long-run validation hook: write a stability_profile snapshot every --longrun-hook-interval-sec to this directory. Combined with tripwire options to stop early on invariant violation.",
+    )
+    parser.add_argument(
+        "--longrun-hook-interval-sec",
+        type=float,
+        default=1800.0,
+        help="Interval (seconds) between long-run validation snapshots. Default 1800 (30 min).",
+    )
+    parser.add_argument(
+        "--longrun-tripwire-max-constraint-violation-rate",
+        type=float,
+        default=0.0,
+        help="Long-run tripwire: stop if constraint_violation_rate exceeds this. Default 0.0 (any violation stops). Set to a negative value to disable.",
+    )
+    parser.add_argument(
+        "--longrun-tripwire-min-continuity-score",
+        type=float,
+        default=0.5,
+        help="Long-run tripwire: stop if continuity_preservation_score drops below this. Default 0.5. Set to a negative value to disable.",
+    )
     return parser.parse_args()
 
 
@@ -362,6 +386,7 @@ def print_run_summary(summary: RunSummary) -> None:
     print(f"turns={summary.turns}")
     print(f"final_life_state={summary.final_life_state}")
     print(f"instance_valid={summary.instance_valid}")
+    print(f"exit_reason={summary.exit_reason}")
 
 
 

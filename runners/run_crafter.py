@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from typing import Callable
+
 from eva.kernel.config import RuntimeConfig
 from eva.kernel.main import (
     RunSummary,
@@ -15,6 +17,7 @@ from eva.kernel.main import (
 )
 from eva.l1_sensing.sensor_registry import SensorRegistry
 from eva.l3_deliberation import WorkingMemoryAdapter
+from runners.longrun_validation import longrun_hook_from_args
 from scenarios.crafter import activate_crafter_scenario
 from scenarios.crafter.wrapper import CrafterEnvWrapper, StepResult
 
@@ -70,6 +73,8 @@ def run_crafter_runtime(
     *,
     working_memory_adapter: WorkingMemoryAdapter | None = None,
     sensor_registry: SensorRegistry | None = None,
+    periodic_hook: Callable[..., tuple[bool, str | None]] | None = None,
+    hook_interval_sec: float = 1800.0,
 ) -> RunSummary:
     """Activate the Crafter scenario and execute the generic framework loop."""
 
@@ -82,6 +87,8 @@ def run_crafter_runtime(
             sensor_registry=sensor_registry,
             extra_shared_facts_provider=session.build_shared_facts,
             action_runtime=session,
+            periodic_hook=periodic_hook,
+            hook_interval_sec=hook_interval_sec,
         )
     finally:
         session.close()
@@ -92,7 +99,12 @@ def main() -> None:
 
     args = parse_args()
     config = build_runtime_config_from_args(args)
-    summary = run_crafter_runtime(config)
+    periodic_hook = longrun_hook_from_args(args)
+    summary = run_crafter_runtime(
+        config,
+        periodic_hook=periodic_hook,
+        hook_interval_sec=args.longrun_hook_interval_sec,
+    )
     print_run_summary(summary)
 
 

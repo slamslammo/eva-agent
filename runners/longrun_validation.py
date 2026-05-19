@@ -28,6 +28,8 @@ from stability_metrics.metrics import calculate_stability_profile
 __all__ = [
     "LongrunTripwire",
     "build_longrun_validation_hook",
+    "longrun_hook_from_args",
+    "tripwire_from_args",
 ]
 
 
@@ -96,6 +98,46 @@ def build_longrun_validation_hook(
         return False, None
 
     return hook
+
+
+def tripwire_from_args(args: Any) -> LongrunTripwire:
+    """Translate parsed CLI args into a ``LongrunTripwire`` configuration.
+
+    Negative values disable a threshold; otherwise the value is honored as
+    the threshold to enforce.
+    """
+
+    def _opt(value: float | None, *, disable_if_negative: bool = True) -> float | None:
+        if value is None:
+            return None
+        numeric = float(value)
+        if disable_if_negative and numeric < 0.0:
+            return None
+        return numeric
+
+    return LongrunTripwire(
+        max_constraint_violation_rate=_opt(getattr(args, "longrun_tripwire_max_constraint_violation_rate", 0.0)),
+        min_continuity_preservation_score=_opt(getattr(args, "longrun_tripwire_min_continuity_score", 0.5)),
+        # ``min_useful_progress_under_constraint`` not yet exposed to CLI;
+        # leave default (None) until Round 1.B-2 tuning produces a value.
+    )
+
+
+def longrun_hook_from_args(args: Any) -> Callable[..., tuple[bool, str | None]] | None:
+    """Translate parsed CLI args into a periodic hook, or ``None`` if disabled.
+
+    Returns ``None`` when ``--longrun-snapshot-dir`` was not supplied, so
+    callers can pass the result directly to ``run_runtime(periodic_hook=...)``
+    without conditional wiring.
+    """
+
+    snapshot_dir = getattr(args, "longrun_snapshot_dir", None)
+    if not snapshot_dir:
+        return None
+    return build_longrun_validation_hook(
+        snapshot_dir=Path(snapshot_dir),
+        tripwire=tripwire_from_args(args),
+    )
 
 
 def _check_tripwire(metrics: dict[str, Any], tripwire: LongrunTripwire) -> str | None:

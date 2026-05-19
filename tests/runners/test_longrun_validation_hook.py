@@ -13,9 +13,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import argparse
+
 from runners.longrun_validation import (
     LongrunTripwire,
     build_longrun_validation_hook,
+    longrun_hook_from_args,
+    tripwire_from_args,
 )
 
 
@@ -127,6 +131,43 @@ class LongrunValidationHookTests(unittest.TestCase):
             result = hook(runtime_dir=runtime_dir, elapsed_since_start=1.0, ticks=1, turns=0)
             self.assertEqual(result, (False, None))
             self.assertTrue((snapshot_dir / "profile-00001.json").exists())
+
+
+class CLIArgsTranslationTests(unittest.TestCase):
+    """Cover the parse_args() → hook translation helpers."""
+
+    def _ns(self, **kwargs) -> argparse.Namespace:
+        defaults = {
+            "longrun_snapshot_dir": None,
+            "longrun_hook_interval_sec": 1800.0,
+            "longrun_tripwire_max_constraint_violation_rate": 0.0,
+            "longrun_tripwire_min_continuity_score": 0.5,
+        }
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
+
+    def test_tripwire_from_args_default_thresholds(self) -> None:
+        tripwire = tripwire_from_args(self._ns())
+        self.assertEqual(tripwire.max_constraint_violation_rate, 0.0)
+        self.assertEqual(tripwire.min_continuity_preservation_score, 0.5)
+        self.assertIsNone(tripwire.min_useful_progress_under_constraint)
+
+    def test_tripwire_from_args_negative_disables(self) -> None:
+        tripwire = tripwire_from_args(self._ns(
+            longrun_tripwire_max_constraint_violation_rate=-1.0,
+            longrun_tripwire_min_continuity_score=-1.0,
+        ))
+        self.assertIsNone(tripwire.max_constraint_violation_rate)
+        self.assertIsNone(tripwire.min_continuity_preservation_score)
+
+    def test_hook_from_args_returns_none_when_snapshot_dir_unset(self) -> None:
+        self.assertIsNone(longrun_hook_from_args(self._ns()))
+
+    def test_hook_from_args_returns_callable_when_snapshot_dir_set(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hook = longrun_hook_from_args(self._ns(longrun_snapshot_dir=temp_dir))
+            self.assertIsNotNone(hook)
+            self.assertTrue(callable(hook))
 
 
 if __name__ == "__main__":
