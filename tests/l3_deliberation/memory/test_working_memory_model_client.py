@@ -146,5 +146,35 @@ class WorkingMemoryModelClientTests(unittest.TestCase):
                 client.build_working_memory_advisory(WorkingMemoryModelClientRequest(payload={}))
 
 
+class AnthropicApiBaseUrlResolutionTests(unittest.TestCase):
+    """Phase 1 pre-work: verify ``ANTHROPIC_API_BASE_URL`` env override works
+    for validation runs that target an enterprise relay rather than the
+    production Anthropic endpoint."""
+
+    def test_default_base_url_when_env_unset(self) -> None:
+        from eva.l3_deliberation.memory.working_memory_model_client import _resolve_anthropic_messages_url
+        with patch.dict(os.environ, {}, clear=True):
+            url = _resolve_anthropic_messages_url()
+        self.assertEqual(url, "https://api.anthropic.com/v1/messages")
+
+    def test_env_override_with_bare_host(self) -> None:
+        from eva.l3_deliberation.memory.working_memory_model_client import _resolve_anthropic_messages_url
+        with patch.dict(os.environ, {"ANTHROPIC_API_BASE_URL": "http://cccai.cfd"}, clear=False):
+            url = _resolve_anthropic_messages_url()
+        self.assertEqual(url, "http://cccai.cfd/v1/messages")
+
+    def test_env_override_with_trailing_slash(self) -> None:
+        from eva.l3_deliberation.memory.working_memory_model_client import _resolve_anthropic_messages_url
+        with patch.dict(os.environ, {"ANTHROPIC_API_BASE_URL": "http://cccai.cfd/"}, clear=False):
+            url = _resolve_anthropic_messages_url()
+        self.assertEqual(url, "http://cccai.cfd/v1/messages")
+
+    def test_env_override_with_explicit_path_preserved(self) -> None:
+        from eva.l3_deliberation.memory.working_memory_model_client import _resolve_anthropic_messages_url
+        with patch.dict(os.environ, {"ANTHROPIC_API_BASE_URL": "http://example.com/v1/messages"}, clear=False):
+            url = _resolve_anthropic_messages_url()
+        self.assertEqual(url, "http://example.com/v1/messages")
+
+
 if __name__ == "__main__":
     unittest.main()

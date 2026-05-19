@@ -13,7 +13,26 @@ MODEL_CLIENT_MODE_HEURISTIC = "heuristic"
 MODEL_CLIENT_MODE_ANTHROPIC = "anthropic"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
-ANTHROPIC_MESSAGES_API_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_API_BASE_URL_ENV = "ANTHROPIC_API_BASE_URL"
+DEFAULT_ANTHROPIC_API_BASE_URL = "https://api.anthropic.com"
+ANTHROPIC_MESSAGES_API_PATH = "/v1/messages"
+
+
+def _resolve_anthropic_messages_url() -> str:
+    """Resolve the Anthropic Messages API URL, honoring the env override.
+
+    When ``ANTHROPIC_API_BASE_URL`` is set, it replaces the production base
+    (``https://api.anthropic.com``). This supports validation runs through
+    an enterprise relay / proxy without committing endpoint config. The
+    ``/v1/messages`` path is appended unless the env value already targets
+    that path explicitly.
+    """
+
+    base = os.environ.get(ANTHROPIC_API_BASE_URL_ENV) or DEFAULT_ANTHROPIC_API_BASE_URL
+    base = base.rstrip("/")
+    if base.endswith(ANTHROPIC_MESSAGES_API_PATH):
+        return base
+    return base + ANTHROPIC_MESSAGES_API_PATH
 ALLOWED_CANDIDATE_SUGGESTIONS = frozenset({"observe_first", "stabilize_first", "escalate_first"})
 
 AnthropicTransport = Callable[[dict[str, Any], str, float], dict[str, Any]]
@@ -263,7 +282,7 @@ def _post_anthropic_messages(payload: dict[str, Any], api_key: str, timeout_sec:
 
     body = json.dumps(payload).encode("utf-8")
     http_request = request.Request(
-        ANTHROPIC_MESSAGES_API_URL,
+        _resolve_anthropic_messages_url(),
         data=body,
         headers={
             "content-type": "application/json",
