@@ -23,7 +23,9 @@ class CrafterDrivePresetTests(unittest.TestCase):
         self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("local_view_threat"), "safety")
         self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("local_view_resource"), "acquisition")
         self.assertEqual(CRAFTER_DRIVE_PRESET.drive_for_dimension("local_view_utility"), "capability")
-        self.assertIsNone(CRAFTER_DRIVE_PRESET.curiosity_drive_type)
+        # Round 1.B-2: Crafter now opts into framework curiosity-style update
+        # for its exploration drive.
+        self.assertEqual(CRAFTER_DRIVE_PRESET.curiosity_drive_type, "exploration")
 
     def test_build_default_drive_state_uses_crafter_drive_types_after_activation(self) -> None:
         now = utc_now()

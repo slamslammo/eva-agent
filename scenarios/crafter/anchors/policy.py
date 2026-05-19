@@ -30,6 +30,10 @@ COMPATIBILITY_RELEASE_IMPACT = {
         "recovery": 0.0,
         "acquisition": 0.4,
         "capability": 0.3,
+        # Round 1.B-2: observe_first is the canonical exploration-satisfying
+        # action. High value lets a high exploration drive shift L3 selection
+        # toward observe_first in low-pressure healthy moments.
+        "exploration": 0.5,
     },
     STABILIZE_FIRST_PROFILE: {
         "metabolic": 0.7,
@@ -37,6 +41,11 @@ COMPATIBILITY_RELEASE_IMPACT = {
         "recovery": 0.6,
         "acquisition": 0.1,
         "capability": 0.0,
+        # Round 1.B-2: stabilize is mildly anti-exploration — sleeping does
+        # not satisfy curiosity. Small negative so observe outscores stabilize
+        # when exploration is high, but not so negative that it overpowers
+        # safety / metabolic concerns.
+        "exploration": -0.05,
     },
     ESCALATE_FIRST_PROFILE: {
         "metabolic": 0.2,
@@ -44,6 +53,10 @@ COMPATIBILITY_RELEASE_IMPACT = {
         "recovery": 0.1,
         "acquisition": -0.1,
         "capability": -0.1,
+        # Round 1.B-2: escalating engages with the world (chop / mine / craft
+        # / fight) — moderately satisfies exploration but less than passive
+        # observation.
+        "exploration": 0.3,
     },
 }
 

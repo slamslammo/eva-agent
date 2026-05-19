@@ -64,6 +64,7 @@ The current Crafter drive family is:
 - `recovery`
 - `acquisition`
 - `capability`
+- `exploration` — Round 1.B-2 internal growth-driver drive (v0.6.1 §4). Not mapped to any sensor dimension; updated via the framework's curiosity-style ``_curiosity_delta`` path (recovers by ``curiosity_recovery`` in healthy / no-threat states; suppressed by ``curiosity_suppression`` under threat or degraded overall status). Candidate scoring picks it up through the per-profile ``exploration`` entry in ``COMPATIBILITY_RELEASE_IMPACT``.
 
 Current H-1 sensor owners:
 - `scenarios/crafter/sensors/avatar_state.py`
