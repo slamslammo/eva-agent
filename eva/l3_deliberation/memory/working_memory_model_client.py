@@ -114,6 +114,8 @@ class HeuristicWorkingMemoryModelClient:
         drive_broadcast = _as_dict(payload.get("drive_broadcast"))
         runtime_gate_context = _as_dict(payload.get("runtime_gate_context"))
         top_drive = str(drive_broadcast.get("top_drive") or "unknown")
+        drive_levels = drive_broadcast.get("drive_levels")
+        top_drive_level = _coerce_drive_level((drive_levels or {}).get(top_drive))
         turn_allowed = bool(runtime_gate_context.get("turn_allowed", False))
         conservative_mode = bool(runtime_gate_context.get("conservative_mode", False))
         local_confidence = max(0.0, min(1.0, float(payload.get("local_confidence", 0.0))))
@@ -128,7 +130,10 @@ class HeuristicWorkingMemoryModelClient:
         if not turn_allowed:
             prediction_hints.append("client_turn_blocked_no_release")
             reasoning_trace.append("model_client_turn_blocked")
-        elif conservative_mode or top_drive == "integrity":
+        elif conservative_mode or top_drive_level >= _HIGH_DRIVE_CLIENT_THRESHOLD:
+            # Round 1.B-1-d: was ``top_drive == "integrity"`` — scenario-neutral
+            # generalization. Conservative mode keeps the OR semantic from the
+            # prior code.
             candidate_suggestions.append("stabilize_first")
             prediction_hints.append("client_prefers_stabilize_first")
             reasoning_trace.append("model_client_prefers_stabilization")
@@ -202,6 +207,21 @@ def build_builtin_working_memory_model_client(
     if normalized == MODEL_CLIENT_MODE_ANTHROPIC:
         return AnthropicWorkingMemoryModelClient(config)
     return NullWorkingMemoryModelClient()
+
+
+# Round 1.B-1-d: scenario-neutral routing threshold. Mirrors
+# ``HIGH_DRIVE_PROJECTION_THRESHOLD`` in conflict_detection — kept local to
+# avoid cross-module coupling.
+_HIGH_DRIVE_CLIENT_THRESHOLD = 0.5
+
+
+def _coerce_drive_level(value: Any) -> float:
+    """Clamp a drive-level payload value to [0.0, 1.0]; non-numeric -> 0.0."""
+
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 

@@ -62,7 +62,14 @@ class ValueJudgmentTests(unittest.TestCase):
             },
             drive_broadcast={
                 "top_drive": "survival",
-                "drive_levels": {"survival": 0.8},
+                # Round 1.B-1-c: with the new level-based projection logic,
+                # ``low_drive_projection_for_observe_first`` fires when the
+                # top drive's level is below HIGH_DRIVE_PROJECTION_THRESHOLD
+                # (0.5). The test's original intent — verify release works
+                # with a non-integrity top drive — is preserved by holding
+                # the level low enough to trigger the observe-first low-drive
+                # branch (and ≥ release threshold via the threat signal).
+                "drive_levels": {"survival": 0.35},
                 "drive_trends": {"survival": "worsening"},
             },
             runtime_gate_context={
@@ -79,7 +86,7 @@ class ValueJudgmentTests(unittest.TestCase):
 
         self.assertEqual(assessments[0].disposition, "allow")
         self.assertEqual(assessments[1].disposition, "allow")
-        self.assertIn("non_integrity_projection_for_observe_first", assessments[0].reasons)
+        self.assertIn("low_drive_projection_for_observe_first", assessments[0].reasons)
         self.assertGreater(assessments[1].score, assessments[0].score)
 
     def test_conservative_mode_defers_release(self) -> None:

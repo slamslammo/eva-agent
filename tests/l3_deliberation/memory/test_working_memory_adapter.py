@@ -81,7 +81,14 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
         response = adapter.build_advisory_context(
             WorkingMemoryAdapterRequest(
                 situation_key="integrity|STABLE|none",
-                drive_broadcast={"top_drive": "integrity", "drive_levels": {}, "drive_trends": {}},
+                # Round 1.B-1-d: drive_levels is now consulted for routing
+                # threshold; supplying an explicit high integrity level keeps
+                # the test's intent (integrity pressure routes to stabilize).
+                drive_broadcast={
+                    "top_drive": "integrity",
+                    "drive_levels": {"integrity": 0.85},
+                    "drive_trends": {},
+                },
                 runtime_gate_context={
                     "instance_valid": True,
                     "turn_allowed": True,
@@ -100,8 +107,8 @@ class WorkingMemoryAdapterTests(unittest.TestCase):
         assert response is not None
         payload = response.to_dict()
         self.assertEqual(payload["candidate_suggestions"], ["stabilize_first"])
-        self.assertEqual(payload["prediction_hints"], ["integrity_pressure_prefers_stabilization"])
-        self.assertIn("top_drive_integrity", payload["reasoning_trace"])
+        self.assertEqual(payload["prediction_hints"], ["high_drive_pressure_prefers_stabilization"])
+        self.assertIn("top_drive_high:integrity", payload["reasoning_trace"])
         self.assertIn("bias_summaries_present", payload["reasoning_trace"])
         self.assertEqual(payload["confidence"], 0.55)
 

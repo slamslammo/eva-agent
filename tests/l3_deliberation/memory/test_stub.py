@@ -23,7 +23,10 @@ class MemoryStubTests(unittest.TestCase):
             },
             drive_broadcast={
                 "top_drive": "curiosity",
-                "drive_levels": {"curiosity": 0.8},
+                # Round 1.B-1-b: lower curiosity below release threshold so
+                # the test's "no release pressure → no stub" intent still
+                # holds. See test_mediator.py for the same data adjustment.
+                "drive_levels": {"curiosity": 0.2},
                 "drive_trends": {"curiosity": "improving"},
             },
             runtime_gate_context={

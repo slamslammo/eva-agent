@@ -24,7 +24,10 @@ class WorkingMemoryModelClientTests(unittest.TestCase):
             WorkingMemoryModelClientRequest(
                 payload={
                     "situation_key": "integrity|STABLE|none",
-                    "drive_broadcast": {"top_drive": "integrity", "drive_levels": {}, "drive_trends": {}},
+                    # Round 1.B-1-d: drive_levels is now consulted for the
+                    # high-drive routing threshold; supplying explicit
+                    # integrity=0.85 keeps the test's intent.
+                    "drive_broadcast": {"top_drive": "integrity", "drive_levels": {"integrity": 0.85}, "drive_trends": {}},
                     "runtime_gate_context": {
                         "instance_valid": True,
                         "turn_allowed": True,

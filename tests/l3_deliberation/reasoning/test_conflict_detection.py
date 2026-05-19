@@ -79,7 +79,7 @@ class ConflictDetectionTests(unittest.TestCase):
 
         self.assertEqual(conflict.disposition, "allow")
         self.assertIn("compatibility_projection_present", conflict.reasons)
-        self.assertIn("integrity_projection_for_stabilize_first", conflict.reasons)
+        self.assertIn("high_drive_projection_for_stabilize_first", conflict.reasons)
         self.assertIn("pressure_projection_for_stabilize_first", conflict.reasons)
         self.assertIn("drive_tension_detected", conflict.reasons)
         self.assertIn("supports_high_drive:integrity", conflict.reasons)
@@ -117,7 +117,7 @@ class ConflictDetectionTests(unittest.TestCase):
 
         self.assertEqual(conflict.candidate_profile, ESCALATE_FIRST_PROFILE)
         self.assertEqual(conflict.disposition, "allow")
-        self.assertIn("integrity_projection_for_escalate_first", conflict.reasons)
+        self.assertIn("high_drive_projection_for_escalate_first", conflict.reasons)
         self.assertIn("high_risk_projection_for_escalate_first", conflict.reasons)
         self.assertIn("pressure_projection_for_escalate_first", conflict.reasons)
         self.assertEqual(conflict.score_delta, 3.25)

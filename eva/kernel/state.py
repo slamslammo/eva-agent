@@ -252,7 +252,10 @@ class ActivePressure:
         now = utc_now()
         return cls(
             pressure_id=str(payload["pressure_id"]),
-            type=str(payload.get("type", "continuity")),
+            # Round 1.B-1-e: ``type`` is a required field. The pre-fix default
+            # ``"continuity"`` was Linux-vocabulary residue that would mask
+            # schema bugs if reached. Production serializers always set this.
+            type=str(payload["type"]),
             severity=str(payload.get("severity", "degraded")),
             evidence=dict(payload.get("evidence", {})),
             first_seen_at=from_iso8601(payload.get("first_seen_at")) or now,
@@ -322,7 +325,9 @@ class DriveState:
         """Deserialize one continuous drive record from JSON payload data."""
 
         return cls(
-            drive_type=str(payload.get("drive_type", "survival")),
+            # Round 1.B-1-e: ``drive_type`` is a required field. The pre-fix
+            # default ``"survival"`` was Linux-vocabulary residue.
+            drive_type=str(payload["drive_type"]),
             level=float(payload.get("level", 0.0)),
             delta=float(payload.get("delta", 0.0)),
             trend=str(payload.get("trend", "unknown")),

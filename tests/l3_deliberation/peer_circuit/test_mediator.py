@@ -28,7 +28,14 @@ class MediatorTests(unittest.TestCase):
             },
             drive_broadcast={
                 "top_drive": "curiosity",
-                "drive_levels": {"curiosity": 0.8},
+                # Round 1.B-1-b: with the new level-based release gate,
+                # curiosity drive at 0.8 with no threat would now PASS the
+                # gate (high curiosity is real release pressure per v0.6.1
+                # §4 exploration semantics). The original test's intent —
+                # "no release pressure → default inhibition holds" — is
+                # preserved by lowering curiosity below
+                # DRIVE_LEVEL_RELEASE_THRESHOLD (0.3).
+                "drive_levels": {"curiosity": 0.2},
                 "drive_trends": {"curiosity": "improving"},
             },
             runtime_gate_context={

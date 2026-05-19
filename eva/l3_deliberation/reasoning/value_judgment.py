@@ -134,13 +134,25 @@ def _drive_weighted_score(
     drive_impact_schema: dict[str, float],
     drive_levels: dict[str, object],
 ) -> float:
-    """Return the main candidate score from continuous drive levels and predicted impact."""
+    """Return the main candidate score from continuous drive levels and predicted impact.
+
+    Round 1.B-1-a: iteration is scenario-neutral — it walks the drives that
+    the candidate has actually declared an impact for. The previous
+    implementation hardcoded the Linux drive vocabulary
+    (``"survival", "integrity", "continuity", "curiosity"``), which silently
+    zeroed-out scoring for any scenario (e.g., Crafter) whose drives have
+    different names. The new form is bit-equivalent for Linux because every
+    Linux drive that contributed under the old loop is present in
+    ``drive_impact_schema.items()``, and any drive absent from
+    ``drive_impact_schema`` would have contributed ``0`` anyway via the
+    ``drive_impact_schema.get(_, 0.0)`` fallback in the old form.
+    """
 
     if not drive_impact_schema:
         return 0.0
     score = 0.0
-    for drive_name in ("survival", "integrity", "continuity", "curiosity"):
-        score += float(drive_levels.get(drive_name, 0.0)) * float(drive_impact_schema.get(drive_name, 0.0))
+    for drive_name, impact in drive_impact_schema.items():
+        score += float(drive_levels.get(drive_name, 0.0)) * float(impact)
     return score
 
 

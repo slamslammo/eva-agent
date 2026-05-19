@@ -99,6 +99,8 @@ class HeuristicWorkingMemoryAdapter:
         """Return simple advisory hints from the local request surface only."""
 
         top_drive = str(request.drive_broadcast.get("top_drive") or "unknown")
+        drive_levels = request.drive_broadcast.get("drive_levels")
+        top_drive_level = _coerce_drive_level((drive_levels or {}).get(top_drive))
         turn_allowed = bool(request.runtime_gate_context.get("turn_allowed", False))
         conservative_mode = bool(request.runtime_gate_context.get("conservative_mode", False))
         candidate_suggestions: list[str] = []
@@ -112,10 +114,14 @@ class HeuristicWorkingMemoryAdapter:
             candidate_suggestions.append("stabilize_first")
             prediction_hints.append("prefer_conservative_compatibility_path")
             reasoning_trace.append("conservative_mode_active")
-        elif top_drive == "integrity":
+        elif top_drive_level >= _HIGH_DRIVE_ROUTING_THRESHOLD:
+            # Round 1.B-1-d: was ``top_drive == "integrity"`` — scenario-neutral
+            # generalization. Any scenario's high-pressure drive routes to
+            # stabilize-first; Linux integrity at 0.5+ behaves identically to
+            # the prior name-based check.
             candidate_suggestions.append("stabilize_first")
-            prediction_hints.append("integrity_pressure_prefers_stabilization")
-            reasoning_trace.append("top_drive_integrity")
+            prediction_hints.append("high_drive_pressure_prefers_stabilization")
+            reasoning_trace.append(f"top_drive_high:{top_drive}")
         else:
             candidate_suggestions.append("observe_first")
             prediction_hints.append("low_constraint_context_prefers_observation")
@@ -177,6 +183,23 @@ def build_builtin_working_memory_adapter(mode: str) -> WorkingMemoryAdapter:
     if normalized == ADAPTER_MODE_HEURISTIC:
         return HeuristicWorkingMemoryAdapter()
     return NullWorkingMemoryAdapter()
+
+
+# Round 1.B-1-d: shared with working_memory_model_client. Above this level a
+# top drive is "high enough to warrant stabilize-first routing"; below it,
+# the adapter prefers exploration / observation. Mirrors
+# ``HIGH_DRIVE_PROJECTION_THRESHOLD`` in conflict_detection — same theoretical
+# anchor, kept module-local to avoid cross-module coupling.
+_HIGH_DRIVE_ROUTING_THRESHOLD = 0.5
+
+
+def _coerce_drive_level(value: Any) -> float:
+    """Clamp a drive-level payload value to [0.0, 1.0]; non-numeric -> 0.0."""
+
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 
