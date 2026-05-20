@@ -61,7 +61,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Component | Code location | Completeness | Known limitation | Planned evolution |
 |---|---|---|---|---|
 | Canonical deliberation input contract | `eva/l3_deliberation/contracts.py` | production | — | — |
-| Four-layer memory surface (working / episodic / semantic / procedural) | `eva/l3_deliberation/reasoning/working_memory.py`, `eva/l3_deliberation/memory/`, `eva/skills/__init__.py` | partial | Semantic store-side windowing / indexing not implemented; procedural memory remains habit-backed rather than a dedicated store | Stage I follow-up #1, future evaluation |
+| Four-layer memory surface (working / episodic / semantic / procedural) | `eva/l3_deliberation/reasoning/working_memory.py`, `eva/l3_deliberation/memory/`, `eva/skills/__init__.py` | partial | Semantic store-side indexing landed in Round 1.C-1 (Stage I follow-up #1 resolved); procedural memory remains habit-backed rather than a dedicated store | Procedural store: future evaluation |
 | Mediator as independent peer circuit (default inhibition + selective release) | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | Runtime-only release token boundary | `eva/l3_deliberation/contracts.py` | production | — | — |
 | Drive-weighted candidate assessment with bounded learned overlays | `eva/l3_deliberation/reasoning/value_judgment.py`, `eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |

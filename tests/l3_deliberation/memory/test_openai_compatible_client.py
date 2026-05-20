@@ -34,6 +34,7 @@ from eva.l3_deliberation.memory.working_memory_model_client import (
     _openai_compatible_request_payload,
     _openai_compatible_text_response,
     _resolve_openai_compatible_chat_url,
+    _sanitize_usage,
 )
 
 
@@ -367,8 +368,8 @@ class _SequencedTransport:
         return item  # type: ignore[return-value]
 
 
-def _ok_response_payload() -> dict[str, object]:
-    return {
+def _ok_response_payload(with_usage: bool = False) -> dict[str, object]:
+    payload: dict[str, object] = {
         "choices": [
             {
                 "message": {
@@ -377,6 +378,15 @@ def _ok_response_payload() -> dict[str, object]:
             }
         ]
     }
+    if with_usage:
+        payload["usage"] = {
+            "prompt_tokens": 203,
+            "completion_tokens": 66,
+            "total_tokens": 269,
+            "prompt_cache_hit_tokens": 128,
+            "prompt_cache_miss_tokens": 75,
+        }
+    return payload
 
 
 def _make_test_request() -> WorkingMemoryModelClientRequest:
@@ -558,6 +568,79 @@ class OpenAICompatibleRetryFallbackTests(unittest.TestCase):
             any("openai-compatible-fallback" in str(r) for r in reasoning),
             f"expected fallback provider label in reasoning_trace, got {reasoning}",
         )
+
+
+class SanitizeUsageTests(unittest.TestCase):
+    """``_sanitize_usage`` —— token usage 字段提取。"""
+
+    def test_extracts_known_int_fields(self) -> None:
+        usage = _sanitize_usage({
+            "prompt_tokens": 203,
+            "completion_tokens": 66,
+            "total_tokens": 269,
+            "prompt_cache_hit_tokens": 128,
+            "prompt_cache_miss_tokens": 75,
+        })
+        self.assertEqual(usage, {
+            "prompt_tokens": 203,
+            "completion_tokens": 66,
+            "total_tokens": 269,
+            "prompt_cache_hit_tokens": 128,
+            "prompt_cache_miss_tokens": 75,
+        })
+
+    def test_drops_unknown_and_non_int_fields(self) -> None:
+        usage = _sanitize_usage({
+            "prompt_tokens": 10,
+            "completion_tokens": "bad",     # 非数字 → 丢弃
+            "extra_vendor_field": {"nested": 1},  # 未知 → 丢弃
+            "is_cached": True,              # bool → 丢弃（不当作 int）
+        })
+        self.assertEqual(usage, {"prompt_tokens": 10})
+
+    def test_returns_none_for_non_dict_or_empty(self) -> None:
+        self.assertIsNone(_sanitize_usage(None))
+        self.assertIsNone(_sanitize_usage("usage"))
+        self.assertIsNone(_sanitize_usage({}))
+        self.assertIsNone(_sanitize_usage({"only_unknown": 1}))
+
+
+class LastUsageCaptureTests(unittest.TestCase):
+    """client 在成功调用后存 ``_last_usage``，fallback 时置 None。"""
+
+    def test_stores_last_usage_on_success(self) -> None:
+        transport = _SequencedTransport([_ok_response_payload(with_usage=True)])
+        client = OpenAICompatibleWorkingMemoryModelClient(_make_config(), transport=transport)
+        with patch("time.sleep"):
+            client.build_working_memory_advisory(_make_test_request())
+        self.assertEqual(client._last_usage, {
+            "prompt_tokens": 203,
+            "completion_tokens": 66,
+            "total_tokens": 269,
+            "prompt_cache_hit_tokens": 128,
+            "prompt_cache_miss_tokens": 75,
+        })
+
+    def test_last_usage_none_when_provider_omits_usage(self) -> None:
+        transport = _SequencedTransport([_ok_response_payload(with_usage=False)])
+        client = OpenAICompatibleWorkingMemoryModelClient(_make_config(), transport=transport)
+        with patch("time.sleep"):
+            client.build_working_memory_advisory(_make_test_request())
+        self.assertIsNone(client._last_usage)
+
+    def test_last_usage_none_on_fallback(self) -> None:
+        # 持续 503 → 耗尽 → fallback 到 heuristic；本次无真实 usage
+        transport = _SequencedTransport([
+            RuntimeError("openai_compatible_http_503"),
+        ])
+        client = OpenAICompatibleWorkingMemoryModelClient(_make_config(max_retries=0), transport=transport)
+        with patch("time.sleep"):
+            client.build_working_memory_advisory(_make_test_request())
+        self.assertIsNone(client._last_usage)
+
+    def test_last_usage_initialized_none(self) -> None:
+        client = OpenAICompatibleWorkingMemoryModelClient(_make_config())
+        self.assertIsNone(client._last_usage)
 
 
 if __name__ == "__main__":

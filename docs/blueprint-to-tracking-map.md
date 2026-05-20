@@ -28,7 +28,7 @@ It answers one question: **for each blueprint commitment, where is its tracking 
 | Pressure projection with urgency modulation | 1.3 `Pressure projection with urgency modulation and bounded anticipatory pressure` | landed | — |
 | Protective reflex fast path | 1.3 `Protective reflex fast path parallel to slower deliberation` | landed | — |
 | Deliberation input contract | 1.4 `Canonical deliberation input contract` | landed | — |
-| Four-layer memory surface | 1.4 `Four-layer memory surface (working / episodic / semantic / procedural)` | partial | Semantic indexing/windowing and dedicated procedural store remain open. |
+| Four-layer memory surface | 1.4 `Four-layer memory surface (working / episodic / semantic / procedural)` | partial | Semantic store-side indexing landed in Round 1.C-1; dedicated procedural store remains open. |
 | Mediator as independent peer circuit | 1.4 `Mediator as independent peer circuit (default inhibition + selective release)` | landed | — |
 | Runtime-only release token boundary | 1.4 `Runtime-only release token boundary` | landed | — |
 | Drive-weighted candidate assessment | 1.4 `Drive-weighted candidate assessment with bounded learned overlays` | landed | — |

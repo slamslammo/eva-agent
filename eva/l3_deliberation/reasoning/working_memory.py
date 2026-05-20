@@ -588,6 +588,10 @@ def _append_llm_advisory_audit(
     """Append one audit-safe Stage E advisory record."""
 
     provider, model, timeout_sec = _adapter_client_metadata(llm_adapter, advisory_source=advisory_source)
+    # 读取 live client 最近一次调用的 token usage（与 provider/model 同样的
+    # "reach into client" 取法）。heuristic/null/explicit adapter 无 client 或无
+    # _last_usage 时为 None；fallback 调用时 client 已将其置 None。
+    usage = getattr(getattr(llm_adapter, "client", None), "_last_usage", None)
     payload = {
         "recorded_at": to_iso8601(utc_now()) or utc_now().isoformat(),
         "backend": backend,
@@ -598,6 +602,7 @@ def _append_llm_advisory_audit(
         "request": request_payload,
         "response": _sanitize_llm_advisory_context(response_payload),
         "outcome": outcome,
+        "usage": usage if isinstance(usage, dict) else None,
     }
     if error_label is not None:
         payload["error"] = error_label

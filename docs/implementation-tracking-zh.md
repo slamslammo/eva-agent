@@ -63,7 +63,7 @@
 | 组件 | 代码位置 | 完成度 | 已知限制 | 计划演进 |
 |---|---|---|---|---|
 | 规范 deliberation 输入 contract | `eva/l3_deliberation/contracts.py` | production | — | — |
-| 四层记忆表面（working / episodic / semantic / procedural） | `eva/l3_deliberation/reasoning/working_memory.py`、`eva/l3_deliberation/memory/`、`eva/skills/__init__.py` | partial | semantic store-side windowing / indexing 未实现；procedural memory 仍是 habit-backed，而非 dedicated store | Stage I follow-up #1、后续评估 |
+| 四层记忆表面（working / episodic / semantic / procedural） | `eva/l3_deliberation/reasoning/working_memory.py`、`eva/l3_deliberation/memory/`、`eva/skills/__init__.py` | partial | semantic store-side indexing 已在 Round 1.C-1 落地（Stage I follow-up #1 已 resolved）；procedural memory 仍是 habit-backed，而非 dedicated store | procedural store：后续评估 |
 | Mediator 作为独立 peer circuit（default inhibition + 选择性 release） | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | 运行时独属 release token 边界 | `eva/l3_deliberation/contracts.py` | production | — | — |
 | 带有界 learned overlay 的 drive 加权 candidate 评估 | `eva/l3_deliberation/reasoning/value_judgment.py`、`eva/l3_deliberation/peer_circuit/rpe.py` | production | — | — |

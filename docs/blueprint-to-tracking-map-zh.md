@@ -28,7 +28,7 @@
 | 带 urgency modulation 的 pressure projection | 1.3 `Pressure projection with urgency modulation and bounded anticipatory pressure` | landed | — |
 | Protective reflex fast path | 1.3 `Protective reflex fast path parallel to slower deliberation` | landed | — |
 | Deliberation input contract | 1.4 `Canonical deliberation input contract` | landed | — |
-| 四层记忆表面 | 1.4 `Four-layer memory surface (working / episodic / semantic / procedural)` | partial | semantic indexing/windowing 和 dedicated procedural store 仍未完成。 |
+| 四层记忆表面 | 1.4 `Four-layer memory surface (working / episodic / semantic / procedural)` | partial | semantic store-side indexing 已在 Round 1.C-1 落地；dedicated procedural store 仍未完成。 |
 | Mediator 作为独立 peer circuit | 1.4 `Mediator as independent peer circuit (default inhibition + selective release)` | landed | — |
 | Runtime-only release token boundary | 1.4 `Runtime-only release token boundary` | landed | — |
 | 带 learned overlay 的 drive-weighted candidate assessment | 1.4 `Drive-weighted candidate assessment with bounded learned overlays` | landed | — |
@@ -38,8 +38,8 @@
 | Advisory-only working-memory assembly | 1.4 `Advisory-only working-memory assembly` | landed | — |
 | Model-backed working-memory advisory path | 1.4 `Model-backed working-memory advisory path with bounded fallback` | landed | — |
 | 基于 append-only artifact 的 episodic retrieval | 1.4 `Episodic retrieval over append-only artifacts` | landed | — |
-| Semantic memory 作为 first-class storage 且有界参与 L3 | 1.4 `Semantic memory — first-class storage + exact query + bounded L3 participation` | partial | store-side windowing / indexing 尚未实现。 |
-| Semantic memory → L2 安全路径 | 1.4 `Semantic memory → L2 drive-weight semantics` | deferred | 安全路径保留但未实现。 |
+| Semantic memory 作为 first-class storage 且有界参与 L3 | 1.4 `Semantic memory — first-class storage + exact query + bounded L3 participation` | production | Round 1.C-1 (W4) 落地 store-side 索引：进程内内存 cache 消除磁盘 re-read；倒排桶通过 `query_semantic_memory_for_situation` 支持有界候选检索。 |
+| Semantic memory → L2 安全路径 | 1.4 `Semantic memory → L2 drive-weight semantics` | production | 安全路径在 Round 1.B-3 (W5) 落地：对 `drive_impact_schema` 做有界放大 overlay（cap 0.15、置信阈值 0.7）；保持 drive read-only 边界。 |
 | 基于 habit-backed substrate 的 procedural memory | 1.4 `Procedural memory via existing habit-track substrate` | partial | 显式 surface 已有，但不是 dedicated procedural store。 |
 | Working-memory 接口复审阈值 | 1.4 `Working-memory interface signature` | partial | 接口参数仍在累积。 |
 | Anchor 生成前限制 | 1.5 `Framework-owned action domain and pre-generative restriction surface` | landed | — |

@@ -232,6 +232,11 @@ class OpenAICompatibleWorkingMemoryModelClient:
             )
         self.fallback = fallback
         self.transport = transport or _post_openai_compatible_chat
+        # 最近一次调用的 token usage（来自 provider response 的 ``usage`` 字段），
+        # 供 advisory audit 读取。fallback 到 heuristic 或 provider 未返回 usage
+        # 时为 None。EVA 串行单 agent，这个 per-client 可变状态在同一 turn 内
+        # 写入即被审计读取，无并发问题。
+        self._last_usage: dict[str, int] | None = None
 
     def build_working_memory_advisory(
         self,
@@ -264,6 +269,7 @@ class OpenAICompatibleWorkingMemoryModelClient:
                 )
                 response_text = _openai_compatible_text_response(response_payload)
                 advisory_payload = _extract_advisory_payload(response_text)
+                self._last_usage = _sanitize_usage(response_payload.get("usage"))
                 return WorkingMemoryModelClientResponse(payload=advisory_payload)
             except RuntimeError as exc:
                 last_error_label = str(exc)
@@ -278,6 +284,8 @@ class OpenAICompatibleWorkingMemoryModelClient:
                 # Otherwise: this was the last attempt; the for-loop will
                 # exit naturally and fall through to the fallback below.
 
+        # Fallback 路径：本次没有真实 provider usage 可记
+        self._last_usage = None
         fallback_response = self.fallback.build_working_memory_advisory(request)
         return _attach_fallback_reason(fallback_response, last_error_label)
 
@@ -647,6 +655,36 @@ def _is_retryable_openai_compatible_error(label: str) -> bool:
     if label.startswith("openai_compatible_http_5"):
         return True
     return False
+
+
+def _sanitize_usage(usage: Any) -> dict[str, int] | None:
+    """Extract bounded token-usage fields from a raw OpenAI-compatible usage object.
+
+    OpenAI Chat Completions responses carry a ``usage`` object with
+    ``prompt_tokens`` / ``completion_tokens`` / ``total_tokens``; DeepSeek adds
+    ``prompt_cache_hit_tokens`` / ``prompt_cache_miss_tokens``. Captured for the
+    advisory audit so context size + LLM token volume are observable per call.
+
+    Returns None when no usage is available (fallback path, or a provider that
+    omits the field). Only known integer fields are kept — no opaque passthrough.
+    """
+
+    if not isinstance(usage, dict):
+        return None
+    out: dict[str, int] = {}
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+    ):
+        value = usage.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            out[key] = int(value)
+    return out or None
 
 
 def _attach_fallback_reason(

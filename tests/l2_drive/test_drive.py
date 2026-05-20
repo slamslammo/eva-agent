@@ -6,9 +6,17 @@ from datetime import timedelta
 from eva.kernel import ActivePressure, ActivePressureTable, DimensionSnapshot, DriveState, DriveStateTable, ExternalLifeSnapshot, utc_now
 from eva.l1_sensing.signal_bus import build_patrol_signals, summarize_signal_dispatch
 from eva.l2_drive import DriveUpdatePolicy, build_default_drive_state, build_drive_broadcast, update_drive_state
+from scenarios.linux_runtime import activate_linux_runtime_scenario
 
 
 class DriveTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # 这些 drive 测试针对 Linux scenario 的 drive 语义（survival/curiosity drive、
+        # 所有 pressure 都视为 imminent threat）。显式激活 Linux 场景，避免依赖
+        # 其他测试遗留的 _DEFAULT_DRIVE_PRESET 缓存（跨测试泄漏会让 build_default_drive_state
+        # 取到错误的 preset，或在隔离运行时因无激活场景而报错）。与 test_pressure.py 一致。
+        activate_linux_runtime_scenario()
+
     def test_update_drive_state_accumulates_risk_and_suppresses_curiosity(self) -> None:
         now = utc_now()
         snapshot = ExternalLifeSnapshot(
@@ -211,7 +219,12 @@ class DriveTests(unittest.TestCase):
 
         self.assertGreater(second_levels["survival"].level, first_levels["survival"].level)
         self.assertEqual(second_levels["survival"].trend, "worsening")
-        self.assertEqual(second_levels["survival"].contributors, ["decay", "resource_state.disk_space_declining", "threat_signal_present"])
+        # Round 1.B-4 起：只有场景声明为 imminent 的 pressure type 才发 class="threat"。
+        # 测试用的 ``survival`` pressure type 不在 Linux 的 imminent 集合
+        # (integrity/continuity/resource_state/anomaly_accumulation) 里，因此发
+        # class="pressure" 而非 "threat" —— 不再产生 ``threat_signal_present`` 贡献项。
+        # drive 仍通过 decay + 快照 resource_state gap 累积。
+        self.assertEqual(second_levels["survival"].contributors, ["decay", "resource_state.disk_space_declining"])
         self.assertEqual(second_levels["curiosity"].level, 0.0)
         self.assertEqual(second_levels["curiosity"].trend, "stable")
 
