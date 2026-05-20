@@ -91,7 +91,12 @@ class CrafterDrivePresetTests(unittest.TestCase):
         self.assertGreater(by_type["safety"].level, 0.0)
         self.assertGreater(by_type["acquisition"].level, 0.0)
         self.assertGreater(by_type["capability"].level, 0.0)
-        self.assertEqual(summary.top_drive, "safety")
+        # Fix-C approach 模式：drive 反映该需求的*最坏* severity（取 max，不按信号数量
+        # 累加）。safety 与 acquisition 都含 critical 维度 → 同趋 target_critical；
+        # capability 仅 degraded → 趋 target_degraded，明显更低（按 severity 分层）。
+        self.assertGreater(by_type["safety"].level, by_type["capability"].level)
+        self.assertGreater(by_type["acquisition"].level, by_type["capability"].level)
+        self.assertIn(summary.top_drive, {"safety", "acquisition"})
 
 
 if __name__ == "__main__":

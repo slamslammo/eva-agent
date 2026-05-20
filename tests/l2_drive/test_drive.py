@@ -298,5 +298,72 @@ class DriveTests(unittest.TestCase):
         self.assertEqual({drive.drive_type: drive.level for drive in table.drives}, payload["drive_levels"])
 
 
+class ApproachModeDriveTests(unittest.TestCase):
+    """Fix-C：approach 模式（趋向 severity 目标值）—— 持续压力不饱和、按 severity 分层。"""
+
+    def setUp(self) -> None:
+        activate_linux_runtime_scenario()
+
+    @staticmethod
+    def _approach_policy() -> DriveUpdatePolicy:
+        return DriveUpdatePolicy(
+            update_mode="approach", approach_rate=0.3, target_critical=0.9, target_degraded=0.55
+        )
+
+    @staticmethod
+    def _snapshot(now, *, survival_status: str, integrity_status: str) -> ExternalLifeSnapshot:
+        return ExternalLifeSnapshot(
+            captured_at=now,
+            source_patrol="deep",
+            dimensions={
+                "resource_state": DimensionSnapshot(status=survival_status, evidence={"reason": "r"}),
+                "runtime_integrity": DimensionSnapshot(status=integrity_status, evidence={"reason": "i"}),
+                "anomaly_accumulation": DimensionSnapshot(status="healthy", evidence={"reason": "q"}),
+            },
+            overall_status="critical",
+            primary_gap=None,
+            trend="worsening",
+            updated_at=now,
+        )
+
+    def test_sustained_pressure_settles_below_one_and_layers_by_severity(self) -> None:
+        now = utc_now()
+        policy = self._approach_policy()
+        table = build_default_drive_state(now - timedelta(seconds=10))
+        for _ in range(30):
+            table, _ = update_drive_state(
+                table, self._snapshot(now, survival_status="critical", integrity_status="degraded"), [], policy=policy
+            )
+        by = {drive.drive_type: drive.level for drive in table.drives}
+        # critical 维度趋向 target_critical(0.9)，明显不饱和到 1.0
+        self.assertGreater(by["survival"], 0.85)
+        self.assertLess(by["survival"], 0.95)
+        # degraded 维度趋向 target_degraded(0.55)
+        self.assertAlmostEqual(by["integrity"], 0.55, delta=0.05)
+        # 分层：critical > degraded（这正是 accumulate 全饱和时丢失的区分度）
+        self.assertGreater(by["survival"], by["integrity"])
+
+    def test_recovered_dimension_decays_toward_zero(self) -> None:
+        now = utc_now()
+        policy = self._approach_policy()
+        table = DriveStateTable(
+            captured_at=now,
+            drives=[
+                DriveState(drive_type="survival", level=0.9, updated_at=now),
+                DriveState(drive_type="integrity", level=0.5, updated_at=now),
+                DriveState(drive_type="continuity", level=0.0, updated_at=now),
+                DriveState(drive_type="curiosity", level=0.0, updated_at=now),
+            ],
+            updated_at=now,
+        )
+        for _ in range(30):
+            table, _ = update_drive_state(
+                table, self._snapshot(now, survival_status="healthy", integrity_status="healthy"), [], policy=policy
+            )
+        by = {drive.drive_type: drive.level for drive in table.drives}
+        self.assertLess(by["survival"], 0.1)
+        self.assertLess(by["integrity"], 0.1)
+
+
 if __name__ == "__main__":
     unittest.main()

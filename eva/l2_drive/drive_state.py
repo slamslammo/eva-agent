@@ -7,7 +7,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Iterable
 
 from ..kernel import DimensionSnapshot, DriveState, DriveStateTable, ExternalLifeSnapshot
-from .drive_registry import DrivePreset, DriveUpdatePolicy, get_default_drive_preset, severity_delta_for_status
+from .drive_registry import (
+    DrivePreset,
+    DriveUpdatePolicy,
+    get_default_drive_preset,
+    severity_delta_for_status,
+    severity_target_for_status,
+)
 
 if TYPE_CHECKING:
     from ..l1_sensing.signal_bus import SignalRecord
@@ -111,7 +117,7 @@ def _update_one_drive(
     if preset.is_curiosity_drive(drive_type):
         delta = _curiosity_delta(snapshot, threat_present, contributors, policy)
     else:
-        delta = _risk_drive_delta(drive_type, snapshot, threat_present, contributors, preset, policy)
+        delta = _risk_drive_delta(drive_type, snapshot, threat_present, contributors, preset, policy, level=level)
     new_level = _clamp(level + delta)
     actual_delta = new_level - level
     return DriveState(
@@ -131,14 +137,52 @@ def _risk_drive_delta(
     contributors: list[str],
     preset: DrivePreset,
     policy: DriveUpdatePolicy,
+    *,
+    level: float,
 ) -> float:
     """Apply named update policies for one non-curiosity drive."""
 
+    if policy.update_mode == "approach":
+        return _approach_target_delta(drive_type, snapshot, threat_present, contributors, preset, policy, level)
     delta = 0.0
     delta += _apply_base_decay(contributors, policy)
     delta += _apply_dimension_severity_accumulation(drive_type, snapshot, contributors, preset, policy)
     delta += _apply_threat_bonus(threat_present, contributors, policy)
     return delta
+
+
+def _approach_target_delta(
+    drive_type: str,
+    snapshot: ExternalLifeSnapshot,
+    threat_present: bool,
+    contributors: list[str],
+    preset: DrivePreset,
+    policy: DriveUpdatePolicy,
+    level: float,
+) -> float:
+    """Fix-C: move one drive toward the worst severity-derived target.
+
+    The target is the highest among the drive's mapped dimensions (critical→
+    target_critical, degraded→target_degraded, healthy→0); a present threat
+    lifts it to at least target_degraded. The drive then moves a fraction
+    ``approach_rate`` of the gap, so sustained critical settles near
+    target_critical (not 1.0) and recovered dimensions decay back toward 0.
+    """
+
+    target = 0.0
+    for dimension_name, dimension in snapshot.dimensions.items():
+        if preset.drive_for_dimension(dimension_name) != drive_type:
+            continue
+        dimension_target = severity_target_for_status(dimension.status, policy)
+        if dimension_target > target:
+            target = dimension_target
+            contributors.append(f"{dimension_name}.{_reason(dimension)}")
+    if threat_present and target < policy.target_degraded:
+        target = policy.target_degraded
+        contributors.append("threat_signal_present")
+    if not contributors:
+        contributors.append("approach_target")
+    return policy.approach_rate * (target - level)
 
 
 def _apply_base_decay(contributors: list[str], policy: DriveUpdatePolicy) -> float:

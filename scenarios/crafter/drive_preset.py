@@ -34,28 +34,26 @@ DRIVE_TYPE_BY_DIMENSION = {
 }
 
 DEFAULT_DRIVE_UPDATE_POLICY = DriveUpdatePolicy(
+    # Fix-C: Crafter opts into approach-mode drive updates — each risk drive moves
+    # toward a severity target (critical→0.9 / degraded→0.55 / healthy→0) instead
+    # of accumulating linearly to 1.0. Under Crafter's "everything is scarce"
+    # opening this keeps drives layered so drive-impact scoring still discriminates
+    # which need is most urgent (linear accumulate pinned every drive at 1.0).
+    update_mode="approach",
+    approach_rate=0.3,
+    target_critical=0.9,
+    target_degraded=0.55,
+    # Accumulate-mode params below are unused under approach mode (kept for revert;
+    # see git history for the Round 1.B-2 → Phase-1.5 → 1.B-4 → Fix-1 tuning notes).
     base_decay=0.04,
     severity_degraded_delta=0.16,
     severity_critical_delta=0.32,
     threat_bonus=0.08,
-    # Round 1.B-2 → Phase-1.5 → Round 1.B-4 → Fix-1 tuning history:
-    #
-    # Original Round 1.B-2 used Linux defaults (0.05 / 0.12). Phase-1.5
-    # bumped recovery to 0.10 and dropped suppression to 0.06, AND set
-    # ``curiosity_suppress_on_degraded_status=False``, on the theory that
-    # the framework was over-suppressing. Round 1.B-4 then found the
-    # actual root cause was in the signal-classification layer (all
-    # active pressures emitting class="threat"). With 1.B-4 in place the
-    # Phase-1.5 recovery/suppression numbers over-corrected: exploration
-    # drive saturated near 1.0 within 10 ticks because Crafter rarely
-    # surfaces real safety threats once the spurious threat signals are
-    # gone. Fix-1 reverts the numeric tuning to Linux defaults
-    # (0.05 / 0.12) while keeping the ``suppress_on_degraded=False`` flag
-    # — the latter is still principled (avatar persistently degraded
-    # shouldn't drive curiosity to 0) and is independent of signal-class
-    # semantics. Re-tune via long-run trajectory data.
-    curiosity_recovery=0.05,
-    curiosity_suppression=0.12,
+    # Curiosity still uses recovery/suppression (independent of approach mode);
+    # Fix-C lowers suppression / raises recovery so persistent threat signals
+    # don't pin exploration drive at 0.
+    curiosity_recovery=0.07,
+    curiosity_suppression=0.06,
     curiosity_suppress_on_degraded_status=False,
 )
 

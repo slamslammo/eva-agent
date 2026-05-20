@@ -26,6 +26,17 @@ class DriveUpdatePolicy:
     # (food/water/energy slowly tick down), making suppression dominate over
     # recovery and pinning exploration drive level at 0 indefinitely.
     curiosity_suppress_on_degraded_status: bool = True
+    # Fix-C: drive update mode. "accumulate" (default) is the original
+    # linear -decay + Σseverity_delta integration — kept for Linux and all
+    # existing behavior. "approach" instead moves each risk drive toward a
+    # severity-derived *target* (critical→target_critical, degraded→
+    # target_degraded, healthy→0) at ``approach_rate``, so sustained pressure
+    # settles at a sub-1.0 layered steady state instead of pinning every drive
+    # at 1.0 (which collapses drive-impact scoring). Scenarios opt in per preset.
+    update_mode: str = "accumulate"
+    approach_rate: float = 0.3
+    target_critical: float = 0.9
+    target_degraded: float = 0.55
 
 
 @dataclass(frozen=True)
@@ -84,6 +95,16 @@ def severity_delta_for_status(status: str, policy: DriveUpdatePolicy) -> float:
     return 0.0
 
 
+def severity_target_for_status(status: str, policy: DriveUpdatePolicy) -> float:
+    """Return the approach-mode target level for one judged status (Fix-C)."""
+
+    if status == "critical":
+        return policy.target_critical
+    if status == "degraded":
+        return policy.target_degraded
+    return 0.0
+
+
 __all__ = [
     "DrivePreset",
     "DriveRegistry",
@@ -91,4 +112,5 @@ __all__ = [
     "get_default_drive_preset",
     "register_default_drive_preset",
     "severity_delta_for_status",
+    "severity_target_for_status",
 ]
