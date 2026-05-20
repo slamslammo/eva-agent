@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Callable, Any
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from .config import AppendOnlyArtifactsConfig, ExternalLifeConfig, LifecycleConf
 from .instance import InstanceGuard
 from .lifecycle import ExternalActionRuntime, LifecycleRuntime
 from .state import EventRecord, StateStore, emit_log_line, utc_now
+from ..scenario_bundle import get_active_runtime_scenario
 from ..l1_sensing.sensor_registry import SensorRegistry
 from ..l3_deliberation import (
     ADAPTER_MODE_HEURISTIC,
@@ -49,6 +51,8 @@ class RunSummary:
     instance_valid: bool
     runtime_dir: str
     exit_reason: str = "normal"
+    # v0.6 rev2 收敛点②：individual 身份（"自我"），区别于 substrate 的 instance_id。
+    individual_id: str = ""
 
 
 def run_runtime(
@@ -89,12 +93,38 @@ def run_runtime(
     active_record = instance_guard.start_instance(instance_id)
     state = store.read_runtime_state()
     now = utc_now()
+    # v0.6 rev2: resolve the embodied individual ("self") that this substrate
+    # hosts. The scenario's reset_semantics decides whether a persisted id is
+    # resumed (same_individual_recovery) or a fresh one is born (new_individual).
+    individual_id, individual_newly_born = _resolve_individual_id(
+        config,
+        instance_id=active_record.instance_id,
+        generation=active_record.generation,
+        now=now,
+    )
     state.recovering_until = now + timedelta(seconds=config.lifecycle.recovering_window_sec)
     state.instance_valid = True
     state.updated_at = now
     store.write_runtime_state(state)
-    store.append_event(EventRecord(event_type="startup", timestamp=now, instance_id=active_record.instance_id, generation=active_record.generation, details={"runtime_dir": str(config.paths.runtime_dir)}))
-    emit_log_line("startup", instance=active_record.instance_id, generation=active_record.generation, runtime_dir=str(config.paths.runtime_dir))
+    store.append_event(EventRecord(
+        event_type="startup",
+        timestamp=now,
+        instance_id=active_record.instance_id,
+        generation=active_record.generation,
+        details={
+            "runtime_dir": str(config.paths.runtime_dir),
+            "individual_id": individual_id,
+            "individual_newly_born": individual_newly_born,
+        },
+    ))
+    emit_log_line(
+        "startup",
+        instance=active_record.instance_id,
+        generation=active_record.generation,
+        runtime_dir=str(config.paths.runtime_dir),
+        individual=individual_id,
+        individual_status="born" if individual_newly_born else "resumed",
+    )
 
     resolved_adapter = _resolve_working_memory_adapter(config, explicit_adapter=working_memory_adapter)
     working_memory_advisory_source = _working_memory_advisory_source(
@@ -198,12 +228,13 @@ def run_runtime(
             instance_id=active_record.instance_id,
             generation=active_record.generation,
             life_state=final_state.life_state,
-            details={"ticks": ticks, "turns": turns, "exit_reason": exit_reason},
+            details={"ticks": ticks, "turns": turns, "exit_reason": exit_reason, "individual_id": individual_id},
         ))
         emit_log_line(
             "shutdown",
             instance=active_record.instance_id,
             generation=active_record.generation,
+            individual=individual_id,
             state=final_state.life_state,
             ticks=ticks,
             turns=turns,
@@ -217,9 +248,109 @@ def run_runtime(
             instance_valid=final_state.instance_valid,
             runtime_dir=str(config.paths.runtime_dir),
             exit_reason=exit_reason,
+            individual_id=individual_id,
         )
     finally:
         instance_guard.release()
+
+
+def _resolve_individual_id(
+    config: RuntimeConfig,
+    *,
+    instance_id: str,
+    generation: int,
+    now: datetime,
+) -> tuple[str, bool]:
+    """Resolve the embodied individual identity for this runtime (v0.6 rev2).
+
+    The *substrate* (instance_id / generation / lease) is the process that
+    hosts a life; the *individual* is the "self" that the scenario's existence
+    semantics say persists — or does not — across substrate restarts. This
+    reads the active scenario's ``reset_semantics``:
+
+    - ``same_individual_recovery`` (e.g. Linux runtime): a persisted
+      ``individual.json`` in the runtime_dir means the same individual is
+      resuming on a new substrate ("the self keeps its identity, the shell
+      changes"). Reuse the id and append the new substrate to its provenance.
+    - otherwise (Crafter ``new_individual``, or no prior record): mint a fresh
+      individual id — one run is one individual's life.
+
+    With no scenario activated (a bare kernel run) the individual is treated as
+    a generic, non-recoverable one: a fresh id is always minted, never silently
+    resumed under an undeclared recovery rule. Returns ``(individual_id,
+    newly_born)``.
+    """
+
+    individual_path = config.paths.runtime_dir / "individual.json"
+    try:
+        scenario = get_active_runtime_scenario()
+        scenario_name = scenario.name
+        reset_semantics = scenario.existence_semantics.reset_semantics
+    except RuntimeError:
+        scenario_name = "generic"
+        reset_semantics = "new_individual"
+
+    substrate_record = {
+        "instance_id": instance_id,
+        "generation": generation,
+        "attached_at": now.isoformat(),
+    }
+
+    if reset_semantics == "same_individual_recovery" and individual_path.exists():
+        try:
+            prior = json.loads(individual_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            prior = None
+        existing_id = (prior or {}).get("individual_id")
+        if existing_id:
+            chain = list((prior or {}).get("substrate_instances", ()))
+            chain.append(substrate_record)
+            _write_individual_record(
+                individual_path,
+                individual_id=existing_id,
+                scenario_name=scenario_name,
+                reset_semantics=reset_semantics,
+                born_at=(prior or {}).get("born_at", now.isoformat()),
+                substrate_instances=chain,
+            )
+            return existing_id, False
+
+    individual_id = f"individual-{scenario_name}-{uuid4().hex[:12]}"
+    _write_individual_record(
+        individual_path,
+        individual_id=individual_id,
+        scenario_name=scenario_name,
+        reset_semantics=reset_semantics,
+        born_at=now.isoformat(),
+        substrate_instances=[substrate_record],
+    )
+    return individual_id, True
+
+
+def _write_individual_record(
+    path,
+    *,
+    individual_id: str,
+    scenario_name: str,
+    reset_semantics: str,
+    born_at: str,
+    substrate_instances: list[dict[str, Any]],
+) -> None:
+    """Persist the individual provenance record (id + substrate chain)."""
+
+    path.write_text(
+        json.dumps(
+            {
+                "individual_id": individual_id,
+                "scenario": scenario_name,
+                "reset_semantics": reset_semantics,
+                "born_at": born_at,
+                "substrate_instances": list(substrate_instances),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _resolve_working_memory_adapter(
@@ -422,6 +553,7 @@ def print_run_summary(summary: RunSummary) -> None:
     """Print the compact runtime summary for CLI callers."""
 
     print(f"runtime_dir={summary.runtime_dir}")
+    print(f"individual_id={summary.individual_id}")
     print(f"ticks={summary.ticks}")
     print(f"turns={summary.turns}")
     print(f"final_life_state={summary.final_life_state}")
