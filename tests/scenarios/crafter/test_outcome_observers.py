@@ -100,6 +100,49 @@ class CrafterOutcomeObserverTests(unittest.TestCase):
         self.assertEqual(confidence, 0.8)
         self.assertEqual(outcome_vector.task_progress, 1.0)
 
+    def test_idle_sleep_is_no_longer_rewarded(self) -> None:
+        # Fix-A: sleep with no measured life change must not score positive.
+        # The old +0.2 viability default rewarded inaction → sleep lock-in.
+        observed, delta, label, _confidence, outcome_vector = evaluate_response_outcome(
+            {
+                "selected_action": "sleep",
+                "life_delta": {},
+                "inventory_delta": {},
+                "visible_threat_count": 0,
+                "followup_needed": False,
+            }
+        )
+        self.assertEqual(delta, 0.0)
+        self.assertEqual(label, "uncertain")
+        self.assertEqual(observed, "unchanged")
+        self.assertIsNone(outcome_vector.viability_delta)
+
+    def test_sleeping_through_a_threat_is_penalized(self) -> None:
+        # Fix-A: sleeping while a threat is visible is the most dangerous
+        # choice and must score negative (previously it was rewarded).
+        _observed, delta, label, _confidence, _vector = evaluate_response_outcome(
+            {
+                "selected_action": "sleep",
+                "life_delta": {},
+                "inventory_delta": {},
+                "visible_threat_count": 1,
+                "followup_needed": False,
+            }
+        )
+        self.assertLess(delta, 0.0)
+        self.assertEqual(label, "negative")
+
+    def test_engaging_a_threat_with_do_beats_sleeping_through_it(self) -> None:
+        # Fix-A: under the same visible threat, `do` (engage) must be ranked
+        # above `sleep` (cower) — the corrected asymmetry that unblocks escalate.
+        _o1, do_delta, _l1, _c1, _v1 = evaluate_response_outcome(
+            {"selected_action": "do", "life_delta": {}, "inventory_delta": {}, "visible_threat_count": 1, "followup_needed": False}
+        )
+        _o2, sleep_delta, _l2, _c2, _v2 = evaluate_response_outcome(
+            {"selected_action": "sleep", "life_delta": {}, "inventory_delta": {}, "visible_threat_count": 1, "followup_needed": False}
+        )
+        self.assertGreater(do_delta, sleep_delta)
+
     def test_followup_needed_lowers_confidence_from_uncertainty(self) -> None:
         observed, delta, label, confidence, outcome_vector = evaluate_response_outcome(
             {

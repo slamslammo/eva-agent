@@ -48,11 +48,16 @@ def evaluate_response_outcome(
     threat_count = int(history.get("visible_threat_count") or response_summary.get("visible_threat_count") or 0)
     followup_needed = bool(history.get("followup_needed") if "followup_needed" in history else response_summary.get("followup_needed"))
 
-    viability_score = sum(float(value) for value in life_delta.values()) if life_delta else (0.2 if selected_action == "sleep" else 0.0)
+    # Fix-A: only real measured life change earns viability; the old idle-sleep +0.2 default rewarded inaction and habit-learning locked the agent into passive sleep.
+    viability_score = sum(float(value) for value in life_delta.values()) if life_delta else 0.0
     resource_score = sum(float(value) for value in inventory_delta.values()) if inventory_delta else 0.0
     capability_score = 1.0 if selected_action.startswith("make_") or selected_action.startswith("place_") else 0.0
     task_progress = achievement_delta if achievement_delta != 0.0 else None
-    risk_delta = 0.5 if threat_count > 0 and selected_action == "do" else -0.2 if selected_action == "sleep" else 0.0
+    # Fix-A: under a visible threat, sleeping is the most dangerous (vulnerable) and engaging via `do` is the appropriate, only mildly risky response; the old mapping perversely rewarded sleeping through danger and punished engaging.
+    if threat_count > 0:
+        risk_delta = 0.5 if selected_action == "sleep" else 0.2 if selected_action == "do" else 0.3
+    else:
+        risk_delta = 0.0
     reversibility = 1.0 if selected_action.startswith("move_") or selected_action == "noop" else 0.5 if selected_action in {"do", "sleep"} else 0.1
     uncertainty = 0.8 if followup_needed else 0.4
     confidence = _confidence_from_uncertainty(uncertainty)
