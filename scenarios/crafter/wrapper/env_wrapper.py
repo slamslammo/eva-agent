@@ -14,6 +14,16 @@ class CrafterLoadError(RuntimeError):
     """Raised when the local Crafter environment cannot be created."""
 
 
+# Crafter facing == the last movement direction (a blocked move still turns the
+# agent), so the wrapper tracks it from the issued action rather than env internals.
+_MOVE_TO_FACING = {
+    "move_left": "left",
+    "move_right": "right",
+    "move_up": "up",
+    "move_down": "down",
+}
+
+
 @dataclass(frozen=True)
 class StepResult:
     raw_observation: Any
@@ -32,6 +42,7 @@ class CrafterEnvWrapper:
         self._adapter = ActionAdapter()
         self._episode_id = uuid4().hex
         self._step = 0
+        self._facing = "down"  # Crafter spawns facing down; updated on each move
         self._last_raw_observation: Any | None = None
         self._last_info: dict[str, Any] = {}
 
@@ -50,6 +61,7 @@ class CrafterEnvWrapper:
             self._seed = seed
         self._episode_id = uuid4().hex
         self._step = 0
+        self._facing = "down"
         raw_observation, info = self._reset_env(seed=self._seed)
         self._last_raw_observation = raw_observation
         self._last_info = dict(info)
@@ -58,12 +70,15 @@ class CrafterEnvWrapper:
             step=self._step,
             raw_observation=raw_observation,
             raw_info=info,
+            facing=self._facing,
         )
 
     def step(self, action_name: str) -> StepResult:
         action_id = self._adapter.name_to_id(action_name)
         raw_observation, reward, done, info = self._step_env(action_id)
         self._step += 1
+        if action_name in _MOVE_TO_FACING:
+            self._facing = _MOVE_TO_FACING[action_name]
         self._last_raw_observation = raw_observation
         self._last_info = dict(info)
         agent_observation = build_symbolic_observation(
@@ -71,6 +86,7 @@ class CrafterEnvWrapper:
             step=self._step,
             raw_observation=raw_observation,
             raw_info=info,
+            facing=self._facing,
         )
         return StepResult(
             raw_observation=raw_observation,

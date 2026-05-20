@@ -93,6 +93,14 @@ PROFILE_ELIGIBLE_ACTIONS: dict[str, tuple[str, ...]] = {
     ),
     "escalate_first": (
         DO_ACTION,
+        # Fix-B: escalate can also *approach* a target (move toward it, then ``do``).
+        # "Actively pursue the resource/threat" includes walking up to it; without
+        # this the dominant escalate profile could only ``do`` whatever it happened
+        # to already face, so it stalled doing nothing in place.
+        MOVE_LEFT_ACTION,
+        MOVE_RIGHT_ACTION,
+        MOVE_UP_ACTION,
+        MOVE_DOWN_ACTION,
         PLACE_STONE_ACTION,
         PLACE_TABLE_ACTION,
         PLACE_FURNACE_ACTION,
@@ -172,7 +180,7 @@ def build_integrity_response_candidates(
     agent_observation = context.get("agent_observation") if isinstance(context.get("agent_observation"), dict) else {}
     inherited_priors = context.get("inherited_priors") if isinstance(context.get("inherited_priors"), list) else []
 
-    del life_state, top_drive, agent_observation  # reserved for future heuristics
+    del life_state, top_drive  # reserved for future heuristics
 
     # When L3 has already selected a candidate_profile (delivered to the bridge
     # via release_context), restrict widening to that profile so the bridge's
@@ -190,6 +198,7 @@ def build_integrity_response_candidates(
             profile,
             pressure_reason=pressure_reason,
             inherited_priors=inherited_priors,
+            agent_observation=agent_observation,
         )
         if not resolved:
             resolved = [PROFILE_DEFAULT_ACTION[profile]]
@@ -210,13 +219,17 @@ def _resolve_actions_for_profile(
     *,
     pressure_reason: str,
     inherited_priors: list[Any],
+    agent_observation: dict[str, Any] | None = None,
 ) -> list[str]:
     """Resolve concrete actions for one profile under current context.
 
     Order of resolution (first hit wins per action; duplicates suppressed):
-      1. Prior with matching profile + eligible preferred_action.
-      2. Pressure-driven heuristic for the profile.
-      3. Profile default (handled by caller if list is empty).
+      1. Fix-B: observation-directed approach/interact (pursue the nearest
+         useful target) — first so the situationally-correct action wins the
+         un-biased ``candidates[0]`` tie-break.
+      2. Prior with matching profile + eligible preferred_action.
+      3. Pressure-driven heuristic for the profile.
+      4. Profile default (handled by caller if list is empty).
     """
 
     eligible: tuple[str, ...] = PROFILE_ELIGIBLE_ACTIONS.get(profile, ())
@@ -224,7 +237,13 @@ def _resolve_actions_for_profile(
         return []
     resolved: list[str] = []
 
-    # 1. Inherited priors whose profile matches and whose preferred_action is
+    # 1. Fix-B: observation-directed action (approach the nearest useful target,
+    # or ``do`` it when already facing it).
+    for action_name in _obs_directed_actions(pressure_reason, eligible, agent_observation):
+        if action_name not in resolved:
+            resolved.append(action_name)
+
+    # 2. Inherited priors whose profile matches and whose preferred_action is
     # eligible under this profile's mapping.
     for prior in inherited_priors:
         if not isinstance(prior, dict):
@@ -235,12 +254,133 @@ def _resolve_actions_for_profile(
         if preferred and preferred in eligible and preferred not in resolved:
             resolved.append(preferred)
 
-    # 2. Pressure-driven resolution.
+    # 3. Pressure-driven resolution.
     for action_name in _pressure_driven_actions_for_profile(profile, pressure_reason, eligible):
         if action_name not in resolved:
             resolved.append(action_name)
 
     return resolved
+
+
+# Fix-B: cell names the agent can usefully approach + interact with, grouped by need.
+_WATER_TARGETS = ("water",)
+_FOOD_TARGETS = ("cow", "plant")
+_RESOURCE_TARGETS = ("tree", "stone", "coal", "iron", "diamond")
+_THREAT_TARGETS = ("zombie", "skeleton")
+
+# facing string -> (col_delta, row_delta) in the local-view grid (col->x, row->y),
+# matching Crafter's verified facing tuples (down=(0,1), left=(-1,0), up=(0,-1), right=(1,0)).
+_FACING_DELTA = {
+    "left": (-1, 0),
+    "right": (1, 0),
+    "up": (0, -1),
+    "down": (0, 1),
+}
+
+
+def _useful_targets_for(pressure_reason: str) -> tuple[str, ...]:
+    """Order target cell-types by the active pressure (most relevant first)."""
+
+    if pressure_reason in {"health_critical", "threat_visible", "threat_nearby"}:
+        return _THREAT_TARGETS + _FOOD_TARGETS + _WATER_TARGETS
+    if pressure_reason in {"metabolic_degraded", "food_critical", "water_critical"}:
+        return _WATER_TARGETS + _FOOD_TARGETS + _RESOURCE_TARGETS
+    if pressure_reason in {"inventory_sparse", "tooling_missing", "resource_visible"}:
+        return _RESOURCE_TARGETS + _FOOD_TARGETS + _WATER_TARGETS
+    return _FOOD_TARGETS + _WATER_TARGETS + _RESOURCE_TARGETS + _THREAT_TARGETS
+
+
+def _local_view_from_observation(agent_observation: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(agent_observation, dict):
+        return None
+    visible = agent_observation.get("visible")
+    local_view = visible.get("local_view") if isinstance(visible, dict) else None
+    if not isinstance(local_view, dict):
+        return None
+    if not isinstance(local_view.get("cells"), list) or not local_view["cells"]:
+        return None
+    if not isinstance(local_view.get("center"), dict):
+        return None
+    return local_view
+
+
+def _cell_at(cells: list[Any], row: int, col: int) -> str | None:
+    if 0 <= row < len(cells):
+        cell_row = cells[row]
+        if isinstance(cell_row, list) and 0 <= col < len(cell_row):
+            return cell_row[col]
+    return None
+
+
+def _facing_cell_is_target(local_view: dict[str, Any], facing: str, targets: tuple[str, ...]) -> bool:
+    delta = _FACING_DELTA.get(str(facing))
+    if delta is None:
+        return False
+    center = local_view["center"]
+    crow, ccol = center.get("row"), center.get("col")
+    if crow is None or ccol is None:
+        return False
+    col_d, row_d = delta
+    return _cell_at(local_view["cells"], crow + row_d, ccol + col_d) in set(targets)
+
+
+def _nearest_target_offset(local_view: dict[str, Any], targets: tuple[str, ...]) -> tuple[int, int] | None:
+    """Return (row_diff, col_diff) from player center to the nearest target cell."""
+
+    center = local_view["center"]
+    crow, ccol = center.get("row"), center.get("col")
+    if crow is None or ccol is None:
+        return None
+    target_set = set(targets)
+    best: tuple[int, int] | None = None
+    best_dist: int | None = None
+    for r, cell_row in enumerate(local_view["cells"]):
+        if not isinstance(cell_row, list):
+            continue
+        for c, name in enumerate(cell_row):
+            if name in target_set:
+                dist = abs(r - crow) + abs(c - ccol)
+                if dist > 0 and (best_dist is None or dist < best_dist):
+                    best_dist, best = dist, (r - crow, c - ccol)
+    return best
+
+
+def _move_toward(row_diff: int, col_diff: int) -> str:
+    """Greedy beeline: step along the larger-magnitude axis first."""
+
+    if abs(col_diff) >= abs(row_diff):
+        return MOVE_RIGHT_ACTION if col_diff > 0 else MOVE_LEFT_ACTION
+    return MOVE_DOWN_ACTION if row_diff > 0 else MOVE_UP_ACTION
+
+
+def _obs_directed_actions(
+    pressure_reason: str,
+    eligible: tuple[str, ...],
+    agent_observation: dict[str, Any] | None,
+) -> list[str]:
+    """Fix-B: pursue the nearest useful target using the local view + facing.
+
+    Facing a useful target -> ``do`` (Crafter interacts with the faced tile).
+    Otherwise step toward the nearest target (which also turns the agent to
+    face it, enabling ``do`` next turn). Only eligible actions are returned, so
+    a profile that cannot move/interact (e.g. ``stabilize_first``) yields [].
+    """
+
+    local_view = _local_view_from_observation(agent_observation)
+    if local_view is None:
+        return []
+    targets = _useful_targets_for(pressure_reason)
+    visible = agent_observation.get("visible") if isinstance(agent_observation, dict) else {}
+    facing = visible.get("facing", "unknown") if isinstance(visible, dict) else "unknown"
+    actions: list[str] = []
+    if DO_ACTION in eligible and _facing_cell_is_target(local_view, facing, targets):
+        actions.append(DO_ACTION)
+    offset = _nearest_target_offset(local_view, targets)
+    if offset is not None:
+        move = _move_toward(offset[0], offset[1])
+        if move in eligible and move not in actions:
+            actions.append(move)
+    return actions
 
 
 def _pressure_driven_actions_for_profile(

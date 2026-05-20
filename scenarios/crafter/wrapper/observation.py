@@ -25,6 +25,7 @@ def build_symbolic_observation(
     raw_observation: Any,
     raw_info: Mapping[str, Any] | None,
     observation_mode: str = "visible_state_proxy",
+    facing: str = "unknown",
 ) -> dict[str, Any]:
     info = dict(raw_info or {})
     achievements = extract_achievements(info)
@@ -45,7 +46,9 @@ def build_symbolic_observation(
                 "available": bool(extract_inventory(info)),
                 "items": jsonable(extract_inventory(info)),
             },
-            "facing": info.get("facing", "unknown"),
+            # Crafter does not surface facing in ``info``; the wrapper supplies it
+            # (tracked from the last movement direction). Fall back to info/unknown.
+            "facing": facing if facing and facing != "unknown" else info.get("facing", "unknown"),
             "nearby_objects": nearby_objects,
         },
         "task_context": {

@@ -61,6 +61,31 @@ def build_runtime_gate_context(
     }
 
 
+def _release_context_with_observation(
+    release_context: dict[str, Any] | None,
+    extra_shared_facts: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Thread the turn's bounded ``agent_observation`` into the release context.
+
+    Fix-B: action-candidate generation needs the agent's local view to pursue
+    targets, but the observation otherwise stops at the sensing layer. Inject it
+    into ``candidate_context`` (without clobbering an existing one) so the
+    scenario action bridge can resolve observation-directed actions. Returns the
+    release context unchanged when there is no observation to add.
+    """
+
+    agent_observation = (
+        extra_shared_facts.get("agent_observation") if isinstance(extra_shared_facts, dict) else None
+    )
+    if not isinstance(release_context, dict) or not isinstance(agent_observation, dict):
+        return release_context
+    augmented = dict(release_context)
+    candidate_context = dict(augmented.get("candidate_context") or {})
+    candidate_context.setdefault("agent_observation", agent_observation)
+    augmented["candidate_context"] = candidate_context
+    return augmented
+
+
 class LifeState(str, Enum):
     """Coarse-grained health states for the life loop."""
 
@@ -476,6 +501,11 @@ class LifecycleRuntime:
             ),
         }
         if work_slice.kind == "patrol":
+            extra_shared_facts = (
+                (self.extra_shared_facts_provider() or None)
+                if self.extra_shared_facts_provider is not None
+                else None
+            )
             patrol_result = execute_patrol(
                 work_slice.name,
                 self.store,
@@ -484,9 +514,7 @@ class LifecycleRuntime:
                 now,
                 due_at=work_slice.due_at,
                 sensor_registry=self.sensor_registry,
-                extra_shared_facts=(self.extra_shared_facts_provider() or None)
-                if self.extra_shared_facts_provider is not None
-                else None,
+                extra_shared_facts=extra_shared_facts,
             )
             details.update(
                 {
@@ -542,7 +570,9 @@ class LifecycleRuntime:
                     runtime=self,
                     allow_repair_side_effects=not conservative_before_patrol,
                     drive_context=patrol_result.drive_broadcast,
-                    release_context=release_decision.release_context,
+                    release_context=_release_context_with_observation(
+                        release_decision.release_context, extra_shared_facts
+                    ),
                     release_token=release_token,
                     selected_candidate_id=selected_candidate_id,
                 )
@@ -608,7 +638,9 @@ class LifecycleRuntime:
                         runtime=self,
                         allow_repair_side_effects=not conservative_before_patrol,
                         drive_context=patrol_result.drive_broadcast,
-                        release_context=release_context,
+                        release_context=_release_context_with_observation(
+                            release_context, extra_shared_facts
+                        ),
                         release_token=release_token,
                         selected_candidate_id=selected_candidate_id,
                     )
