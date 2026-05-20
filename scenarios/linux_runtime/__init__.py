@@ -7,6 +7,7 @@ from dataclasses import replace
 from eva.scenario_bundle import (
     ActionPolicyBundle,
     AnchorPolicyBundle,
+    ExistenceSemantics,
     OutcomeObserverBundle,
     PriorSkillBundle,
     RuntimeScenarioBundle,
@@ -112,6 +113,20 @@ LINUX_RUNTIME_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         build_prior_skill_registry=build_linux_runtime_prior_skill_registry,
         build_startup_prior_registry=build_linux_runtime_startup_prior_registry,
         build_inherited_prior_registry=build_linux_runtime_inherited_prior_registry,
+    ),
+    # v0.6 rev2 存在语义声明（优先级低，先显式化当前语义；后续单独循环细化）：
+    # Linux runtime 重进程连续性 —— 进程重启 / 迁移 / 重新拿租约是可恢复中断（不致命，
+    # 但属高风险高威胁，由 drive/sensing 表达，不是终止）；真死=不可恢复地丢失
+    # 状态 / legitimacy 链 / provenance；身份按 legitimacy 链延续；生命时钟按挂钟秒。
+    existence_semantics=ExistenceSemantics(
+        continuity_criterion="runtime integrity + host continuity maintained; instance legitimacy (lock/generation/lease) held",
+        recoverable_interruption=("process restart", "host migration", "lease re-acquisition"),
+        terminal_failure="unrecoverable loss of state / legitimacy chain / provenance",
+        individual_boundary="one long-running Linux runtime instance, spanning recoverable restarts",
+        reset_semantics="same_individual_recovery",
+        inheritance_channel="same-scenario inherited priors via offline distillation",
+        identity_continuity="same legitimacy chain + recoverable persisted state across restart = same individual",
+        clock_source="wall_clock",
     ),
 )
 

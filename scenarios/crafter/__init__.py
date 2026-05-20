@@ -7,6 +7,7 @@ from dataclasses import replace
 from eva.scenario_bundle import (
     ActionPolicyBundle,
     AnchorPolicyBundle,
+    ExistenceSemantics,
     OutcomeObserverBundle,
     PriorSkillBundle,
     RuntimeScenarioBundle,
@@ -111,6 +112,19 @@ CRAFTER_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         build_prior_skill_registry=build_crafter_prior_skill_registry,
         build_startup_prior_registry=build_crafter_startup_prior_registry,
         build_inherited_prior_registry=build_crafter_inherited_prior_registry,
+    ),
+    # v0.6 rev2 存在语义声明：Crafter 是单局生存世界，HP=0 即个体真死，无 in-life
+    # 复活；reset = 新个体；生命时钟按 step（回合）；死亡个体经验经 inheritance
+    # pipeline 蒸馏给新个体。
+    existence_semantics=ExistenceSemantics(
+        continuity_criterion="avatar alive: HP>0 and required vitals not depleted to death",
+        recoverable_interruption=(),
+        terminal_failure="HP=0 (avatar death) — terminal individual death, no in-life revival (single-episode world)",
+        individual_boundary="one Crafter episode = one individual's lifetime",
+        reset_semantics="new_individual",
+        inheritance_channel="dead individual's trace -> distillation -> new individual's inherited priors",
+        identity_continuity="loading the same saved episode/avatar = same individual; a fresh episode = a new distinct individual",
+        clock_source="step",
     ),
 )
 

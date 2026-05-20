@@ -89,6 +89,37 @@ class PriorSkillBundle:
 
 
 @dataclass(frozen=True)
+class ExistenceSemantics:
+    """场景声明的存在语义（v0.6 rev2）。
+
+    rev2 把"什么算活 / 死"的解释权从框架交还场景：框架提供维持持续存在的机制 +
+    七层分类语言，但不硬编码生死；它读取本声明并一致执行。**每个场景必须声明**。
+
+    字段多为人类可读 / 审计用的声明（框架据此记录与校验）；``clock_source`` 是
+    框架会主动消费的配置（决定生命时钟来源，见 rev2 决策点 3）。终止的实际**检测**
+    发生在场景的 action_runtime（如 Crafter HP=0），由它向 kernel 报告 individual
+    终止；本声明描述"规则是什么"，不替代行为。
+    """
+
+    # 什么算"还活着"（持续存在判据）
+    continuity_criterion: str
+    # 哪些中断算可恢复（重启 / 迁移 / 充电）；() = 无 in-life 可恢复中断（如单局 Crafter）
+    recoverable_interruption: tuple[str, ...]
+    # 什么算真死（不可恢复终止）
+    terminal_failure: str
+    # 一个 individual 的边界
+    individual_boundary: str
+    # reset 的语义："new_individual" / "same_individual_recovery" / "not_applicable"
+    reset_semantics: str
+    # 继承通道（有无 / 怎么蒸馏）
+    inheritance_channel: str
+    # 身份延续判据：重启 / 换 substrate 后，怎么算还是同一个 individual
+    identity_continuity: str
+    # 生命时钟来源（框架主动消费）："step"=回合驱动；"wall_clock"=挂钟秒
+    clock_source: str = "wall_clock"
+
+
+@dataclass(frozen=True)
 class RuntimeScenarioBundle:
     """Full concrete scenario assembly activated for one runtime."""
 
@@ -99,6 +130,8 @@ class RuntimeScenarioBundle:
     anchors: AnchorPolicyBundle
     outcome_observers: OutcomeObserverBundle
     prior_skills: PriorSkillBundle
+    # v0.6 rev2: 每个场景必须声明存在语义（生死规则）。框架读取并一致执行。
+    existence_semantics: ExistenceSemantics
 
 
 _ACTIVE_RUNTIME_SCENARIO: RuntimeScenarioBundle | None = None
@@ -125,13 +158,21 @@ def get_active_runtime_scenario() -> RuntimeScenarioBundle:
     return _ACTIVE_RUNTIME_SCENARIO
 
 
+def get_active_existence_semantics() -> ExistenceSemantics:
+    """Return the active scenario's existence-semantics declaration (v0.6 rev2)."""
+
+    return get_active_runtime_scenario().existence_semantics
+
+
 __all__ = [
     "ActionPolicyBundle",
     "AnchorPolicyBundle",
+    "ExistenceSemantics",
     "OutcomeObserverBundle",
     "PriorSkillBundle",
     "RuntimeScenarioBundle",
     "SensorPolicyBundle",
     "activate_runtime_scenario",
+    "get_active_existence_semantics",
     "get_active_runtime_scenario",
 ]
