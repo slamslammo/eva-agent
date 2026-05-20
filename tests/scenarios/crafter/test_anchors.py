@@ -63,7 +63,10 @@ class CrafterAnchorTests(unittest.TestCase):
         self.assertIn("escalate_first", profiles)
         self.assertIn("low_health_no_engagement", action_domain.restriction_reasons)
 
-    def test_high_metabolic_prefers_stabilize_first(self) -> None:
+    def test_high_metabolic_admits_escalate_first(self) -> None:
+        # 修复 B：饥饿 / 缺水（metabolic 高）应 admit escalate，让 agent 能去
+        # 采集食物 / 水 —— 而非被强制锁死成 stabilize→sleep（睡觉在 Crafter 里
+        # 不恢复 food/water，会让 agent 饿着空跑）。stabilize 仍作为兜底保留。
         deliberation_input = self._base_input(
             top_drive="metabolic",
             drive_levels={
@@ -76,7 +79,9 @@ class CrafterAnchorTests(unittest.TestCase):
             pressure_reason="water_critical",
         )
         candidates = build_candidates(build_action_domain(deliberation_input))
-        self.assertEqual(candidates[0].parameter_domain["candidate_profile"], "stabilize_first")
+        profiles = [c.parameter_domain["candidate_profile"] for c in candidates]
+        self.assertIn("escalate_first", profiles)
+        self.assertIn("stabilize_first", profiles)
 
 
 if __name__ == "__main__":
