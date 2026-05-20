@@ -9,6 +9,7 @@ from unittest.mock import patch
 from eva.kernel import ExternalLifeConfig, LifecycleConfig, LoopControl, StateStore, build_runtime_config
 from runners.run_crafter import CrafterRuntimeSession, run_crafter_runtime
 from scenarios.crafter import activate_crafter_scenario
+from scenarios.crafter.wrapper import StepResult
 
 
 class StubCrafterSession:
@@ -280,6 +281,81 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
             self.assertIn("inherited_prior_bias", matching_audit["assessments"][0]["bias_reasons"])
             self.assertTrue(config.paths.learning_outcomes_file.exists())
 
+
+
+class CrafterTerminationSemanticsTests(unittest.TestCase):
+    """v0.6 rev2：HP=0（env done）= 该 individual 真死 —— 不再 reset 续命；
+    kernel 以 exit_reason='individual_terminated' 收尾本次 run（一个个体的一生）。"""
+
+    def setUp(self) -> None:
+        activate_crafter_scenario()
+
+    def test_session_terminates_on_done_without_reset(self) -> None:
+        class _FakeWrapper:
+            def __init__(self) -> None:
+                self.reset_calls = 0
+                self.step_calls = 0
+
+            def reset(self, *, seed=None):
+                self.reset_calls += 1
+                return {"episode_id": "ep", "step": 0, "visible": {}}
+
+            def step(self, action_name):
+                self.step_calls += 1
+                return StepResult(
+                    raw_observation=None,
+                    reward=0.0,
+                    done=True,
+                    raw_info={},
+                    agent_observation={"episode_id": "ep", "step": 1, "visible": {"dead": True}},
+                )
+
+            def close(self) -> None:
+                pass
+
+        wrapper = _FakeWrapper()
+        session = CrafterRuntimeSession(
+            wrapper=wrapper,
+            latest_agent_observation={"episode_id": "ep", "step": 0, "visible": {}},
+        )
+        self.assertFalse(session.terminated)
+        step = session.step_action("do")
+        self.assertTrue(step.done)
+        self.assertTrue(session.terminated)          # 个体终止标志置位
+        self.assertEqual(wrapper.reset_calls, 0)     # 不再 reset 续命
+        # 保留终止时的 observation（不是 reset 后的新局观测）
+        self.assertEqual(session.latest_agent_observation["visible"], {"dead": True})
+
+    def test_run_ends_with_individual_terminated_when_session_reports_terminated(self) -> None:
+        class _TerminatingStub(StubCrafterSession):
+            def step_action(self, action_name):
+                result = super().step_action(action_name)
+                self.terminated = True  # 第一步后即个体终止
+                return result
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=50, max_runtime_sec=3.0, idle_sleep_sec=0.01),
+            )
+            stub_session = _TerminatingStub()
+            with patch.object(CrafterRuntimeSession, "start", return_value=stub_session):
+                summary = run_crafter_runtime(config)
+            # 个体终止收尾，而非 max_turns/max_runtime（substrate 被叫停）
+            self.assertEqual(summary.exit_reason, "individual_terminated")
+            self.assertGreaterEqual(len(stub_session.step_actions), 1)
 
 
 if __name__ == "__main__":

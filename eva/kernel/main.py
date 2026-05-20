@@ -67,7 +67,9 @@ def run_runtime(
     event is always written before returning. ``RunSummary.exit_reason``
     reports the termination cause (``"normal"`` / ``"max_ticks"`` /
     ``"max_turns"`` / ``"max_runtime_sec"`` / ``"keyboard_interrupt"`` /
-    ``"periodic_hook_stop"`` plus optional reason suffix from the hook).
+    ``"periodic_hook_stop"`` plus optional reason suffix from the hook /
+    ``"individual_terminated"`` when the scenario reports the embodied
+    individual reached its terminal condition, e.g. Crafter HP=0 — v0.6 rev2).
 
     Round 1.D-2: ``periodic_hook`` (if supplied) is called at most every
     ``hook_interval_sec`` seconds with kwargs ``(runtime_dir,
@@ -136,6 +138,13 @@ def run_runtime(
                 else:
                     sleep_for = min(config.control.idle_sleep_sec, max((next_heartbeat_at - now).total_seconds(), 0.0))
                     time.sleep(sleep_for)
+
+                # v0.6 rev2: 场景声明的个体终止（如 Crafter HP=0）。action_runtime
+                # 报告 terminated → 把本次 run 作为"一个个体的一生"正常收尾，
+                # 区别于 substrate 级的 max_ticks/max_runtime（进程被叫停）。
+                if action_runtime is not None and getattr(action_runtime, "terminated", False):
+                    exit_reason = "individual_terminated"
+                    break
 
                 if config.control.max_ticks is not None and ticks >= config.control.max_ticks:
                     exit_reason = "max_ticks"

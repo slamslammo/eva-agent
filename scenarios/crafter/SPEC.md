@@ -173,7 +173,7 @@ The current Crafter hierarchy is:
 - Level 3: `crafter_capability_structure`
 - Level 4: `crafter_resource_system`
 
-Level 2 is currently interpreted as the bounded avatar-in-world continuity target for one Crafter episode, not as EVA termination. In the landed H-5 runtime, avatar death or env `done=True` triggers a bounded wrapper reset so the next patrol sees a fresh episode; that reset preserves the Stage-H validation intent without treating one Crafter episode boundary as substrate-level death.
+**Existence semantics (v0.6 rev2)**: Crafter is a single-episode survival world. Avatar death (`HP=0` / env `done=True`) is the **terminal death of that individual** — there is no in-life revival. The runtime no longer `reset()`s to resurrect in the same process; instead the session reports `terminated`, and the kernel ends the run with `exit_reason="individual_terminated"` (one run = one individual's lifetime). The next individual is a **new run** (which may load inherited priors distilled from past individuals' traces). `reset` therefore means *new individual*, not *same individual continues*. Life clock is **step-driven** (one env step = one tick), not wall-clock. Avatar vitals map to L2 dimensions/drives, **not** to substrate viability (Level 1/2 separation preserved). See `eva/scenario_bundle.py:ExistenceSemantics` for the machine-readable declaration and `maintainer/development/rev2-existence-semantics-alignment.md` for the analysis.
 
 Crafter learning integration now preserves multi-dimensional outcome fields through the same append-only learning record path used by the framework.
 

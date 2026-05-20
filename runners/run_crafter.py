@@ -39,6 +39,9 @@ class CrafterActionStep:
 class CrafterRuntimeSession:
     wrapper: CrafterEnvWrapper
     latest_agent_observation: dict[str, Any]
+    # v0.6 rev2: 个体终止标志。HP=0（env done）= 该 individual 真死，kernel loop
+    # 读到 terminated 后收尾本 run（exit_reason=individual_terminated），不 reset 续命。
+    terminated: bool = False
 
     @classmethod
     def start(cls, *, seed: int | None = None) -> "CrafterRuntimeSession":
@@ -52,14 +55,19 @@ class CrafterRuntimeSession:
         before_observation = dict(self.latest_agent_observation)
         step_result: StepResult = self.wrapper.step(action_name)
         after_action_observation = dict(step_result.agent_observation)
-        next_observation = after_action_observation if not step_result.done else self.wrapper.reset()
-        self.latest_agent_observation = next_observation
+        # v0.6 rev2：Crafter 是单局生存世界，HP=0（done）是该 individual 真死，
+        # 无 in-life 复活。**不再 reset 续命** —— 保留终止时的 observation，置
+        # terminated 让 kernel loop 把本次 run 作为"一个个体的一生"正常收尾。
+        # 下一个体是新的 run（可加载 inherited priors），不是同进程接着跑。
+        if step_result.done:
+            self.terminated = True
+        self.latest_agent_observation = after_action_observation
         return CrafterActionStep(
             raw_observation=step_result.raw_observation,
             reward=step_result.reward,
             done=step_result.done,
             raw_info=dict(step_result.raw_info),
-            agent_observation=dict(next_observation),
+            agent_observation=dict(after_action_observation),
             before_observation=before_observation,
             after_action_observation=after_action_observation,
         )
