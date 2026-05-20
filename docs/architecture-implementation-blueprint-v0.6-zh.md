@@ -43,6 +43,8 @@ EVA-Agent 从一个前提出发：对于一类 agent 来说，**连续存在是�
 
 本文中的“连续存在”按 v0.6 的主动语义解读：被保护的是 agent 持续存在的能力本身，而不是当前状态值。状态保留与持续存在不是同一件事。
 
+**EVA 是架构，不是本体。** EVA-Agent 不替场景裁决“什么算活、什么算死”，也不把任何固定的存在判据硬编码进框架。框架提供维持持续存在所需的**机制**（cadence、legitimacy、持久化分轨、anchor、mediator、memory、inheritance 等），并**一致地遵守场景声明的存在语义**；存在语义本身由场景作为 field condition 声明（参见 §2.7 与 §12.7）。这条边界使同一框架可以承载差异巨大的 existence field——从持续部署的 always-on agent，到单局制 Crafter 个体——而结构不变量保持不动。
+
 ### 0.2 什么是 EVA-Agent v0.6
 
 EVA-Agent v0.6 不是以任务完成为中心的通用任务编排器。它是一种**以存在为中心的 agent 架构**，其首要约束是持续、有界、可恢复的运行。
@@ -65,6 +67,21 @@ EVA-Agent v0.6 不是以任务完成为中心的通用任务编排器。它是�
 2. framework/scenario 分离、五层结构、Anchor System 与 Kernel 如何分工？
 3. 感知、驱力、deliberation、release、memory 与 learning 如何形成持续闭环？
 4. 这样的系统应如何被验证、测量与部署？
+
+### 0.4 文档定位（架构合同 vs 落地状态）
+
+本蓝图是 EVA-Agent v0.6 的**架构合同（architectural contract）**，同时承载两类承诺：
+
+- **已实现需遵守（landed and binding）**：当前代码已实现的结构不变量与边界——新开发不得偏离，偏离前需先回到蓝图与 tracking 同步更新；
+- **待实现目标（target architecture）**：理论上不可协商但代码尚未完整实现——指引后续 phase 的开发方向。
+
+两类承诺的精确边界**不由本文承担**，由 `implementation-tracking.md` 的 completeness tier 承接：`production`（已落地、可作为正典）/ `partial`（已实现但有显式限制）/ `skeleton`（仅有接口或占位）/ `deferred`（理论承诺、运行时未实现）。任何开发动作的"该遵守什么 / 该实现什么"判断，按以下三件套读：
+
+- **本蓝图** = 合同（"是什么、为什么、边界在哪")
+- **`implementation-tracking.md`** = 状态（"已 land 到哪、还差什么")
+- **`scenarios-SPEC.md` / `scenarios/<name>/SPEC.md`** = 合同的 scenario 侧实现细则
+
+`blueprint-to-tracking-map.md` 给出蓝图条目 → tracking 条目的直接映射。蓝图修改时，必须同步检查 tracking 与 map 是否需要更新；反之亦然。
 
 ---
 
@@ -93,6 +110,19 @@ v0.6 对“连续存在”的含义进行了收紧。
 - 只有 state、没有 rate，在非平凡环境中是不够的
 - 评估必须考虑 trajectory，而不只是当前值
 - exploration 在实现时只能是受约束的 viability-supporting mechanism，而不能成为终极目标
+
+#### 1.2.1 持续存在 ≠ 持续运行
+
+主动持续不等同于 execution 不间断。两类情形必须被结构性区分：
+
+- **可恢复中断（recoverable interruption）**：状态、结构不变量与 provenance 可被一致恢复（如崩溃后重启、迁移、断电后充电、热升级）。同一 individual 继续存在。
+- **不可恢复终止（terminal failure）**：状态、结构不变量或 provenance 链不可恢复地丢失，或场景声明的 continuity criterion 不再成立。该 individual 终止。
+
+“是否同一 individual” 的判定锚在三件事上：**legitimacy 链 + 可恢复状态 + provenance**——而**不**在“进程是否一直在跑”、“tick 是否未停”、“后继是否继承了任何内容”。框架提供这三条机制；至于哪些中断属于可恢复、哪些事件构成 terminal failure，由场景声明（见 §2.7 与 §12.7）。
+
+#### 1.2.2 个体（individual）作为持存主体
+
+持存主体是 **individual**，而不是“进程”或“代码实例”。一次 runtime activation 对应一个 individual 从诞生到 terminal 的一生；多次 activation（即便共享同一进程或文件系统）构成一个**种群（population）**。继承与设计者改良是种群层面的信息延续机制，不构成同一个体的多次生命（详见 §7.9 与 §13.5）。
 
 ### 1.3 核心工程不变量
 
@@ -195,6 +225,8 @@ Base layer: Infrastructure / Kernel
 - **Infrastructure / Kernel 不是 L1 之前的实现细节。** 它是同一 agent instance 持续存在的条件。
 - **Anchor System 不是第六个认知层，也不是事后过滤器。** 它在生成前限制可见候选域。
 
+此外还要注意一条：**七层是分类语言，不是失败判决。** 一个 individual 在某一层上出现失败，是否构成 terminal failure，由场景声明决定，而不是结构不变量决定。任意 deployment 都需要声明：哪些层在该场景下被激活；每个被激活的层，其“可恢复中断”与“terminal failure”各自意味着什么。框架按这份声明执行终止 / 恢复路径，不替场景预判生死（详见 §2.7、§12.7）。
+
 ### 2.3 各层功能角色
 
 - **Infrastructure / Kernel**：cadence、legitimacy、state persistence、append-only audit、communication substrate、persistence-target registration
@@ -233,6 +265,8 @@ scenario 通过一个统一的 runtime scenario bundle 契约进入 framework �
 
 framework 拥有承载这些 surface 的结构，scenario 拥有填充这些结构的内容和策略。
 
+除内容 surface 之外，scenario 还必须提供一份**存在语义声明**（§12.7 的八项），用于告诉 framework 在该 field 中如何判定可恢复中断与 terminal failure。声明与内容 surface 是两类不同性质的约束，但都属于 scenario onboarding 的强制项。
+
 ### 2.6 为什么必须这样分离
 
 如果没有这种分离，世界特定内容会侵入结构层，结构不变量也会与单一环境绑死。v0.6 的承诺正相反：
@@ -241,6 +275,27 @@ framework 拥有承载这些 surface 的结构，scenario 拥有填充这些结�
 - scenario 拥有使 agent 在特定世界中运行的内容
 
 正因为有这个规则，scenario specification 才能成为新环境接入的默认方式。
+
+### 2.7 Framework 提供机制，Scenario 声明语义
+
+framework / scenario 分离的最深一层在于：**生死语义本身由场景声明**，framework 只提供机制并一致地遵守声明。下表给出这条分工的最小映射：
+
+| 维度 | EVA Framework（场景无关，结构不变量） | Scenario 声明（field condition，被 framework 消费） |
+|---|---|---|
+| 生死语义 | 提供机制 + 一致执行场景声明（**不硬编码生死**） | **存在语义声明（八项）**（见 §12.7） |
+| 持续性层级 | 提供 7 层分类；audit / drive / value-judgment 在被激活层上运作 | 该场景激活哪些层（如 Crafter：embodied + capability） |
+| 实例身份 | instance legitimacy（lock / generation / lease）+ 可恢复状态 + provenance；`_resolve_individual_id` 按 `reset_semantics` 决定生新 id 还是续旧 id | 哪些中断算 recoverable、哪些事件算 terminal；`identity_continuity` 声明跨 substrate 后如何算同一 individual |
+| 感知信号 | sensing / rate-sensing 的**机制**（registry、归一化、urgency 路由） | 信号→dimension / drive / outcome 映射、rate 节拍、cadence 配置（avatar vitals → dimension，**不**→ substrate viability） |
+| 时钟 | kernel cadence 权威**单一**；**契约目标**为读取场景声明的 `clock_source` 选择节拍来源（当前 kernel cadence 实现仍为 wall-clock，`clock_source` 的实际消费尚未落地，参见 tracking 中"Kernel consumption of declared `clock_source`"行）；不允许 kernel 为单一场景分叉 cadence 逻辑 | `clock_source = "step"`（回合驱动，Crafter）或 `"wall_clock"`（挂钟秒，Linux runtime）；per-step rate 等仍在 scenario adapter 配置 |
+| 继承 | 接收 prior bundle 的 registry、provenance 校验、结构不变量校验 | 是否存在 inheritance channel；distillation 如何聚合死亡个体 trace |
+
+> **声明 vs 配置**：存在语义八项中，前七项（continuity criterion、recoverable interruption、terminal failure、individual boundary、reset semantics、inheritance channel、identity continuity）是**人类可读 / 审计用的声明**——framework 据此记录与校验，不据此分叉运行逻辑；第八项 `clock_source` **契约上**属于 framework-consumed config——kernel 应据此选择生命时钟来源。**注意**：当前 kernel 的 cadence 路径仍是 wall-clock，`clock_source` 字段已作为 `ExistenceSemantics` 数据类一部分 land、被场景声明，但 kernel 对该字段的实际消费（驱动 step vs wall-clock 节拍切换）尚未实现，是后续目标项；具体状态见 tracking。详见 §12.7。
+
+这条分工有三条派生约束，framework 实现与 scenario onboarding 都必须遵守：
+
+1. **不引入 P1 / P2 运行模式**。存在语义是场景声明，不是 runtime 的模式开关；任何把 continuity 语义降级为"通过配置开关切换"的设计都会让结构不变量漂移成工程偏好。
+2. **不把 scenario 内的 vitals 提升为 substrate viability**。avatar HP、energy、saturation 这类量属于 embodied / capability 维度，进入 L1 dimension 与 L2 drive；它们的归零或耗尽是否构成 terminal failure，由场景在存在语义里声明，**不**改变 substrate 层的 Level 1 含义。
+3. **不让 kernel cadence 为单一场景分叉**。kernel cadence 权威单一；step-driven 与 wall-clock 的差异**契约目标**是通过场景声明 `clock_source` 让 kernel 读取来表达——这是该约束的正解，**不是**违例（当前 kernel 尚未消费 `clock_source`，仍是 wall-clock；该消费是后续目标项，见 tracking）。被禁止的是"在 kernel 里加 if-scenario-is-crafter 之类的特例分支"或"为某场景修改 kernel 调度结构"；声明 `clock_source` 让 kernel 统一读取不属此列。
 
 ---
 
@@ -326,9 +381,28 @@ v0.6 明确指出：agent 维持的不是单一对象，而是一组层级化的
 
 架构并不要求每个 deployment 都激活全部七层，但要求 deployment 必须声明激活哪些层级，并要求 Kernel 暴露相应的注册表面。
 
-### 3.8 Kernel 最终决定什么
+每个被激活的层级，其“可恢复中断”与“terminal failure”各自意味着什么，由场景在 §12.7 的存在语义中声明。框架不替场景预设——例如，框架本身不规定“Level 2 embodied 失败必为可恢复 episode 边界”，也不规定“Level 1 进程退出必为 terminal”。
 
-Kernel 决定的是：其余架构是否还能以同一个合法 agent 的形式继续存在。
+### 3.8 Substrate continuity 与个体身份
+
+substrate continuity 不等于 tick 不停或进程不停。同一 individual 是否仍在存在，由三件事联合决定：
+
+1. **legitimacy 链**：lock / generation / lease 在中断前后保持单调一致；
+2. **可恢复状态**：atomic current state 在中断后可被一致重建；
+3. **provenance**：append-only history 链不被破坏，新实例的来源与既往身份对得上。
+
+由此可派生两类边界判断：
+
+- **可恢复中断**：崩溃—重启、节点迁移、断电后充电、热升级、临时挂起后恢复——只要上面三条都成立，就是同一 individual 的连续存在。
+- **不可恢复终止**：legitimacy 链断裂、atomic state 不可重建、provenance 链断裂，或场景声明的 continuity criterion 不再成立——该 individual 终止。
+
+`individual_id` 是这条判断的工程承载：`_resolve_individual_id`（`eva/kernel/main.py`）按当前 scenario 的 `reset_semantics` 决定——`"same_individual_recovery"` 则从持久化 `individual.json` 恢复并把新 substrate 附加到既有 chain；`"new_individual"`（或其他）则铸一个新 id。`RunSummary` 记录本次 run 的 `individual_id` 与 `exit_reason`，供事后审计判断这是同一 individual 的延续还是一个新 individual 的开始。
+
+> **重要**：Embodied 层（Level 2）的失败**是否**构成 terminal，由场景声明。例如 Crafter 单局世界声明 `HP = 0 ⇒ terminal individual death`；在那种场景下，HP 归零不是 episode 边界、不是 RL 训练范式里的 "done"，而是该 individual 的真死——`CrafterRuntimeSession` 把 `terminated=True` 报告给 kernel，kernel 以 `exit_reason="individual_terminated"` 退出本次 run（归档 trace、结束本次 run），**不调用 `wrapper.reset()` 续命**。下一次 activation 是一个**新 individual**（`_resolve_individual_id` 铸新 id），可在 inheritance channel 中加载已蒸馏的 priors。框架不在 substrate 层把 avatar vitals 当作 viability 信号——它接受场景声明并据此执行。
+
+### 3.9 Kernel 最终决定什么
+
+Kernel 决定的是：其余架构是否还能以同一个合法 agent 的形式继续存在；同时，它**一致地遵守场景对存在语义的声明**，把"是否同一 individual" 的判断锚定在 legitimacy + 可恢复状态 + provenance，而不是 execution 是否中断。
 
 ---
 
@@ -783,10 +857,17 @@ habit shaping 的属性包括：
 
 v0.6 指定了一条可实现的 L3 inherited-prior path。
 
+**关键定位**：inheritance 是**跨个体（cross-individual）**的种群信息延续机制——从已 terminal 的 past individuals 流向一个 **distinct new individual**。它**不是**同一个体在多次生命之间的延续：
+
+- 接收方是新 individual，不是原 individual 的“复活”或“续命”；
+- “进程未停” / “继承到了任何内容”都**不**构成同一 individual 的存在延续；
+- 同一 individual 的连续性，永远锚在 §3.8 的 legitimacy + 可恢复状态 + provenance 上；
+- inheritance 改变的是新 individual 的初始 capability 与 prior content，不改变其身份归属。
+
 这个机制有两个阶段：
 
-1. **offline distillation**：从 past-life trace 提取 prior bundle
-2. **online loading and bounded use**：在新的 activation 中加载并受限使用
+1. **offline distillation**：从一个或多个已 terminal 的 past individuals 的 trace 提取 prior bundle
+2. **online loading and bounded use**：在一个 distinct new individual 的 activation 中加载并受限使用
 
 #### Distillation path
 
@@ -1098,6 +1179,44 @@ scenario 不能：
 
 举证责任在 extension 一方，而不在 scenario 一方。
 
+### 12.7 Existence Semantics Declaration（存在语义声明 · 八项）
+
+每个 scenario 在 onboarding 时**必须**声明下列八项；framework 读取并一致执行这份声明，而不是套用任何默认的进程级生死语义。代码层承载在 `eva/scenario_bundle.py::ExistenceSemantics` 上，作为 `RuntimeScenarioBundle.existence_semantics` 字段强制传入。
+
+| # | 声明项 | 类别 | 含义 | 框架如何消费 |
+|---|---|---|---|---|
+| 1 | **continuity criterion** | declaration | 在该场景中，individual "仍然存在" 的判据 | 决定何时进入 terminal 路径（审计 + 校验） |
+| 2 | **recoverable interruption** | declaration | 哪些中断算可恢复（同一 individual 继续）；`()` = 无 in-life 可恢复中断 | kernel 选择恢复路径而非终止路径（审计 + 校验） |
+| 3 | **terminal failure** | declaration | 哪些事件构成不可恢复终止 | 触发 trace 归档与 individual 结束（审计） |
+| 4 | **individual boundary** | declaration | 一个 individual 的开始与结束（一次 run / 一段时期 / …） | 用于身份范围、metrics 聚合维度 |
+| 5 | **reset semantics** | declaration | 终止后"重置"意味着什么：`"new_individual"` / `"same_individual_recovery"` / `"not_applicable"` | `_resolve_individual_id` 据此决定铸新 id 还是续旧 id |
+| 6 | **inheritance channel** | declaration | 是否存在跨个体继承通道，以及 distillation 输入 / 范围 | 决定 prior-bundle 装载策略 |
+| 7 | **identity continuity** | declaration | 重启 / 换 substrate 后，怎么算还是同一个 individual | 配合 §3.8 三件事（legitimacy + 可恢复状态 + provenance）做身份判定 |
+| 8 | **clock_source** | **framework-consumed config**（目标态；当前未消费） | 生命时钟来源：`"step"`（回合驱动）或 `"wall_clock"`（挂钟秒）；默认 `"wall_clock"` | **契约目标**：kernel 据此选择 cadence 节拍来源（**不**为单一场景分叉调度结构）。**当前**：kernel cadence 仍为 wall-clock，字段已 land、声明已就位，但 kernel 实际消费 `clock_source` 切换节拍尚未落地——见 tracking |
+
+**声明 vs 配置（重要）**：前 7 项是 declaration——框架据此**记录与校验**，但不据此分叉运行逻辑；只有第 8 项 `clock_source` **契约上**属于 framework-consumed config——kernel 应据此选择节拍来源。**当前**：kernel cadence 路径仍是 wall-clock，`clock_source` 字段作为 `ExistenceSemantics` 数据类一部分已 land、场景已声明，但 kernel 对该字段的消费（切换 step vs wall-clock 节拍）尚未实现——见 tracking。把它放在同一个 `ExistenceSemantics` 数据类里，是因为它属于"该 individual 在该场景下如何生存"这一同一组承诺；但其消费方式与前 7 项不同（前 7 项 land 后即生效——框架记录与校验；第 8 项 land 仅指字段与声明就位，实际消费另在 deferred 行追踪）。这条边界与 §2.7 派生约束 #3 一致——禁止的是"kernel 为单一场景分叉 cadence 逻辑"，**不是**"禁止场景声明自己的时钟来源"。
+
+此声明属于 scenario 必备 surface 之一（与 §2.5 列出的六个内容 surface 并列、但语义独立）。任何 deployment 缺少这八项，framework 应在 scenario activation 阶段失败而不是采用默认值；唯一例外是 `clock_source` 在数据类层有默认值 `"wall_clock"`（兼顾 Linux runtime 常态），但场景仍应显式声明以让审计闭环。
+
+**范例 — Crafter**（单局世界）：
+
+- continuity criterion = `HP > 0` 且必要 vitals 未耗尽
+- recoverable interruption = `()` —— **无**（单局世界内不存在 in-life 复活）
+- terminal failure = `HP = 0`
+- individual boundary = 一个 episode = 一个 individual 从生到 terminal 的一生
+- reset semantics = `"new_individual"`（同进程下一次 activation 不是原 individual 续命）
+- inheritance channel = 已 terminal 个体 trace → distillation → 新 individual 的 inherited priors（可选启用）
+- identity continuity = 单局世界内不跨 substrate 续命；terminal 后即新 individual
+- clock_source = `"step"`（回合驱动；rate 与 cadence 按 step 计算，**不**改 kernel cadence 权威）
+
+> 工程含义：Crafter 接入时，env 返回 `done=True` → `CrafterRuntimeSession.step_action()` 设 `self.terminated = True`，**不调用 `wrapper.reset()`** 续命；kernel loop 读取该标志并以 `exit_reason="individual_terminated"` 退出本次 run。下一次 activation 由 `_resolve_individual_id` 显式记录为新 individual（铸新 `individual_id`），并按 inheritance channel 决定是否加载 priors。avatar vitals 进入 L1 dimension 与 L2 drive，**不**被提升为 substrate viability。
+
+**范例 — Linux runtime**（持续部署、跨 substrate 重启）：
+
+- reset semantics = `"same_individual_recovery"`（进程崩溃 / 节点迁移后从 `individual.json` 恢复，沿用原 `individual_id`）
+- clock_source = `"wall_clock"`
+- 其余声明项详见 `scenarios/linux_runtime/__init__.py`
+
 ---
 
 ## §13 验证与稳定性 {#s13}
@@ -1144,6 +1263,17 @@ v0.6 为稳定性加入了 architecture-neutral measurement surface。具体实�
 v0.6 提出了一个 comparative stability hypothesis：在相关条件下，具有这些结构承诺的 existence-centered agent 架构，应表现出比匹配的 task-centered baseline 更强的稳定性行为。
 
 这是一条**可证伪假说**，而不是已验证结论。
+
+### 13.5 Run 与个体（individual）的语义对齐
+
+稳定性指标本身**不定义存在语义**——它们测量的是架构属性在场景声明的存在语义下的表现。实验 harness 与 metrics 设计必须按如下口径解读：
+
+- **一次 run = 一个 individual 从诞生到 terminal 的一生**（terminal 由场景的 continuity criterion / terminal failure 声明决定）；
+- **多次 run = 一个种群（population）的统计**，类似人均寿命、群体存活率——不是“同一个主体的多条命”；
+- **跨 reset 的 metric 聚合不构成单 individual 的存活**：如果场景声明 reset = new individual（如 Crafter），任何把“across resets”读成“continuous survival of one agent”的指标都属于范式错误；
+- **是否启用 inheritance channel 不改变上面三条**：新 individual 继承 priors 不等于原 individual 的延续。
+
+可观测稳定性（§13.3）的六项指标，应同时支持**单 individual 维度**（lifetime 内）与**种群维度**（多 individuals 聚合）的报告。混合两种维度而不加标注，会让“连续存在”这件事重新塌缩成 task-agent 风格的 throughput 指标。
 
 ---
 
@@ -1220,6 +1350,16 @@ v0.6 覆盖：
 
 Scenario specification 是默认路径，theory extension 是例外。
 
+### 15.4 演化护栏（不要做的事）
+
+以下几条在 v0.6 框架内不允许，违反任何一条都构成范式错误，应在 review 时拒绝：
+
+1. **不引入 P1 / P2 运行模式来表达存在语义。** 存在语义是 scenario 声明（§12.7），不是 runtime 的模式开关；用配置开关切换 continuity 含义会让结构不变量退化成工程偏好。
+2. **不把 scenario 内的 vitals 提升为 substrate viability。** avatar 的 HP / energy / saturation 进入 L1 dimension 与 L2 drive；它们归零是否构成 terminal failure 由场景在 §12.7 中声明，而不是改写 Level 1 substrate 的含义。
+3. **不让 kernel cadence 为单一场景分叉。** kernel cadence 权威单一；step-driven 与 wall-clock 的差异，**契约目标**是通过场景声明 `clock_source`（§12.7 第 8 项）让 kernel 读取——这是该约束的正解（当前 kernel 尚未消费 `clock_source`，仍是 wall-clock；该消费是后续目标项，见 tracking）。被禁止的是"在 kernel 调度结构里加 if-scenario-is-X 之类的分支"、"为某场景重写 kernel cadence 路径"、"per-step rate 等场景配置侵入 kernel"——不是"禁止声明时钟来源"。
+4. **不把"进程没停 / 继承到了"读成同一 individual 的存在延续。** 同一 individual 的连续性永远锚在 §3.8 的 legitimacy + 可恢复状态 + provenance；inheritance 是跨个体机制（§7.9）。
+5. **不在 framework 层硬编码 “done → reset 续命”的语义。** terminal 路径与 new-individual 路径必须按场景声明分流；scenario adapter 中任何把 terminal 当作 episode 边界默默续命的写法都需要先回到 §12.7 重新声明。
+
 ---
 
 ## 附录 A. v0.5 母本素材吸收映射 {#app-a}
@@ -1248,8 +1388,15 @@ Scenario specification 是默认路径，theory extension 是例外。
 | Structural invariants vs operational content | §1, §4, §6, §7 |
 | Rate-aware sensing | §5, §11 |
 | Four-layer memory | §7, §10 |
-| Inherited priors L3 mechanism | §7, §11, §15 |
+| Inherited priors L3 mechanism（cross-individual） | §7, §11, §15 |
 | Multi-dimensional outcome | §7, §13 |
 | Observable stability | §13 |
 | Scenario specification discipline | §2, §12 |
 | Extension discipline | §12, §15 |
+| EVA 是架构非本体（rev2） | §0, §2.7 |
+| 持续存在 ≠ 持续运行（rev2） | §1.2.1, §3.8 |
+| Individual 作为持存主体（rev2） | §1.2.2, §7.9, §13.5 |
+| Framework 机制 vs Scenario 声明（rev2） | §2.7, §3.7, §3.8, §12.7 |
+| Existence Semantics Declaration 八项 / 声明 vs 配置（rev2） | §2.7, §12.7 |
+| 演化护栏（rev2） | §15.4 |
+| 架构合同 vs 落地状态（rev2） | §0.4 |

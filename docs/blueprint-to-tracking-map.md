@@ -14,6 +14,9 @@ It answers one question: **for each blueprint commitment, where is its tracking 
 | Atomic current state vs append-only history | 1.1 `Separated atomic current-state persistence and append-only audit substrate` | landed | — |
 | Framework / scenario activation boundary | 1.1 `Explicit scenario activation through RuntimeScenarioBundle` | landed | — |
 | Runner-owned startup assembly | 1.1 `Runner-owned startup assembly for shipped scenarios` | landed | — |
+| Existence semantics declaration (eight-field dataclass) (blueprint §2.7 / §12.7 / §3.8, rev2) | 1.1 `Scenario-declared existence semantics (eight-field dataclass...)` | landed | The declaration / config boundary is written into §12.7; the first seven are human-readable declarations, and item 8 `clock_source` is a dataclass field that has landed, but kernel consumption of it remains a target state (see the next row). |
+| Individual as the persisting subject; same-individual = legitimacy + recoverable state + provenance (blueprint §1.2.2 / §3.8 / §7.9 / §13.5, rev2) | 1.1 `Individual identity resolution: cross-run continuity vs fresh mint` | landed | `_resolve_individual_id` mints-new or continues-existing based on `reset_semantics`; `RunSummary.exit_reason="individual_terminated"` records the actual death of a one-life individual. |
+| Kernel consumption of `clock_source` to select cadence rhythm source (blueprint §2.7 Clock row / §12.7 item 8 / §2.7 derived constraint #3 / §15.4 anti-pattern #3 contract target) | 1.1 `Kernel consumption of declared clock_source to select cadence rhythm source` | deferred | The field has landed and scenarios declare it, but kernel cadence is still wall-clock; this consumption is a target item. The "declaring `clock_source` is the correct way" framing in §2.7 / §15.4 anti-pattern #3 is a contract target, not a landed status. |
 | Fast/slow closed-loop runtime composition | 1.1 `Integrated fast/slow closed-loop runtime composition` | landed | — |
 | Persistence-target registration surface | 1.1 `Explicit persistence hierarchy contract` | landed | — |
 | Persistence Levels 5–7 | 1.1 `Persistence target Levels 5–7` | deferred | Reserved by theory; mechanisms not implemented. |
@@ -28,6 +31,7 @@ It answers one question: **for each blueprint commitment, where is its tracking 
 | Pressure projection with urgency modulation | 1.3 `Pressure projection with urgency modulation and bounded anticipatory pressure` | landed | — |
 | Protective reflex fast path | 1.3 `Protective reflex fast path parallel to slower deliberation` | landed | — |
 | Deliberation input contract | 1.4 `Canonical deliberation input contract` | landed | — |
+| L3 reasoning core (model-driven reasoning described in blueprint §7.4) | 1.4 `L3 reasoning content beyond candidate-value assembly (model-driven planning / novel-problem reasoning / genuine multi-step inference)` | skeleton | Current L3 has only drive-weighted candidate assessment + advisory-only LLM (value uplift capped at ≤0.12) + habit/prior/memory; the reasoning core in §7.4 remains a target state. |
 | Four-layer memory surface | 1.4 `Four-layer memory surface (working / episodic / semantic / procedural)` | partial | Semantic indexing/windowing and dedicated procedural store remain open. |
 | Mediator as independent peer circuit | 1.4 `Mediator as independent peer circuit (default inhibition + selective release)` | landed | — |
 | Runtime-only release token boundary | 1.4 `Runtime-only release token boundary` | landed | — |
@@ -57,6 +61,7 @@ It answers one question: **for each blueprint commitment, where is its tracking 
 | Generic scenario loader / validator | 1.7 `Generic scenario loader / validator` | deferred | Explicit runner assembly remains the current shape. |
 | Multi-scenario runtime switching | 1.7 `Multi-scenario runtime switching inside one process` | deferred | Explicitly out of current scope. |
 | Six-surface scenario contract | 2 `RuntimeScenarioBundle`, `SensorPolicyBundle`, `ActionPolicyBundle`, `AnchorPolicyBundle`, `OutcomeObserverBundle`, `PriorSkillBundle` | partial | Five surfaces are production; `PriorSkillBundle` remains partial because provenance-boundary deepening is future work. |
+| Existence semantics declaration as a mandatory scenario surface (blueprint §2.5 / §12.7, rev2) | 2 `ExistenceSemantics declaration (eight items, required bundle field, v0.6 rev2)` | landed | Parallel to but semantically distinct from the six content surfaces; missing this field should fail scenario activation. |
 | Scenario-owned persistence registration | 2 `Scenario-owned persistence hierarchy registration` | landed | — |
 | Canonical multi-dimensional outcome at contract level | 2 `Canonical multi-dimensional OutcomeVector` | landed | — |
 | Framework-owned skill registries with scenario-owned provenance inputs | 2 `Framework-owned skill registries with scenario-owned provenance inputs` | landed | — |

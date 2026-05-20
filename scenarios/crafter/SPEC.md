@@ -163,7 +163,7 @@ The current Crafter hierarchy is:
 - Level 3: `crafter_capability_structure`
 - Level 4: `crafter_resource_system`
 
-Level 2 is currently interpreted as the bounded avatar-in-world continuity target for one Crafter episode, not as EVA termination. In the landed H-5 runtime, avatar death or env `done=True` triggers a bounded wrapper reset so the next patrol sees a fresh episode; that reset preserves the Stage-H validation intent without treating one Crafter episode boundary as substrate-level death.
+Level 2 is the Crafter avatar's embodied-continuity target. Per the v0.6 rev2 existence-semantics declaration shipped with the Crafter scenario (`eva/scenario_bundle.py::ExistenceSemantics`, populated by `scenarios/crafter/__init__.py`), Crafter is a one-life world: HP reaching zero is the **terminal failure** of one individual, not an episode boundary. When the env returns `done=True`, the runtime takes the terminal path — archive the trace and end this run — rather than resetting the wrapper to extend life. The next activation is explicitly a new individual (see §H-5 for the runtime mechanics and `architecture-implementation-blueprint-v0.6.md` §3.8 / §12.7 for the contract). Earlier Stage-H drafts treated `done=True` as a bounded episode reset; that reading has been superseded by the rev2 declaration.
 
 Crafter learning integration now preserves multi-dimensional outcome fields through the same append-only learning record path used by the framework.
 
@@ -262,16 +262,16 @@ H-5 lands:
 - a runner-owned `agent_observation` feed into the framework sensing seam
 - wrapper-backed Crafter action execution
 - bounded Crafter delta propagation into response history and learning records
-- bounded episode reset when the Crafter env returns `done=True`
+- terminal individual path when the Crafter env returns `done=True` (v0.6 rev2)
 
 The current runtime shape is:
-1. `runners/run_crafter.py` activates the Crafter scenario
+1. `runners/run_crafter.py` activates the Crafter scenario (the activation includes the `ExistenceSemantics` declaration with `reset_semantics="new_individual"` and `clock_source="step"`)
 2. it creates one `CrafterRuntimeSession`
-3. the session resets the wrapper and stores the latest bounded `agent_observation`
+3. at run start, the session does an initial wrapper reset and stores the latest bounded `agent_observation`
 4. the runner passes those facts into the generic sensing seam
 5. when the compatibility bridge releases a bounded Crafter action, the wrapper steps the env
 6. the resulting deltas are recorded through the existing append-only response-history and learning paths
-7. if the env episode ends, the session resets the wrapper immediately so the next patrol sees a fresh observation
+7. if the env step returns `done=True` (Crafter terminal — typically `HP=0`), `CrafterRuntimeSession.step_action()` sets `self.terminated = True`; **the session does not call `wrapper.reset()` to extend life inside the same run**. The kernel loop observes the flag and exits the run with `exit_reason="individual_terminated"`, archiving the trace as one individual's complete lifetime. The next `python -m runners.run_crafter ...` invocation is a new individual, with a fresh `individual_id` minted by `_resolve_individual_id`; that activation may optionally load distilled priors via `--inherited-priors-path` from prior terminated individuals.
 
 ### Runtime and learning payload notes
 

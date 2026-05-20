@@ -30,6 +30,9 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Separated atomic current-state persistence and append-only audit substrate | `eva/kernel/state.py` | production | — | — |
 | Explicit scenario activation through RuntimeScenarioBundle | `eva/scenario_bundle.py` | production | — | — |
 | Runner-owned startup assembly for shipped scenarios | `runners/run_linux.py`, `runners/run_crafter.py` | production | — | — |
+| Scenario-declared existence semantics (eight-field dataclass, including the `clock_source` field itself) (v0.6 rev2) | `eva/scenario_bundle.py::ExistenceSemantics`, declarations in `scenarios/<name>/__init__.py` | production | Refers only to the dataclass fields landing and the scenarios declaring them; kernel consumption of `clock_source` is tracked separately below | — |
+| Individual identity resolution: cross-run continuity vs fresh mint (rev2) | `eva/kernel/main.py::_resolve_individual_id`, `eva/kernel/main.py::RunSummary`, `exit_reason="individual_terminated"` exit path | production | — | — |
+| Kernel consumption of declared `clock_source` to select cadence rhythm source (blueprint §2.7 / §12.7 item 8) | — | deferred | The field has landed and scenarios declare it, but the kernel cadence path is still wall-clock and does not switch to step-driven based on `clock_source`; this consumption is a target item | Later phase |
 | Integrated fast/slow closed-loop runtime composition | `eva/kernel/main.py`, `eva/l1_sensing/signal_bus.py`, `eva/l2_drive/reflex.py`, `eva/l3_deliberation/contracts.py` | production | — | — |
 | Explicit persistence hierarchy contract | `eva/persistence_targets/__init__.py` | production | — | — |
 | Scenario-owned activation of lower persistence levels | `scenarios/linux_runtime/persistence/`, `scenarios/crafter/persistence/` | production | — | — |
@@ -60,6 +63,7 @@ Each commitment is classified into exactly one tier. No "in progress" or "soon" 
 | Component | Code location | Completeness | Known limitation | Planned evolution |
 |---|---|---|---|---|
 | Canonical deliberation input contract | `eva/l3_deliberation/contracts.py` | production | — | — |
+| L3 reasoning content beyond candidate-value assembly (model-driven planning / novel-problem reasoning / genuine multi-step inference) | current paths under `eva/l3_deliberation/reasoning/` | skeleton | Current L3 deliberation output comes from drive-weighted candidate assessment + advisory-only working memory (when model-backed, LLM is a bounded advisor capped at ≤0.12 value uplift) + habit/prior/memory inputs; there is no model-driven planning or novel-problem solver, and the reasoning core described in blueprint §7.4 remains a target state | Later phase (once the structural mainline and validation program are mature) |
 | Four-layer memory surface (working / episodic / semantic / procedural) | `eva/l3_deliberation/reasoning/working_memory.py`, `eva/l3_deliberation/memory/`, `eva/skills/__init__.py` | partial | Semantic store-side windowing / indexing not implemented; procedural memory remains habit-backed rather than a dedicated store | Stage I follow-up #1, future evaluation |
 | Mediator as independent peer circuit (default inhibition + selective release) | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | Runtime-only release token boundary | `eva/l3_deliberation/contracts.py` | production | — | — |
@@ -113,6 +117,7 @@ Tracks the cross-scenario integration contract. For the full contract specificat
 | Contract component | Code location | Completeness | Known limitation |
 |---|---|---|---|
 | `RuntimeScenarioBundle` interface | `eva/scenario_bundle.py` | production | — |
+| `ExistenceSemantics` declaration (eight items, required bundle field, v0.6 rev2) | `eva/scenario_bundle.py::ExistenceSemantics`, `scenarios/crafter/__init__.py`, `scenarios/linux_runtime/__init__.py` | production | — |
 | `SensorPolicyBundle` integration | `eva/l1_sensing/sensor_registry.py` | production | — |
 | `ActionPolicyBundle` integration | `eva/l3_deliberation/tool_edge/tool_registry.py` | production | — |
 | `AnchorPolicyBundle` integration | `eva/anchor/domain_restriction.py` | production | — |
@@ -141,6 +146,7 @@ Tracks the cross-scenario integration contract. For the full contract specificat
 | Bounded end-to-end Crafter runtime through shared framework loop | partial | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) — a real landed second scenario but documented as intentionally bounded in scope |
 | Crafter-specific drives, sensors, bounded action bridge, anchors, outcome observers, persistence hierarchy, prior-skill policy | production (within bounded scope) | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
 | Trajectory-aware sensing and bounded anticipatory pressure for required-tier dimensions | production | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
+| Crafter existence-semantics declaration + one-life individual-terminal path (v0.6 rev2, supersedes the earlier Stage-H bounded-episode-reset reading) | production | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) §H-3 / §H-5 — `reset_semantics="new_individual"`, `clock_source="step"`; env `done=True` → `terminated=True` → `exit_reason="individual_terminated"`; no `wrapper.reset()` to extend life |
 
 ---
 

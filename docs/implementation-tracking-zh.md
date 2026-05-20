@@ -32,6 +32,9 @@
 | 分离的 atomic current-state persistence 与 append-only audit substrate | `eva/kernel/state.py` | production | — | — |
 | 通过 RuntimeScenarioBundle 的显式场景激活 | `eva/scenario_bundle.py` | production | — | — |
 | Shipped 场景的 runner-owned 启动装配 | `runners/run_linux.py`、`runners/run_crafter.py` | production | — | — |
+| 场景声明的存在语义（八项数据类字段，含 `clock_source` 字段本身的 land）（v0.6 rev2） | `eva/scenario_bundle.py::ExistenceSemantics`、`scenarios/<name>/__init__.py` 中的声明 | production | 仅指数据类字段与场景声明的 land；kernel 对 `clock_source` 的实际消费见下一行 | — |
+| Individual 身份解析与跨 run 延续 / 新生（rev2） | `eva/kernel/main.py::_resolve_individual_id`、`eva/kernel/main.py::RunSummary`、`exit_reason="individual_terminated"` 退出路径 | production | — | — |
+| Kernel 消费已声明的 `clock_source` 选择 cadence 节拍来源（蓝图 §2.7 / §12.7 第 8 项） | — | deferred | 字段已 land、场景已声明，但 kernel cadence 路径仍是 wall-clock，未根据 `clock_source` 切换至 step-driven；属后续目标项 | 后续 phase |
 | 集成的 fast/slow 双路径闭环运行时组合 | `eva/kernel/main.py`、`eva/l1_sensing/signal_bus.py`、`eva/l2_drive/reflex.py`、`eva/l3_deliberation/contracts.py` | production | — | — |
 | 显式 persistence hierarchy contract | `eva/persistence_targets/__init__.py` | production | — | — |
 | 场景所有者在 shipped 场景中激活 lower persistence levels | `scenarios/linux_runtime/persistence/`、`scenarios/crafter/persistence/` | production | — | — |
@@ -62,6 +65,7 @@
 | 组件 | 代码位置 | 完成度 | 已知限制 | 计划演进 |
 |---|---|---|---|---|
 | 规范 deliberation 输入 contract | `eva/l3_deliberation/contracts.py` | production | — | — |
+| 超出 candidate value 装配的 L3 reasoning（模型主导规划 / 新颖问题求解 / 真实多步推理） | `eva/l3_deliberation/reasoning/` 当前路径 | skeleton | 当前 L3 deliberation 产出来自 drive 加权 candidate 评估 + advisory-only working memory（model-backed 时 LLM 仅作有界顾问，价值加成 ≤0.12）+ habit/prior/memory 输入；没有 model-driven 规划或新颖问题求解，blueprint §7.4 描述的 reasoning core 仍为目标态 | 后期 phase（待结构主干 + 验证程序成熟后） |
 | 四层记忆表面（working / episodic / semantic / procedural） | `eva/l3_deliberation/reasoning/working_memory.py`、`eva/l3_deliberation/memory/`、`eva/skills/__init__.py` | partial | semantic store-side windowing / indexing 未实现；procedural memory 仍是 habit-backed，而非 dedicated store | Stage I follow-up #1、后续评估 |
 | Mediator 作为独立 peer circuit（default inhibition + 选择性 release） | `eva/l3_deliberation/peer_circuit/mediator.py` | production | — | — |
 | 运行时独属 release token 边界 | `eva/l3_deliberation/contracts.py` | production | — | — |
@@ -115,6 +119,7 @@
 | 契约组件 | 代码位置 | 完成度 | 已知限制 |
 |---|---|---|---|
 | `RuntimeScenarioBundle` 接口 | `eva/scenario_bundle.py` | production | — |
+| `ExistenceSemantics` 声明（八项，必传 bundle 字段，v0.6 rev2） | `eva/scenario_bundle.py::ExistenceSemantics`、`scenarios/crafter/__init__.py`、`scenarios/linux_runtime/__init__.py` | production | — |
 | `SensorPolicyBundle` 集成 | `eva/l1_sensing/sensor_registry.py` | production | — |
 | `ActionPolicyBundle` 集成 | `eva/l3_deliberation/tool_edge/tool_registry.py` | production | — |
 | `AnchorPolicyBundle` 集成 | `eva/anchor/domain_restriction.py` | production | — |
@@ -143,6 +148,7 @@
 | 通过共享框架循环的有界端到端 Crafter runtime | partial | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) — 是真实的已落地 second scenario，但文档化为有意识地限制在 bounded scope 内 |
 | Crafter 特定 drives、sensors、有界 action bridge、anchors、outcome observers、persistence hierarchy、prior-skill policy | production（bounded scope 内） | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
 | 对 required-tier dimensions 的 trajectory-aware sensing 和有界 anticipatory pressure | production | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) |
+| Crafter 存在语义声明 + 单局世界 individual-terminal 路径（v0.6 rev2，取代 Stage-H 早期的 bounded episode reset 读法） | production | [`scenarios/crafter/SPEC.md`](../scenarios/crafter/SPEC.md) §H-3 / §H-5 — `reset_semantics="new_individual"`、`clock_source="step"`；env `done=True` → `terminated=True` → `exit_reason="individual_terminated"`，不再 `wrapper.reset()` 续命 |
 
 ---
 
