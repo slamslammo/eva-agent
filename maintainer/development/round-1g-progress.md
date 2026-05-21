@@ -1,6 +1,6 @@
 # Round 1.G — L3 Reasoning-Core Rebuild — Progress（B / 代码开发）
 
-**当前状态**：**phase-1 结构重建 DONE**；**phase-2 scope=(a) 进行中**——**G-5（action_hint 因果路径，结构层、无 LLM、behavior-preserving）DONE**（全量回归 **507 绿**，冻结 owner git-diff 干净）；**G-6（live LLMCandidateProducer 产 action_hint）/ G-7（审计 hint→executed + bounded 短跑）待做**。
+**当前状态**：**phase-1 结构重建 DONE**；**phase-2 scope=(a) 进行中**——**G-5（action_hint 因果路径，结构层）DONE** + **G-6（`LLMCandidateProducer` 模块 + 8 单测，token-free）DONE**（全量回归 **515 绿**，纯新增/未接线、冻结 owner 干净）；**G-6b（lifecycle 接线）/ G-7（审计 hint→executed + bounded 短跑）待做**。
 **分支**：`claude/recursing-hertz-7c4029`。本轮 = round-1e/1f 的正解收口（proposer + ≤0.12 退役）。
 
 ## phase-2 (a) 完成记录（2026-05-21）
@@ -10,7 +10,8 @@ A 裁示（用户已选 (a)）：drive 定 posture（OFC 冻结 max + drive 底�
 | slice | 状态 | 内容 |
 |---|---|---|
 | **G-5 action_hint 因果路径（结构层）** | **DONE** | ①`Candidate.action_hint: str\|None`（`to_dict` 仅非空输出 → None 字节等价）。②`run_deliberation._thread_selected_action_hint`：mediator 选定 posture 后，按 `selected_candidate_id` 取胜者 candidate 的 hint，折进 `release_context["action_hint"]`（不动 outcome/selected_candidate_id/release_token/默认抑制；无 hint → 决策不变 = 字节等价；与 lifecycle `_release_context_with_observation` 同理增强）。③Crafter bridge 消费：`_candidate_context_from_release_context` 提升 `action_hint`；`build_integrity_response_candidates` 把合法（profile-eligible）hint 前置进候选；`select_response_action` 中合法 hint **权威**（优先于 default/prior/habit，reason=`crafter_llm_action_hint_selection`）；非法/无 hint → 启发式不变。 |
-| G-6 live LLMCandidateProducer | TODO | `LLMCandidateProducer(base=Heuristic, model_client)`：base 候选 → 1 次 schema-bound JSON LLM 调用 → 给每候选标 `action_hint`（限该 profile eligible 动作），失败/超时/非法 → 退回 base（无 hint，degrade to heuristic）。**不增删候选 / 不碰 posture**（结构性防 passivity）。lifecycle 在 `llm_assisted` live 接线，注入 `run_deliberation(producer=…)`。 |
+| **G-6 live LLMCandidateProducer（模块 + 单测）** | **DONE** | 新 `eva/l3_deliberation/reasoning/llm_candidate_producer.py`：`LLMCandidateProducer(base_producer, *, chat_fn, profile_action_vocab)`。base 候选 → 1 次 bounded schema-bound JSON 调用（`chat_fn` 注入的 vendor-neutral transport seam）→ 解析 `{"action_hints":{profile:action}}` → 仅当 action ∈ 该 profile 的注入 vocab 时 `dataclasses.replace` 标 `action_hint`。**结构性防 passivity**：只标注既有候选、**不增删候选 / 不改 profile**（drive 锁 posture 不变）。任何 transport/timeout/parse 失败 或 无 vocab/无 chat_fn → 返回 base（degrade to heuristic、字节等价）。vocab/transport 依赖注入（框架 generic、scenario 注 vocab、lifecycle 注 transport）。**8 单测**（stub chat_fn、token-free）：合法 in-vocab hint 标注 / 非法 hint 丢弃 / 成员+profile 不变 / transport 失败 degrade / 不可解析 degrade / 无 vocab 跳过调用 / 无 chat_fn 纯启发式 / protocol。全量回归 **515 绿**（纯新增、未接线 → 0 行为变更）。 |
+| G-6b lifecycle/runner 接线 | TODO | backend=`llm_assisted` live 时构造 `LLMCandidateProducer`（注 scenario vocab via bundle + 实 transport via working_memory_model_client 公共 helper）→ 传入 `run_deliberation(producer=…)`；触 kernel/main.py config + lifecycle 调用点 + scenario_bundle 暴露 vocab。集成测试用 stub。 |
 | G-7 审计 + bounded 短跑 | TODO | 审计样本证 LLM hint=X → 执行=X（candidates[].action_hint + release_context.action_hint + response_history selected_action/reason 三处对齐）；model-off → 默认动作字节等价回归；bounded 短跑（~¥0.18）验 action_hint 因果 + drive 锁 posture 无 90% sleep 回潮。 |
 
 **G-5 验证**：全量回归 **507 passed**（499 + 8 新：threading×4 + serialization×2 + bridge consumption×3 −1 重叠计数）；冻结 owner git-diff 干净（仅 `eva/l3_deliberation/contracts.py` 加字段 + `runtime.py` 加 threading + `scenarios/crafter/actions/compatibility.py` bridge 消费 + tests；**未触** mediator/peer_circuit/goal_directed_track/anchor policy/value_judgment(OFC)/l2_drive/l1_sensing/existence-semantics）；model-off / 无 hint byte-preserving。
