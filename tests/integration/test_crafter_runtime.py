@@ -464,6 +464,12 @@ class CrafterP1aTraceIntegrationTests(unittest.TestCase):
             self.assertIn("l1.raw_observation", transform_ids)  # H-2b
             self.assertIn("l2.approach_delta", transform_ids)  # H-2c owner-hook
             self.assertIn("l1.threshold_classify", transform_ids)  # H-2d
+            # H-3a: P1b batch-2 L3 chain.
+            self.assertIn("l3.candidate_produce", transform_ids)
+            self.assertIn("l3.assess_score", transform_ids)
+            self.assertIn("l3.decide_release", transform_ids)
+            self.assertIn("mediator.release", transform_ids)
+            self.assertIn("bridge.resolve_action", transform_ids)
             snapshot_types = {r["snapshot_type"] for r in records if r["event_type"] == "snapshot"}
             self.assertIn("drive_state", snapshot_types)
             # H-2b: raw observation grid persisted under raw_observations/.

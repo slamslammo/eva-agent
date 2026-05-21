@@ -308,6 +308,85 @@ class LifecycleRuntime:
             outputs={"admitted_candidates": admitted, "count": len(admitted)},
         )
 
+        # H-3a: P1b batch-2 L3 chain — all seam-assembled from the deliberation audit
+        # the pass already returned (candidates / assessments / release_decision). The
+        # frozen owners (value_judgment OFC, mediator) are read, never modified.
+        self.trace_sink.emit_transform(
+            layer="L3",
+            transform_id="l3.candidate_produce",
+            code_anchor="eva/l3_deliberation/reasoning/llm_candidate_producer.py:LLMCandidateProducer.produce",
+            turn_index=turn_index,
+            parents=[{"id": "anchor.admit", "edge_type": "pressure"}],
+            outputs={"candidates": admitted, "count": len(admitted)},
+        )
+        self.trace_sink.emit_transform(
+            layer="L3",
+            transform_id="l3.assess_score",
+            code_anchor="eva/l3_deliberation/reasoning/value_judgment.py:assess_candidates",
+            turn_index=turn_index,
+            parents=[{"id": "l3.candidate_produce", "edge_type": "top_drive_bias"}],
+            outputs={
+                "assessments": [
+                    {
+                        "candidate_id": a.get("candidate_id"),
+                        "action": a.get("action"),
+                        "score": a.get("score"),
+                        "disposition": a.get("disposition"),
+                        "learning_bias": a.get("learning_bias"),
+                    }
+                    for a in deliberation_audit.assessments
+                ]
+            },
+        )
+        release = deliberation_audit.release_decision or {}
+        self.trace_sink.emit_transform(
+            layer="L3",
+            transform_id="l3.decide_release",
+            code_anchor="eva/l3_deliberation/peer_circuit/mediator.py:decide_release",
+            turn_index=turn_index,
+            parents=[{"id": "l3.assess_score", "edge_type": "pressure"}],
+            outputs={
+                "selected_candidate_id": release.get("selected_candidate_id"),
+                "selected_action": release.get("selected_action"),
+                "outcome": release.get("outcome"),
+            },
+        )
+        self.trace_sink.emit_transform(
+            layer="mediator",
+            transform_id="mediator.release",
+            code_anchor="eva/l3_deliberation/peer_circuit/mediator.py:decide_release",
+            turn_index=turn_index,
+            parents=[{"id": "l3.decide_release", "edge_type": "pressure"}],
+            outputs={
+                "outcome": release.get("outcome"),
+                "release_authorized": deliberation_audit.release_token is not None,
+                "action_hint": (release.get("release_context") or {}).get("action_hint"),
+            },
+        )
+
+    def _emit_bridge_resolve_action_trace(self, response_summary: dict[str, Any] | None) -> None:
+        """H-3a: emit ``bridge.resolve_action`` — the action_hint -> executed causal point.
+
+        Read from the returned ``ResponseSelection`` summary (selected_action +
+        selected_action_reason); the ``crafter_llm_action_hint_selection`` reason marks
+        where the LLM action_hint drove the concrete action. No bridge body touched.
+        """
+
+        if not isinstance(response_summary, dict):
+            return
+        self.trace_sink.emit_transform(
+            layer="bridge",
+            transform_id="bridge.resolve_action",
+            code_anchor="scenarios/crafter/actions/compatibility.py:select_response_action",
+            turn_index=self._trace_turn_index,
+            parents=[{"id": "mediator.release", "edge_type": "llm_advisory"}],
+            outputs={
+                "selected_action": response_summary.get("selected_action"),
+                "selected_posture": response_summary.get("selected_posture"),
+                "selected_action_reason": response_summary.get("selected_action_reason"),
+            },
+        )
+
     def activate_conservative_until_next_patrol(self) -> None:
         """Pause ordinary turn work until one later patrol finishes."""
 
@@ -795,6 +874,8 @@ class LifecycleRuntime:
                         release_token=release_token,
                         selected_candidate_id=selected_candidate_id,
                     )
+            if self.trace_sink.enabled and response_summary is not None:
+                self._emit_bridge_resolve_action_trace(response_summary)
             details["runtime_gate_context"] = build_runtime_gate_context(
                 state,
                 instance_valid=True,
