@@ -30,7 +30,6 @@ from ..l3_deliberation.memory import (
     read_learning_outcomes,
 )
 from ..l3_deliberation.tool_edge import build_response_selected_event_details, maybe_respond_after_patrol
-from ..l3_deliberation.reasoning.proposer import ModelBackedProposer
 
 __all__ = [
     "LifeState",
@@ -589,17 +588,7 @@ class LifecycleRuntime:
                     working_memory_advisory_source=self.working_memory_advisory_source,
                     response_history=prior_response_history,
                 )
-                # Round 1.E: under llm_assisted the model shapes the considered
-                # candidate set as an anchor-bounded proposer (reusing the upstream
-                # advisory_context); local_rule_based / auto stay inert (proposer
-                # None → byte-identical to pre-1.E). Selection/release authority below
-                # is unchanged.
-                deliberation_proposer = (
-                    ModelBackedProposer() if self.working_memory_backend == "llm_assisted" else None
-                )
-                deliberation_audit, memory_stub = run_deliberation(
-                    now, deliberation_input, proposer=deliberation_proposer
-                )
+                deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)
                 self.store.append_deliberation_audit(deliberation_audit.to_dict())
                 if memory_stub is not None:
                     append_cognitive_memory_stub(self.store, memory_stub)

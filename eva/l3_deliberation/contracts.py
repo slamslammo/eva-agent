@@ -163,41 +163,6 @@ class Candidate:
 
 
 @dataclass(frozen=True)
-class ReasoningProposal:
-    """A reasoning-layer proposal — a hint about which admitted candidate to consider.
-
-    Round 1.E: a ``Proposer`` produces these *within the anchor-admitted domain only*,
-    then they are normalized into the existing ``Candidate`` vocabulary before
-    assessment. The proposer shapes *what is considered*; selection (peer-circuit)
-    and release (mediator) authority are unchanged.
-
-    ``action_hint`` / ``predicted_outcome`` are optional so a future schema-bound-JSON
-    proposer (DP1 option b) drops in without changing this contract.
-    """
-
-    proposal_id: str
-    candidate_profile: str
-    action_hint: str | None = None
-    predicted_outcome: dict[str, Any] | None = None
-    rationale: tuple[str, ...] = ()
-    confidence: float = 0.0
-    provenance: str = "reasoning"
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize one reasoning proposal for the deliberation audit."""
-
-        return {
-            "proposal_id": self.proposal_id,
-            "candidate_profile": self.candidate_profile,
-            "action_hint": self.action_hint,
-            "predicted_outcome": None if self.predicted_outcome is None else dict(self.predicted_outcome),
-            "rationale": list(self.rationale),
-            "confidence": self.confidence,
-            "provenance": self.provenance,
-        }
-
-
-@dataclass(frozen=True)
 class CandidateAssessment:
     """Rule-based value judgment result for one candidate."""
 
@@ -279,34 +244,17 @@ class DeliberationAuditRecord:
     assessments: list[dict[str, Any]]
     release_decision: dict[str, Any]
     release_token: ReleaseToken | None = None
-    # Round 1.E (additive): reasoning-layer proposals that shaped the considered
-    # candidate set, and proposals rejected at normalization (out-of-domain). Both
-    # omitted from to_dict when empty so an inert/heuristic-off pass is byte-identical
-    # to the pre-1.E audit (behavior-preserving).
-    proposals: list[dict[str, Any]] = field(default_factory=list)
-    rejected_proposals: list[dict[str, Any]] = field(default_factory=list)
-    # Round 1.E (additive): which proposal (if any) produced the mediator-selected
-    # candidate, with its provenance — the reasoning-contribution signal. None when
-    # no proposer ran or nothing was released.
-    reasoning_contribution: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the deliberation audit record."""
 
-        payload: dict[str, Any] = {
+        return {
             "recorded_at": self.recorded_at,
             "deliberation_input": dict(self.deliberation_input),
             "candidates": [dict(candidate) for candidate in self.candidates],
             "assessments": [dict(assessment) for assessment in self.assessments],
             "release_decision": dict(self.release_decision),
         }
-        if self.proposals:
-            payload["proposals"] = [dict(proposal) for proposal in self.proposals]
-        if self.rejected_proposals:
-            payload["rejected_proposals"] = [dict(rejection) for rejection in self.rejected_proposals]
-        if self.reasoning_contribution is not None:
-            payload["reasoning_contribution"] = dict(self.reasoning_contribution)
-        return payload
 
 
 def build_deliberation_audit_record(
@@ -315,10 +263,6 @@ def build_deliberation_audit_record(
     candidates: list[Candidate],
     assessments: list[CandidateAssessment],
     release_decision: ReleaseDecision,
-    *,
-    proposals: list[dict[str, Any]] | None = None,
-    rejected_proposals: list[dict[str, Any]] | None = None,
-    reasoning_contribution: dict[str, Any] | None = None,
 ) -> DeliberationAuditRecord:
     """Build the append-only L3 deliberation audit artifact from current pass artifacts."""
 
@@ -329,9 +273,6 @@ def build_deliberation_audit_record(
         assessments=[assessment.to_dict() for assessment in assessments],
         release_decision=release_decision.to_dict(),
         release_token=release_decision.release_token,
-        proposals=list(proposals or []),
-        rejected_proposals=list(rejected_proposals or []),
-        reasoning_contribution=reasoning_contribution,
     )
 
 
@@ -341,7 +282,6 @@ __all__ = [
     "DeliberationAuditRecord",
     "DeliberationInput",
     "OutcomeVector",
-    "ReasoningProposal",
     "ReleaseDecision",
     "ReleaseToken",
     "build_deliberation_audit_record",
