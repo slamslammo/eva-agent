@@ -163,6 +163,41 @@ class Candidate:
 
 
 @dataclass(frozen=True)
+class ReasoningProposal:
+    """A reasoning-layer proposal — a hint about which admitted candidate to consider.
+
+    Round 1.E: a ``Proposer`` produces these *within the anchor-admitted domain only*,
+    then they are normalized into the existing ``Candidate`` vocabulary before
+    assessment. The proposer shapes *what is considered*; selection (peer-circuit)
+    and release (mediator) authority are unchanged.
+
+    ``action_hint`` / ``predicted_outcome`` are optional so a future schema-bound-JSON
+    proposer (DP1 option b) drops in without changing this contract.
+    """
+
+    proposal_id: str
+    candidate_profile: str
+    action_hint: str | None = None
+    predicted_outcome: dict[str, Any] | None = None
+    rationale: tuple[str, ...] = ()
+    confidence: float = 0.0
+    provenance: str = "reasoning"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize one reasoning proposal for the deliberation audit."""
+
+        return {
+            "proposal_id": self.proposal_id,
+            "candidate_profile": self.candidate_profile,
+            "action_hint": self.action_hint,
+            "predicted_outcome": None if self.predicted_outcome is None else dict(self.predicted_outcome),
+            "rationale": list(self.rationale),
+            "confidence": self.confidence,
+            "provenance": self.provenance,
+        }
+
+
+@dataclass(frozen=True)
 class CandidateAssessment:
     """Rule-based value judgment result for one candidate."""
 
@@ -282,6 +317,7 @@ __all__ = [
     "DeliberationAuditRecord",
     "DeliberationInput",
     "OutcomeVector",
+    "ReasoningProposal",
     "ReleaseDecision",
     "ReleaseToken",
     "build_deliberation_audit_record",
