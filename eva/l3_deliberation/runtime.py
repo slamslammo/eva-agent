@@ -11,6 +11,7 @@ from .contracts import DeliberationAuditRecord, DeliberationInput, build_deliber
 from .memory import WorkingMemoryAdapter, build_memory_stub
 from .peer_circuit import decide_release
 from .reasoning import assess_candidates, build_candidates, build_working_memory_context_from_store
+from .reasoning.proposer import Proposer, normalize_proposals
 
 def build_deliberation_input_from_store(
     store: StateStore,
@@ -49,12 +50,35 @@ def build_deliberation_input_from_store(
     )
 
 
-def run_deliberation(now: datetime, deliberation_input: DeliberationInput) -> tuple[DeliberationAuditRecord, dict[str, Any] | None]:
-    """Run the minimal L3 pass and return audit plus optional memory-stub payloads."""
+def run_deliberation(
+    now: datetime,
+    deliberation_input: DeliberationInput,
+    *,
+    proposer: Proposer | None = None,
+) -> tuple[DeliberationAuditRecord, dict[str, Any] | None]:
+    """Run the minimal L3 pass and return audit plus optional memory-stub payloads.
+
+    Round 1.E: an optional ``proposer`` shapes the considered candidate set within
+    the anchor-admitted domain (between admission and assessment). With ``proposer``
+    None the pass is byte-identical to pre-1.E (behavior-preserving). The proposer
+    only shapes *what is considered* — selection (peer-circuit) and release
+    (mediator) authority below are unchanged; a proposal is never a release.
+    """
 
     recorded_at = to_iso8601(now) or now.isoformat()
     action_domain = build_action_domain(deliberation_input)
-    candidates = build_candidates(action_domain)
+    proposals_payload: list[dict[str, Any]] = []
+    rejected_payload: list[dict[str, Any]] = []
+    if proposer is None:
+        candidates = build_candidates(action_domain)
+    else:
+        proposals = proposer.propose(deliberation_input.working_memory_context or {}, action_domain)
+        normalized = normalize_proposals(proposals, action_domain)
+        # Safety net: never starve the mediator — fall back to the full admitted
+        # set if shaping yielded nothing.
+        candidates = normalized.candidates or build_candidates(action_domain)
+        proposals_payload = [proposal.to_dict() for proposal in proposals]
+        rejected_payload = list(normalized.rejections)
     assessments = assess_candidates(candidates, deliberation_input)
     release_decision = decide_release(
         assessments,
@@ -67,5 +91,7 @@ def run_deliberation(now: datetime, deliberation_input: DeliberationInput) -> tu
         candidates,
         assessments,
         release_decision,
+        proposals=proposals_payload,
+        rejected_proposals=rejected_payload,
     )
     return audit_record, None if memory_stub is None else memory_stub.to_dict()
