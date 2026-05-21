@@ -123,7 +123,7 @@ CRAFTER_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         individual_boundary="one Crafter episode = one individual's lifetime",
         reset_semantics="new_individual",
         inheritance_channel="dead individual's trace -> distillation -> new individual's inherited priors",
-        identity_continuity="loading the same saved episode/avatar = same individual; a fresh episode = a new distinct individual",
+        identity_continuity="one-life world: no in-life / cross-episode continuation (recoverable_interruption is empty); once terminal, the next activation is a fresh, distinct individual",
         clock_source="step",
     ),
 )
