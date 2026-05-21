@@ -144,6 +144,14 @@ class Candidate:
     justification: tuple[str, ...] = ()
     drive_impact_schema: dict[str, float] = field(default_factory=dict)
     side_effect_class: str = "compatibility_side_effect"
+    # Round 1.G phase 2 (a): the dlPFC producer's concrete-action lever. Drive
+    # decides the posture/profile (OFC-frozen selection); within that posture the
+    # live-LLM producer may annotate the candidate with one concrete action to take
+    # (a scenario action name, validated downstream against the profile's eligible
+    # actions). ``None`` = no hint = heuristic/model-off path (byte-identical: see
+    # ``to_dict`` below). The hint never adds/removes candidates and never selects or
+    # releases — it only proposes the concrete action *if* this posture is chosen.
+    action_hint: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize one structured candidate."""
@@ -159,6 +167,8 @@ class Candidate:
             payload["drive_impact_schema"] = dict(self.drive_impact_schema)
         if self.side_effect_class != "compatibility_side_effect":
             payload["side_effect_class"] = self.side_effect_class
+        if self.action_hint is not None:
+            payload["action_hint"] = self.action_hint
         return payload
 
 

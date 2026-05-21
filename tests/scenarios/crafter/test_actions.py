@@ -16,6 +16,7 @@ from scenarios.crafter.actions import (
     build_integrity_response_candidates,
     execute_crafter_action,
     filter_response_candidates,
+    select_integrity_response,
 )
 
 
@@ -198,6 +199,71 @@ class CrafterActionTests(unittest.TestCase):
         self.assertEqual(result["side_effects"], ["episode_reset"])
         self.assertEqual(result["pressure_outcome"], "unknown")
         self.assertTrue(result["followup_needed"])
+
+
+class CrafterActionHintConsumptionTests(unittest.TestCase):
+    """Round 1.G phase 2 (a): the LLM action_hint is the concrete-action lever
+    within the drive-selected posture (priority over default / prior / habit);
+    an ineligible or absent hint leaves the heuristic path untouched."""
+
+    def setUp(self) -> None:
+        activate_crafter_scenario()
+        self.runtime_state = RuntimeState(life_state="STABLE", instance_valid=True)
+
+    def _pressure(self, reason: str) -> ActivePressure:
+        return ActivePressure(
+            pressure_id=f"pressure-{reason}",
+            type="integrity",
+            severity="degraded",
+            evidence={"reason": reason},
+            first_seen_at=utc_now(),
+            last_seen_at=utc_now(),
+            trend="worsening",
+        )
+
+    def _release_context(self, profile: str, action_hint: str | None = None) -> dict:
+        ctx: dict[str, object] = {
+            "bridge_target": "pressure_led_compatibility",
+            "response_mode": "pressure_led_compatibility",
+            "candidate_profile": profile,
+        }
+        if action_hint is not None:
+            ctx["action_hint"] = action_hint
+        return ctx
+
+    def test_valid_action_hint_is_authoritative_within_posture(self) -> None:
+        # escalate_first eligible action that the pressure heuristic alone would
+        # not surface under empty pressure — proves the hint is causal.
+        selection = select_integrity_response(
+            self._pressure(""),
+            self.runtime_state,
+            release_context=self._release_context("escalate_first", action_hint="place_plant"),
+        )
+        self.assertEqual(selection.selected_action, "place_plant")
+        self.assertEqual(selection.selected_action_reason, "crafter_llm_action_hint_selection")
+
+    def test_no_action_hint_preserves_heuristic_selection(self) -> None:
+        baseline = select_integrity_response(
+            self._pressure(""),
+            self.runtime_state,
+            release_context=self._release_context("escalate_first"),
+        )
+        self.assertNotEqual(baseline.selected_action_reason, "crafter_llm_action_hint_selection")
+
+    def test_ineligible_action_hint_is_ignored(self) -> None:
+        # ``do`` is not eligible under stabilize_first → hint ignored, heuristic stands.
+        baseline = select_integrity_response(
+            self._pressure("threat_visible"),
+            self.runtime_state,
+            release_context=self._release_context("stabilize_first"),
+        )
+        hinted = select_integrity_response(
+            self._pressure("threat_visible"),
+            self.runtime_state,
+            release_context=self._release_context("stabilize_first", action_hint="do"),
+        )
+        self.assertEqual(hinted.selected_action, baseline.selected_action)
+        self.assertNotEqual(hinted.selected_action_reason, "crafter_llm_action_hint_selection")
 
 
 if __name__ == "__main__":

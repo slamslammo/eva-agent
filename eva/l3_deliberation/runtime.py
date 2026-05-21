@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime
 from typing import Any
 
 from ..kernel import StateStore, to_iso8601
 from ..anchor import build_action_domain
-from .contracts import DeliberationAuditRecord, DeliberationInput, build_deliberation_audit_record, build_deliberation_input
+from .contracts import (
+    Candidate,
+    DeliberationAuditRecord,
+    DeliberationInput,
+    ReleaseDecision,
+    build_deliberation_audit_record,
+    build_deliberation_input,
+)
 from .memory import WorkingMemoryAdapter, build_memory_stub
 from .peer_circuit import decide_release
 from .reasoning import assess_candidates, build_working_memory_context_from_store
@@ -75,6 +83,7 @@ def run_deliberation(
         assessments,
         working_memory_context=deliberation_input.working_memory_context,
     )
+    release_decision = _thread_selected_action_hint(release_decision, candidates)
     memory_stub = build_memory_stub(recorded_at, deliberation_input, release_decision)
     audit_record = build_deliberation_audit_record(
         recorded_at,
@@ -84,3 +93,43 @@ def run_deliberation(
         release_decision,
     )
     return audit_record, None if memory_stub is None else memory_stub.to_dict()
+
+
+def _thread_selected_action_hint(
+    release_decision: ReleaseDecision,
+    candidates: list[Candidate],
+) -> ReleaseDecision:
+    """Carry the selected candidate's ``action_hint`` into ``release_context``.
+
+    Round 1.G phase 2 (a): drive decides the posture (the mediator's frozen
+    OFC-max selection picks ``selected_candidate_id``); within that posture the
+    dlPFC producer's concrete-action lever is the selected candidate's
+    ``action_hint``. The mediator does not carry candidate-level data, so once it
+    has chosen, we look the winner up by id and fold its hint into the
+    scenario-facing ``release_context`` (where the Crafter bridge consumes it,
+    prioritizing it over ``PROFILE_DEFAULT_ACTION`` / prior).
+
+    This never changes release authority or default inhibition — ``outcome``,
+    ``selected_candidate_id`` and ``release_token`` are untouched; it only
+    enriches ``release_context``, exactly as lifecycle's
+    ``_release_context_with_observation`` already does downstream. When the
+    selected candidate has no hint (heuristic / model-off), the decision is
+    returned unchanged → byte-identical.
+    """
+
+    selected_id = release_decision.selected_candidate_id
+    if not selected_id:
+        return release_decision
+    hint = next(
+        (
+            candidate.action_hint
+            for candidate in candidates
+            if candidate.candidate_id == selected_id and candidate.action_hint
+        ),
+        None,
+    )
+    if not hint:
+        return release_decision
+    release_context = dict(release_decision.release_context)
+    release_context["action_hint"] = hint
+    return dataclasses.replace(release_decision, release_context=release_context)

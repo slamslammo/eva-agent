@@ -192,6 +192,12 @@ def build_integrity_response_candidates(
     else:
         active_profiles = _CANDIDATE_PROFILES
 
+    # Round 1.G phase 2 (a): the live-LLM producer's concrete-action lever for the
+    # drive-selected posture. Only honored when it names an action eligible under
+    # that profile; otherwise ignored (heuristic resolution stands).
+    action_hint = context.get("action_hint")
+    action_hint = action_hint if isinstance(action_hint, str) and action_hint else None
+
     candidates: list[ResponseCandidate] = []
     for profile in active_profiles:
         resolved = _resolve_actions_for_profile(
@@ -202,6 +208,11 @@ def build_integrity_response_candidates(
         )
         if not resolved:
             resolved = [PROFILE_DEFAULT_ACTION[profile]]
+        # Ensure a valid LLM action_hint is available as a candidate for this
+        # posture (prepended) so selection can honor it; eligibility is checked
+        # against this profile's action set.
+        if action_hint and action_hint in PROFILE_ELIGIBLE_ACTIONS.get(profile, ()):
+            resolved = [action_hint] + [a for a in resolved if a != action_hint]
         posture = PROFILE_TO_POSTURE[profile]
         for action_name in resolved:
             candidates.append(
@@ -505,6 +516,13 @@ def _candidate_context_from_release_context(
         l3_profile = release_context.get("candidate_profile")
         if isinstance(l3_profile, str) and l3_profile in _CANDIDATE_PROFILES:
             base["candidate_profile"] = l3_profile
+    # Round 1.G phase 2 (a): lift the selected candidate's LLM ``action_hint``
+    # (threaded into release_context by ``run_deliberation``) so the concrete
+    # action it names becomes available to candidate widening and selection.
+    if "action_hint" not in base:
+        l3_action_hint = release_context.get("action_hint")
+        if isinstance(l3_action_hint, str) and l3_action_hint:
+            base["action_hint"] = l3_action_hint
     return base if base else None
 
 
@@ -555,6 +573,30 @@ def select_response_action(
             filter_reasons=(),
             state_mode=ACTION_TO_STATE_MODE[fallback_candidate.action],
         )
+
+    # Round 1.G phase 2 (a): a valid LLM action_hint for the drive-selected
+    # posture is authoritative for the concrete action — it takes priority over
+    # PROFILE_DEFAULT_ACTION, inherited prior, and habit bias (within the posture,
+    # the live reasoning core picks the action; RPE feeds learning back). It is
+    # honored only when it matches a candidate already admitted for this posture
+    # (so eligibility is enforced upstream); otherwise the heuristic path stands
+    # → model-off / no-hint is byte-identical.
+    action_hint = bridge_policy.get("action_hint") if isinstance(bridge_policy, dict) else None
+    if isinstance(action_hint, str) and action_hint:
+        for candidate in candidates:
+            if candidate.action == action_hint:
+                return ResponseSelection(
+                    pressure_id=pressure.pressure_id,
+                    selected_action=candidate.action,
+                    selected_posture=candidate.posture,
+                    selected_action_reason="crafter_llm_action_hint_selection",
+                    filter_result="allow",
+                    candidate_actions=tuple(c.action for c in candidates),
+                    denied_actions=(),
+                    discouraged_actions=(),
+                    filter_reasons=tuple(reason for decision in decisions for reason in decision.reasons),
+                    state_mode=ACTION_TO_STATE_MODE[candidate.action],
+                )
 
     selection_context = _selection_context_from_bridge_policy(bridge_policy)
     situation_key = str(selection_context.get("situation_key") or "")
