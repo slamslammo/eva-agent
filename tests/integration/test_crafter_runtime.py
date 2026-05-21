@@ -358,5 +358,66 @@ class CrafterTerminationSemanticsTests(unittest.TestCase):
             self.assertGreaterEqual(len(stub_session.step_actions), 1)
 
 
+class CrafterActionHintWiringIntegrationTests(unittest.TestCase):
+    """Round 1.G phase 2 (a) G-6b: end-to-end action_hint causal path with a stub
+    producer (no live tokens). Proves producer -> run_deliberation threading ->
+    release_context -> Crafter bridge -> executed action."""
+
+    def setUp(self) -> None:
+        activate_crafter_scenario()
+
+    def test_injected_producer_action_hint_drives_executed_action(self) -> None:
+        from scenarios.crafter.actions import PROFILE_ELIGIBLE_ACTIONS, PROFILE_TO_POSTURE
+        from eva.l3_deliberation.reasoning.llm_candidate_producer import LLMCandidateProducer
+
+        hints = {
+            "escalate_first": "make_wood_pickaxe",
+            "stabilize_first": "sleep",
+            "observe_first": "move_right",
+        }
+
+        def stub_chat(messages):
+            return json.dumps({"action_hints": hints})
+
+        producer = LLMCandidateProducer(
+            chat_fn=stub_chat, profile_action_vocab=PROFILE_ELIGIBLE_ACTIONS
+        )
+        posture_to_profile = {posture: profile for profile, posture in PROFILE_TO_POSTURE.items()}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=6, max_runtime_sec=2.0, idle_sleep_sec=0.01),
+            )
+            stub_session = StubCrafterSession()
+            with patch.object(CrafterRuntimeSession, "start", return_value=stub_session):
+                run_crafter_runtime(config, candidate_producer=producer)
+            store = StateStore(config.paths)
+            response_history = store.read_response_history()
+
+        hinted = [
+            r for r in response_history
+            if r.get("selected_action_reason") == "crafter_llm_action_hint_selection"
+        ]
+        # The LLM action_hint reached and drove the bridge's concrete-action choice.
+        self.assertGreaterEqual(len(hinted), 1)
+        for record in hinted:
+            profile = posture_to_profile.get(record.get("selected_posture"))
+            self.assertIsNotNone(profile)
+            self.assertEqual(record.get("selected_action"), hints[profile])
+
+
 if __name__ == "__main__":
     unittest.main()

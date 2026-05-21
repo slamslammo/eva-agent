@@ -23,6 +23,7 @@ from ..l3_deliberation import (
     summarize_habit_bias,
 )
 from ..l3_deliberation.contracts import DeliberationAuditRecord, ReleaseDecision, ReleaseToken
+from ..l3_deliberation.reasoning.candidate_producer import CandidateProducer
 from ..l3_deliberation.memory import (
     append_cognitive_memory_stub,
     append_habit_bias,
@@ -148,6 +149,7 @@ class LifecycleRuntime:
         sensor_registry: SensorRegistry | None = None,
         extra_shared_facts_provider: Callable[[], dict[str, Any] | None] | None = None,
         action_runtime: ExternalActionRuntime | None = None,
+        candidate_producer: CandidateProducer | None = None,
     ) -> None:
         self.store = store
         self.instance_guard = instance_guard
@@ -159,6 +161,10 @@ class LifecycleRuntime:
         self.sensor_registry = sensor_registry
         self.extra_shared_facts_provider = extra_shared_facts_provider
         self.action_runtime = action_runtime
+        # Round 1.G phase 2 (a): the live dlPFC candidate producer (action_hint
+        # lever). ``None`` -> run_deliberation defaults to the deterministic
+        # HeuristicCandidateProducer (model-off byte-equivalent).
+        self.candidate_producer = candidate_producer
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -588,7 +594,9 @@ class LifecycleRuntime:
                     working_memory_advisory_source=self.working_memory_advisory_source,
                     response_history=prior_response_history,
                 )
-                deliberation_audit, memory_stub = run_deliberation(now, deliberation_input)
+                deliberation_audit, memory_stub = run_deliberation(
+                    now, deliberation_input, producer=self.candidate_producer
+                )
                 self.store.append_deliberation_audit(deliberation_audit.to_dict())
                 if memory_stub is not None:
                     append_cognitive_memory_stub(self.store, memory_stub)

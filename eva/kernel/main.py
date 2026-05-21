@@ -13,6 +13,7 @@ from uuid import uuid4
 from .config import AppendOnlyArtifactsConfig, ExternalLifeConfig, LifecycleConfig, LoopControl, RuntimeConfig, build_runtime_config
 from .instance import InstanceGuard
 from .lifecycle import ExternalActionRuntime, LifecycleRuntime
+from ..l3_deliberation.reasoning.candidate_producer import CandidateProducer
 from .state import EventRecord, StateStore, emit_log_line, utc_now
 from ..scenario_bundle import get_active_runtime_scenario
 from ..l1_sensing.sensor_registry import SensorRegistry
@@ -62,6 +63,7 @@ def run_runtime(
     sensor_registry: SensorRegistry | None = None,
     extra_shared_facts_provider: Callable[[], dict[str, Any] | None] | None = None,
     action_runtime: ExternalActionRuntime | None = None,
+    candidate_producer: CandidateProducer | None = None,
     periodic_hook: Callable[..., tuple[bool, str | None]] | None = None,
     hook_interval_sec: float = 1800.0,
 ) -> RunSummary:
@@ -143,6 +145,7 @@ def run_runtime(
         sensor_registry,
         extra_shared_facts_provider,
         action_runtime,
+        candidate_producer=candidate_producer,
     )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()

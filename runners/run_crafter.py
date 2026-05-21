@@ -17,8 +17,15 @@ from eva.kernel.main import (
 )
 from eva.l1_sensing.sensor_registry import SensorRegistry
 from eva.l3_deliberation import WorkingMemoryAdapter
+from eva.l3_deliberation.memory.working_memory_model_client import (
+    MODEL_CLIENT_MODE_LIVE,
+    build_live_chat_fn,
+)
+from eva.l3_deliberation.reasoning.candidate_producer import CandidateProducer
+from eva.l3_deliberation.reasoning.llm_candidate_producer import LLMCandidateProducer
 from runners.longrun_validation import longrun_hook_from_args
 from scenarios.crafter import activate_crafter_scenario
+from scenarios.crafter.actions import PROFILE_ELIGIBLE_ACTIONS
 from scenarios.crafter.wrapper import CrafterEnvWrapper, StepResult
 
 __all__ = ["CrafterActionStep", "CrafterRuntimeSession", "main", "run_crafter_runtime"]
@@ -76,10 +83,34 @@ class CrafterRuntimeSession:
         self.wrapper.close()
 
 
+def _build_candidate_producer(config: RuntimeConfig) -> CandidateProducer | None:
+    """Build the live dlPFC action_hint producer for live llm_assisted runs only.
+
+    Round 1.G phase 2 (a): the LLM's causal lever is the per-posture ``action_hint``.
+    We only attach a live producer when the run is configured for a live model
+    client; otherwise return ``None`` so ``run_deliberation`` uses the deterministic
+    heuristic producer (model-off byte-equivalent). Scenario action vocabulary
+    (``PROFILE_ELIGIBLE_ACTIONS``) is injected here so the framework producer stays
+    scenario-agnostic. A missing live env yields ``chat_fn=None`` → heuristic.
+    """
+
+    if config.working_memory_backend != "llm_assisted":
+        return None
+    if config.working_memory_model_client_mode != MODEL_CLIENT_MODE_LIVE:
+        return None
+    client_config = config.working_memory_model_client_config
+    timeout_sec = client_config.request_timeout_sec if client_config is not None else 5.0
+    chat_fn = build_live_chat_fn(timeout_sec=timeout_sec)
+    if chat_fn is None:
+        return None
+    return LLMCandidateProducer(chat_fn=chat_fn, profile_action_vocab=PROFILE_ELIGIBLE_ACTIONS)
+
+
 def run_crafter_runtime(
     config: RuntimeConfig,
     *,
     working_memory_adapter: WorkingMemoryAdapter | None = None,
+    candidate_producer: CandidateProducer | None = None,
     sensor_registry: SensorRegistry | None = None,
     periodic_hook: Callable[..., tuple[bool, str | None]] | None = None,
     hook_interval_sec: float = 1800.0,
@@ -89,6 +120,7 @@ def run_crafter_runtime(
 
     activate_crafter_scenario(inherited_priors_path=config.inherited_priors_path)
     session = CrafterRuntimeSession.start(seed=seed)
+    resolved_producer = candidate_producer or _build_candidate_producer(config)
     try:
         return run_runtime(
             config,
@@ -96,6 +128,7 @@ def run_crafter_runtime(
             sensor_registry=sensor_registry,
             extra_shared_facts_provider=session.build_shared_facts,
             action_runtime=session,
+            candidate_producer=resolved_producer,
             periodic_hook=periodic_hook,
             hook_interval_sec=hook_interval_sec,
         )

@@ -291,6 +291,49 @@ class OpenAICompatibleWorkingMemoryModelClient:
 
 
 
+def build_live_chat_fn(
+    *,
+    timeout_sec: float = 5.0,
+    max_tokens: int = 256,
+    transport: OpenAICompatibleTransport | None = None,
+) -> Callable[[list[dict[str, str]]], str] | None:
+    """Build a vendor-neutral OpenAI-compatible chat callable from ``EVA_LLM_*`` env.
+
+    Round 1.G phase 2 (a): the live dlPFC ``LLMCandidateProducer`` needs a generic
+    "send messages, get assistant text" transport, distinct from the advisory
+    client's fixed prompt/parse. This reuses the same env-resolved config and HTTP
+    transport as the working-memory advisory client without touching that path.
+
+    Returns ``None`` when the live env is not configured (missing
+    ``EVA_LLM_API_BASE_URL`` / ``EVA_LLM_API_KEY`` / ``EVA_LLM_MODEL``) so callers
+    degrade gracefully to the heuristic producer. The caller-supplied
+    ``messages`` already encode the full prompt; this only adds model / token /
+    temperature envelope and merges opaque vendor ``extra_params``.
+    """
+
+    try:
+        config = _load_live_config_from_env(
+            WorkingMemoryModelClientConfig(request_timeout_sec=timeout_sec)
+        )
+    except RuntimeError:
+        return None
+    post = transport or _post_openai_compatible_chat
+
+    def chat(messages: list[dict[str, str]]) -> str:
+        body: dict[str, Any] = {
+            "model": config.model,
+            "max_tokens": max(1, int(max_tokens)),
+            "temperature": 0,
+            "messages": messages,
+        }
+        if config.extra_params:
+            body.update(config.extra_params)
+        payload = post(body, config.api_key, config.timeout_sec, config.base_url)
+        return _openai_compatible_text_response(payload)
+
+    return chat
+
+
 def build_builtin_working_memory_model_client(
     mode: str,
     config: WorkingMemoryModelClientConfig | None = None,
