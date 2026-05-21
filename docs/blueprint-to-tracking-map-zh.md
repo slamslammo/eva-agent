@@ -32,6 +32,7 @@
 | Mediator 作为独立 peer circuit | 1.4 `Mediator as independent peer circuit (default inhibition + selective release)` | landed | — |
 | Runtime-only release token boundary | 1.4 `Runtime-only release token boundary` | landed | — |
 | 带 learned overlay 的 drive-weighted candidate assessment | 1.4 `Drive-weighted candidate assessment with bounded learned overlays` | landed | — |
+| L3 reasoning core 形成候选（提议路径） | 1.4 `L3 reasoning proposal path (anchor-bounded proposer shapes the considered candidate set)` | landed (mechanism) | Round 1.E（蓝图 §7.4）：anchor 受限 proposer 塑形 considered candidate set；model 影响从 ≤0.12 事后偏置升为 considered-set 塑形，仍受 anchor admission + peer-circuit 选择 + mediator 释放约束。LLM-reasoning 长跑验证延后（§8）。 |
 | 规范多维 outcome 支持 | 1.4 `Append-only learning outcome records with canonical OutcomeVector support` | landed | — |
 | RPE 作为内部更新信号 | 1.4 `RPE-like learning as internal update signal` | landed | tracking 用的是 “RPE-like” 表述；blueprint 对 vector semantics 更严格。 |
 | Habit shaping 与 skill crystallization | 1.4 `Habit shaping and skill crystallization through habit track` | landed | — |
