@@ -186,18 +186,40 @@ class LifecycleRuntime:
         self,
         deliberation_input: Any,
         deliberation_audit: DeliberationAuditRecord,
+        extra_shared_facts: dict[str, Any] | None = None,
     ) -> None:
-        """Round 1.H H-2a: emit the seam-assembled P1a batch-1 transforms.
+        """Round 1.H H-2a/H-2b: emit the seam-assembled P1a batch-1 transforms.
 
-        Assembled purely from data the deliberation pass already returned — no
-        frozen-owner function body is touched (red-line #2). Only called when
+        Assembled purely from data the deliberation pass + patrol already returned —
+        no frozen-owner function body is touched (red-line #2). Only called when
         ``trace_sink.enabled``; ``_trace_turn_index`` advances only while tracing,
-        so a non-traced run is byte-identical. Deeper L1 sensor emits + the
-        ``l2.approach_delta`` owner-hook + ``raw_observations`` land in H-2b.
+        so a non-traced run is byte-identical. H-2b adds ``l1.raw_observation`` here
+        (the symbolic grid the agent consumes, from ``extra_shared_facts``). The
+        ``l2.approach_delta`` owner-hook + ``l1.rate_sense`` / ``l1.threshold_classify``
+        land in H-2c (they read patrol-time owner-internal values).
         """
 
         turn_index = self._trace_turn_index
         self._trace_turn_index += 1
+        agent_observation = (
+            extra_shared_facts.get("agent_observation")
+            if isinstance(extra_shared_facts, dict)
+            else None
+        )
+        if isinstance(agent_observation, dict):
+            visible = agent_observation.get("visible") if isinstance(agent_observation.get("visible"), dict) else {}
+            self.trace_sink.emit_raw_observation(
+                turn_index=turn_index,
+                episode_step=agent_observation.get("step") if isinstance(agent_observation.get("step"), int) else None,
+                payload={
+                    "episode_id": agent_observation.get("episode_id"),
+                    "step": agent_observation.get("step"),
+                    "local_view": visible.get("local_view"),
+                    "facing": visible.get("facing"),
+                    "life_panel": visible.get("life_panel"),
+                    "inventory_panel": visible.get("inventory_panel"),
+                },
+            )
         gate = dict(getattr(deliberation_input, "runtime_gate_context", {}) or {})
         gate_inputs = {
             key: gate.get(key)
@@ -675,7 +697,7 @@ class LifecycleRuntime:
                     now, deliberation_input, producer=self.candidate_producer
                 )
                 if self.trace_sink.enabled:
-                    self._emit_p1a_seam_trace(deliberation_input, deliberation_audit)
+                    self._emit_p1a_seam_trace(deliberation_input, deliberation_audit, extra_shared_facts)
                 self.store.append_deliberation_audit(deliberation_audit.to_dict())
                 if memory_stub is not None:
                     append_cognitive_memory_stub(self.store, memory_stub)

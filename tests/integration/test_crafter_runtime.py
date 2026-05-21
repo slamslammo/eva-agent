@@ -461,8 +461,12 @@ class CrafterP1aTraceIntegrationTests(unittest.TestCase):
             self.assertIn("l1.signal_publish", transform_ids)
             self.assertIn("l2.broadcast", transform_ids)
             self.assertIn("anchor.admit", transform_ids)
+            self.assertIn("l1.raw_observation", transform_ids)  # H-2b
             snapshot_types = {r["snapshot_type"] for r in records if r["event_type"] == "snapshot"}
             self.assertIn("drive_state", snapshot_types)
+            # H-2b: raw observation grid persisted under raw_observations/.
+            raw_files = list((runtime_dir / "raw_observations").glob("turn-*.json"))
+            self.assertGreaterEqual(len(raw_files), 1)
             # Every event carries the common envelope + a turn_index.
             for record in records:
                 self.assertIn("run_id", record)
