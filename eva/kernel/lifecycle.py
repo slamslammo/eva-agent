@@ -24,7 +24,7 @@ from ..l3_deliberation import (
 )
 from ..l3_deliberation.contracts import DeliberationAuditRecord, ReleaseDecision, ReleaseToken
 from ..l3_deliberation.reasoning.candidate_producer import CandidateProducer
-from ..observability import NullTraceSink, TraceSink
+from ..observability import NullTraceSink, TraceSink, reset_current_trace, set_current_trace
 from ..l3_deliberation.memory import (
     append_cognitive_memory_stub,
     append_habit_bias,
@@ -199,8 +199,9 @@ class LifecycleRuntime:
         land in H-2c (they read patrol-time owner-internal values).
         """
 
+        # turn_index is allocated once per patrol turn (set_current_trace below)
+        # and shared by patrol-time owner hooks + this seam emit; advanced at turn end.
         turn_index = self._trace_turn_index
-        self._trace_turn_index += 1
         agent_observation = (
             extra_shared_facts.get("agent_observation")
             if isinstance(extra_shared_facts, dict)
@@ -606,6 +607,11 @@ class LifecycleRuntime:
             ),
         }
         if work_slice.kind == "patrol":
+            # Round 1.H H-2c: publish the process-current trace context before patrol
+            # so patrol-time owner hooks (e.g. drive_state.l2.approach_delta) share this
+            # turn's turn_index. Only while tracing -> no-op + byte-equivalent when off.
+            if self.trace_sink.enabled:
+                set_current_trace(self.trace_sink, self._trace_turn_index)
             extra_shared_facts = (
                 (self.extra_shared_facts_provider() or None)
                 if self.extra_shared_facts_provider is not None
@@ -806,6 +812,12 @@ class LifecycleRuntime:
                     )
                 )
 
+        # Round 1.H H-2c: close out this turn's trace context (only after a traced
+        # patrol set it). Advance the shared turn_index and reset to the no-op sink so
+        # later non-patrol slices don't emit. Gated on tracing -> byte-equivalent off.
+        if self.trace_sink.enabled and work_slice.kind == "patrol":
+            self._trace_turn_index += 1
+            reset_current_trace()
         state.last_turn_id = turn_id
         state.updated_at = now
         self.store.write_runtime_state(state)

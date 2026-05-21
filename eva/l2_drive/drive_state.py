@@ -14,6 +14,7 @@ from .drive_registry import (
     severity_delta_for_status,
     severity_target_for_status,
 )
+from ..observability import current_trace_sink, current_trace_turn_index
 
 if TYPE_CHECKING:
     from ..l1_sensing.signal_bus import SignalRecord
@@ -182,7 +183,28 @@ def _approach_target_delta(
         contributors.append("threat_signal_present")
     if not contributors:
         contributors.append("approach_target")
-    return policy.approach_rate * (target - level)
+    result = policy.approach_rate * (target - level)
+    # Round 1.H H-2c: flag-gated read-only owner-hook (A-approved exception #1).
+    # The per-drive target / approach_rate / contributor reasons are local here and
+    # invisible at any seam. Emission is gated on the process-current trace sink
+    # (NullTraceSink when EVA_TRACE is off → no-op → byte-equivalent); it never
+    # touches the return value or control flow.
+    _trace = current_trace_sink()
+    if _trace.enabled:
+        _trace.emit_transform(
+            layer="L2",
+            transform_id="l2.approach_delta",
+            code_anchor="eva/l2_drive/drive_state.py:_approach_target_delta",
+            turn_index=current_trace_turn_index(),
+            inputs={"drive_type": drive_type, "level": level, "threat_present": threat_present},
+            outputs={
+                "target": target,
+                "delta": result,
+                "approach_rate": policy.approach_rate,
+                "contributors": list(contributors),
+            },
+        )
+    return result
 
 
 def _apply_base_decay(contributors: list[str], policy: DriveUpdatePolicy) -> float:

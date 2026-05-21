@@ -31,6 +31,10 @@ __all__ = [
     "build_trace_sink",
     "trace_enabled",
     "write_run_meta",
+    "set_current_trace",
+    "reset_current_trace",
+    "current_trace_sink",
+    "current_trace_turn_index",
 ]
 
 TRACE_ENV_FLAG = "EVA_TRACE"
@@ -233,6 +237,45 @@ def write_run_meta(runtime_dir: str | os.PathLike[str], meta: dict[str, Any]) ->
     path.mkdir(parents=True, exist_ok=True)
     with (path / "run_meta.json").open("w", encoding="utf-8") as handle:
         json.dump(meta, handle, ensure_ascii=False, sort_keys=True, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Module-level "current trace" context (H-2c). EVA runs serially, single-agent
+# (see kernel/working_memory comments) — a module global is safe and avoids
+# threading the sink through frozen-owner function signatures. The lifecycle
+# sets this before patrol so patrol-time owner code (e.g. drive_state) can emit a
+# flag-gated read-only hook without any signature change; it resets afterward.
+# When unset it is a NullTraceSink, so owner hooks are no-ops (byte-equivalent).
+# ---------------------------------------------------------------------------
+_CURRENT_SINK: TraceSink = NullTraceSink()
+_CURRENT_TURN_INDEX: int = 0
+
+
+def set_current_trace(sink: TraceSink, turn_index: int) -> None:
+    """Set the process-current trace sink + turn_index for owner-internal hooks."""
+
+    global _CURRENT_SINK, _CURRENT_TURN_INDEX
+    _CURRENT_SINK = sink
+    _CURRENT_TURN_INDEX = turn_index
+
+
+def reset_current_trace() -> None:
+    """Clear the process-current trace sink back to the no-op default."""
+
+    global _CURRENT_SINK
+    _CURRENT_SINK = NullTraceSink()
+
+
+def current_trace_sink() -> TraceSink:
+    """Return the process-current trace sink (NullTraceSink when unset)."""
+
+    return _CURRENT_SINK
+
+
+def current_trace_turn_index() -> int:
+    """Return the turn_index associated with the current trace context."""
+
+    return _CURRENT_TURN_INDEX
 
 
 def build_trace_sink(

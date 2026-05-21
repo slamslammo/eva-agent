@@ -462,6 +462,7 @@ class CrafterP1aTraceIntegrationTests(unittest.TestCase):
             self.assertIn("l2.broadcast", transform_ids)
             self.assertIn("anchor.admit", transform_ids)
             self.assertIn("l1.raw_observation", transform_ids)  # H-2b
+            self.assertIn("l2.approach_delta", transform_ids)  # H-2c owner-hook
             snapshot_types = {r["snapshot_type"] for r in records if r["event_type"] == "snapshot"}
             self.assertIn("drive_state", snapshot_types)
             # H-2b: raw observation grid persisted under raw_observations/.

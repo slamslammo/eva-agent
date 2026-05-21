@@ -11,6 +11,10 @@ from .trace_sink import (
     RunIdentity,
     TraceSink,
     build_trace_sink,
+    current_trace_sink,
+    current_trace_turn_index,
+    reset_current_trace,
+    set_current_trace,
     trace_enabled,
     write_run_meta,
 )
@@ -26,6 +30,10 @@ __all__ = [
     "RunIdentity",
     "TraceSink",
     "build_trace_sink",
+    "current_trace_sink",
+    "current_trace_turn_index",
+    "reset_current_trace",
+    "set_current_trace",
     "trace_enabled",
     "write_run_meta",
 ]
