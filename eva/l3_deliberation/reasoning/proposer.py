@@ -13,7 +13,7 @@ proposer (option b) to drop in without touching the seam.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from ..contracts import Candidate, ReasoningProposal
@@ -123,10 +123,16 @@ def _advisory_signal(working_memory_context: dict[str, Any] | None) -> tuple[lis
 
 @dataclass(frozen=True)
 class NormalizationResult:
-    """Outcome of mapping proposals into the admitted candidate vocabulary."""
+    """Outcome of mapping proposals into the admitted candidate vocabulary.
+
+    ``linkage`` maps each materialized ``candidate_id`` to the ``proposal_id`` that
+    produced it — the basis for the E-6 reasoning-contribution signal (which
+    proposal, if any, the mediator's selected candidate came from).
+    """
 
     candidates: list[Candidate]
     rejections: list[dict[str, Any]]
+    linkage: dict[str, str] = field(default_factory=dict)
 
 
 def normalize_proposals(
@@ -147,6 +153,7 @@ def normalize_proposals(
 
     candidates: list[Candidate] = []
     rejections: list[dict[str, Any]] = []
+    linkage: dict[str, str] = {}
     used_candidate_ids: set[str] = set()
     for proposal in proposals:
         if proposal.candidate_profile not in schemas_by_profile:
@@ -172,7 +179,8 @@ def normalize_proposals(
             continue
         used_candidate_ids.add(schema.candidate_id)
         candidates.append(schema.to_candidate())
-    return NormalizationResult(candidates=candidates, rejections=rejections)
+        linkage[schema.candidate_id] = proposal.proposal_id
+    return NormalizationResult(candidates=candidates, rejections=rejections, linkage=linkage)
 
 
 def _match_schema(schemas: list["CandidateSchema"], action_hint: str | None) -> "CandidateSchema":

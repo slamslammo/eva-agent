@@ -285,6 +285,10 @@ class DeliberationAuditRecord:
     # to the pre-1.E audit (behavior-preserving).
     proposals: list[dict[str, Any]] = field(default_factory=list)
     rejected_proposals: list[dict[str, Any]] = field(default_factory=list)
+    # Round 1.E (additive): which proposal (if any) produced the mediator-selected
+    # candidate, with its provenance — the reasoning-contribution signal. None when
+    # no proposer ran or nothing was released.
+    reasoning_contribution: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the deliberation audit record."""
@@ -300,6 +304,8 @@ class DeliberationAuditRecord:
             payload["proposals"] = [dict(proposal) for proposal in self.proposals]
         if self.rejected_proposals:
             payload["rejected_proposals"] = [dict(rejection) for rejection in self.rejected_proposals]
+        if self.reasoning_contribution is not None:
+            payload["reasoning_contribution"] = dict(self.reasoning_contribution)
         return payload
 
 
@@ -312,6 +318,7 @@ def build_deliberation_audit_record(
     *,
     proposals: list[dict[str, Any]] | None = None,
     rejected_proposals: list[dict[str, Any]] | None = None,
+    reasoning_contribution: dict[str, Any] | None = None,
 ) -> DeliberationAuditRecord:
     """Build the append-only L3 deliberation audit artifact from current pass artifacts."""
 
@@ -324,6 +331,7 @@ def build_deliberation_audit_record(
         release_token=release_decision.release_token,
         proposals=list(proposals or []),
         rejected_proposals=list(rejected_proposals or []),
+        reasoning_contribution=reasoning_contribution,
     )
 
 

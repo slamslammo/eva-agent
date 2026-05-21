@@ -130,6 +130,20 @@ class ReasoningProposalPathTests(unittest.TestCase):
         audit, _ = run_deliberation(self.now, di, proposer=ModelBackedProposer())
         self.assertNotEqual(audit.release_decision.get("outcome"), "compatibility_release")
 
+    def test_reasoning_contribution_links_selected_candidate_to_proposal(self) -> None:
+        # (E-6) When a proposer-shaped candidate is released, the audit records
+        # which proposal produced it + that proposal's provenance — the
+        # measurable reasoning-contribution signal.
+        di = _deliberation_input(advisory_profiles=["escalate_first"], advisory_confidence=0.9)
+        audit, _ = run_deliberation(self.now, di, proposer=ModelBackedProposer())
+        if not audit.release_decision.get("selected_candidate_id"):
+            self.skipTest("no candidate released for this input; contribution n/a")
+        contribution = audit.reasoning_contribution
+        self.assertIsNotNone(contribution)
+        self.assertEqual(contribution["selected_candidate_id"], audit.release_decision.get("selected_candidate_id"))
+        self.assertEqual(contribution["source_provenance"], "model_advisory")
+        self.assertIn(contribution["source_proposal_id"], [p["proposal_id"] for p in audit.proposals])
+
     def test_proposal_path_has_default_inhibition(self) -> None:
         # (d) The proposer/normalization layer only produces candidates; it
         # exposes no selection/release surface and performs no side effect
