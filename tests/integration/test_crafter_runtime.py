@@ -470,6 +470,10 @@ class CrafterP1aTraceIntegrationTests(unittest.TestCase):
             self.assertIn("l3.decide_release", transform_ids)
             self.assertIn("mediator.release", transform_ids)
             self.assertIn("bridge.resolve_action", transform_ids)
+            # round-1i I-2: bridge.resolve_action now carries a non-None
+            # selected_action_reason (trace-gap fix; was None before).
+            bridge_events = [r for r in records if r.get("transform_id") == "bridge.resolve_action"]
+            self.assertTrue(all(b["outputs"].get("selected_action_reason") for b in bridge_events))
             snapshot_types = {r["snapshot_type"] for r in records if r["event_type"] == "snapshot"}
             self.assertIn("drive_state", snapshot_types)
             self.assertIn("candidate_scoring", snapshot_types)  # H-3b owner-hook #2

@@ -25,7 +25,7 @@ from eva.l3_deliberation.reasoning.candidate_producer import CandidateProducer
 from eva.l3_deliberation.reasoning.llm_candidate_producer import LLMCandidateProducer
 from runners.longrun_validation import longrun_hook_from_args
 from scenarios.crafter import activate_crafter_scenario
-from scenarios.crafter.actions import PROFILE_ELIGIBLE_ACTIONS
+from scenarios.crafter.actions.feasibility import feasible_profile_action_vocab
 from scenarios.crafter.wrapper import CrafterEnvWrapper, StepResult
 
 __all__ = ["CrafterActionStep", "CrafterRuntimeSession", "main", "run_crafter_runtime"]
@@ -83,15 +83,23 @@ class CrafterRuntimeSession:
         self.wrapper.close()
 
 
-def _build_candidate_producer(config: RuntimeConfig) -> CandidateProducer | None:
+def _build_candidate_producer(
+    config: RuntimeConfig, session: "CrafterRuntimeSession"
+) -> CandidateProducer | None:
     """Build the live dlPFC action_hint producer for live llm_assisted runs only.
 
     Round 1.G phase 2 (a): the LLM's causal lever is the per-posture ``action_hint``.
     We only attach a live producer when the run is configured for a live model
     client; otherwise return ``None`` so ``run_deliberation`` uses the deterministic
-    heuristic producer (model-off byte-equivalent). Scenario action vocabulary
-    (``PROFILE_ELIGIBLE_ACTIONS``) is injected here so the framework producer stays
-    scenario-agnostic. A missing live env yields ``chat_fn=None`` → heuristic.
+    heuristic producer (model-off byte-equivalent). A missing live env yields
+    ``chat_fn=None`` → heuristic.
+
+    Round 1.I (a2): the scenario action vocabulary is injected as a **per-turn
+    callable** closed over the live ``session`` — it returns only the actions
+    *feasible this turn* (filtered by current inventory + nearby table/furnace per
+    Crafter's recipes), so the LLM is never offered an action the world makes
+    impossible (e.g. ``make_iron_*`` with no iron). The framework producer treats the
+    callable opaquely and never imports the Crafter scenario.
     """
 
     if config.working_memory_backend != "llm_assisted":
@@ -103,7 +111,10 @@ def _build_candidate_producer(config: RuntimeConfig) -> CandidateProducer | None
     chat_fn = build_live_chat_fn(timeout_sec=timeout_sec)
     if chat_fn is None:
         return None
-    return LLMCandidateProducer(chat_fn=chat_fn, profile_action_vocab=PROFILE_ELIGIBLE_ACTIONS)
+    return LLMCandidateProducer(
+        chat_fn=chat_fn,
+        profile_action_vocab=lambda: feasible_profile_action_vocab(session.latest_agent_observation),
+    )
 
 
 def run_crafter_runtime(
@@ -120,7 +131,7 @@ def run_crafter_runtime(
 
     activate_crafter_scenario(inherited_priors_path=config.inherited_priors_path)
     session = CrafterRuntimeSession.start(seed=seed)
-    resolved_producer = candidate_producer or _build_candidate_producer(config)
+    resolved_producer = candidate_producer or _build_candidate_producer(config, session)
     try:
         return run_runtime(
             config,

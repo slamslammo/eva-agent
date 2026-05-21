@@ -1,6 +1,6 @@
 # Round 1.I — Instrumented 短跑 → 分析 → 修可行性（计划②）— Progress（B）
 
-**当前状态**：**I-1 DONE → G1_REQUESTED**（短跑 + 分析 + 报告完成，停等 A/用户敲定修法）。
+**当前状态**：**I-2 DONE → 暂停待用户跑 I-3 live 确认**。I-1（短跑+分析）+ G1（A 定 a2）+ I-2（动态可行 vocab + trace 缺口补，535 绿、字节等价）完成；I-3 = 同参再短跑确认（~¥0.03、用户在场）。
 **分支**：`claude/recursing-hertz-7c4029`。指令 `eva-coordination/round-1i-instrumented-shortrun-craftability-fix-startup-instruction.md`。
 
 ---
@@ -30,6 +30,17 @@
 
 **→ 置 `G1_REQUESTED`，停等 A/用户定 (a1) vs (a2) + 是否带 (b)。**
 
-## 后续 slice
-- I-2（A/用户定后）：按选定修法改 producer（+ 可能 RPE）+ 补 bridge.resolve_action reason trace 缺口。
-- I-3：同参再短跑确认 make_iron_* no-op 显著减少 + 仍 0 sleep + 无回归 → `G2_REQUESTED`。
+## I-2 — 修可行性（a2 动态可行 vocab）（2026-05-22）
+
+A/用户裁定 = **(a2) 动态可行 vocab 为主、不带 (b)**。实现：
+- **新 `scenarios/crafter/actions/feasibility.py`**（Crafter-owned，可知 recipe）：按 `crafter/data.yaml` 的 `make_*`/`place_*` 的 `uses`(inventory) + `nearby`(table/furnace) 要求，`feasible_profile_action_vocab(observation)` 把 `PROFILE_ELIGIBLE_ACTIONS` 过滤成**本 turn 物理可行**子集。**红线 ④**：只剔物理不可行（缺料/缺 nearby），**绝不按 usefulness 剔**；noop/sleep/move_*/do 无 requirement 永远可行 → **每 posture ≥ 默认动作、永不空集**（A 条件 ②，结构性满足 + 显式兜底）。nearby 用 local_view cells 出现判定（保守过近似、只在材料完全不在视野时剔，绝不过滤可行动作）。
+- **producer 改 callable vocab**：`LLMCandidateProducer.profile_action_vocab` 接受 `Mapping | Callable[[], Mapping]`，每 `produce()` 解析（`_resolve_vocab`）。静态 dict 仍兼容（测试）。**producer 仍 framework-generic、不 import Crafter**。
+- **runner 闭包注入**：`_build_candidate_producer(config, session)` 注入 `lambda: feasible_profile_action_vocab(session.latest_agent_observation)`——scenario-owned 可行性经闭包流入、不扩冻结契约（A 条件 ①）。
+- **trace 缺口补**（A 条件 ③）：`build_response_summary` 加 `selected_action_reason`（持久 response_history 本就有；events 只读 named keys → **persisted 字节等价**）→ `bridge.resolve_action` trace 不再 None。
+- **测试**：feasibility 7（make_iron 缺料剔 / make_wood 需 table / place 按 inventory / 永远可行不剔 / 只剔不增+默认在 / 纯 helper）+ producer callable vocab 1（infeasible hint 丢弃）+ conformance 加断言 reason 非 None。**全量回归 535 绿**、flag-off/model-off 字节等价、未触 OFC/mediator/peer_circuit/anchor/L1/L2/existence-semantics 决策逻辑。
+- **范围注**：(a2) 只消 no-op（不 offer 造不出的动作），**不保证选"最推进科技树"**——那属蓝图 §7.4 多步规划、后轮（A 已注明）。
+
+**→ I-2 DONE。暂停交用户跑 I-3 live 确认**（同参再短跑 ~¥0.03，用户在场）。
+
+## I-3 — 再短跑确认（待用户起手）
+同 I-1 参数（`EVA_TRACE=1`+live+seed=1+~12turn）再跑，读原始 trace 确认：make_iron_* no-op 显著减少 / LLM 选合理可行动作 / 仍 0 sleep / 无回归 → 置 `G2_REQUESTED`（A gate；G2 专核红线 ④ feasibility-only）。

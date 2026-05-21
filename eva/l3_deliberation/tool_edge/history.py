@@ -95,6 +95,11 @@ def build_response_summary(
         "pressure_type": pressure.type,
         "selected_action": selection.selected_action,
         "selected_posture": selection.selected_posture,
+        # Round 1.I I-2: carry the selection reason in the summary too (the persisted
+        # response_history record already has it) so bridge.resolve_action trace records
+        # the action_hint causal reason instead of None. Inert for events (those read
+        # only named keys), so flag-off stays byte-equivalent.
+        "selected_action_reason": selection.selected_action_reason,
         "execution_status": execution_result["execution_status"],
         "pressure_outcome": execution_result["pressure_outcome"],
         "followup_needed": execution_result["followup_needed"],

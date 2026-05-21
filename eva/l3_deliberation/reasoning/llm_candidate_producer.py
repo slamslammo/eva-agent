@@ -29,13 +29,19 @@ from .candidate_producer import CandidateProducer, HeuristicCandidateProducer
 if TYPE_CHECKING:
     from ...anchor.domain_restriction import ActionDomain
 
-__all__ = ["LLMCandidateProducer", "ChatFn"]
+__all__ = ["LLMCandidateProducer", "ChatFn", "VocabSource"]
 
 # Injected transport seam: takes OpenAI-style ``messages`` and returns the
 # assistant's text. The framework stays vendor-neutral; the live wiring builds
 # this from the existing working-memory model-client transport, and tests inject
 # a stub. ``None`` disables the LLM (→ pure heuristic).
 ChatFn = Callable[[list[dict[str, str]]], str]
+
+# Scenario-owned per-posture action vocabulary. Either a static mapping or a
+# zero-arg callable resolved per ``produce()`` (round-1i a2: lets the scenario
+# return only the actions feasible *this turn*, e.g. filtered by current inventory).
+# The producer treats it opaquely and never imports the scenario.
+VocabSource = Mapping[str, Sequence[str]] | Callable[[], Mapping[str, Sequence[str]]]
 
 _PROFILE_KEY = "candidate_profile"
 _MAX_VOCAB_IN_PROMPT = 16
@@ -49,38 +55,50 @@ class LLMCandidateProducer:
         base_producer: CandidateProducer | None = None,
         *,
         chat_fn: ChatFn | None = None,
-        profile_action_vocab: Mapping[str, Sequence[str]] | None = None,
+        profile_action_vocab: VocabSource | None = None,
     ) -> None:
         self.base_producer = base_producer or HeuristicCandidateProducer()
         self.chat_fn = chat_fn
-        # Scenario-owned vocabulary (profile -> eligible concrete actions),
-        # injected by the runtime so the framework producer stays generic. When
-        # absent, no hint is attached (the producer cannot validate eligibility).
-        self.profile_action_vocab: dict[str, tuple[str, ...]] = {
-            str(profile): tuple(str(a) for a in actions)
-            for profile, actions in (profile_action_vocab or {}).items()
-        }
+        # Scenario-owned vocabulary (profile -> eligible concrete actions), injected
+        # by the runtime so the framework producer stays generic (no scenario import).
+        # round-1i (a2): may be a **callable** resolved per ``produce()`` so the scenario
+        # can return only the actions feasible *this turn* (e.g. filtered by current
+        # inventory) — the producer treats it opaquely. A static mapping still works.
+        self._vocab_source: VocabSource | None = profile_action_vocab
+
+    def _resolve_vocab(self) -> dict[str, tuple[str, ...]]:
+        """Resolve the per-turn vocabulary (call the source if it is a callable)."""
+
+        source = self._vocab_source
+        if callable(source):
+            source = source()
+        if not isinstance(source, Mapping):
+            return {}
+        return {str(profile): tuple(str(a) for a in actions) for profile, actions in source.items()}
 
     def produce(
         self, action_domain: "ActionDomain", deliberation_input: DeliberationInput
     ) -> list[Candidate]:
         base = list(self.base_producer.produce(action_domain, deliberation_input))
-        if self.chat_fn is None or not base or not self.profile_action_vocab:
+        vocab = self._resolve_vocab()
+        if self.chat_fn is None or not base or not vocab:
             return base
         try:
-            text = self.chat_fn(self._build_messages(base, deliberation_input))
+            text = self.chat_fn(self._build_messages(base, deliberation_input, vocab))
             hints = _parse_action_hints(text)
         except Exception:
             # Any failure (transport, timeout, parse) degrades to heuristic.
             return base
         if not hints:
             return base
-        return [self._maybe_attach_hint(candidate, hints) for candidate in base]
+        return [self._maybe_attach_hint(candidate, hints, vocab) for candidate in base]
 
     # -- internal -----------------------------------------------------------
 
-    def _maybe_attach_hint(self, candidate: Candidate, hints: dict[str, str]) -> Candidate:
-        """Attach a hint only when it is eligible for the candidate's profile."""
+    def _maybe_attach_hint(
+        self, candidate: Candidate, hints: dict[str, str], vocab: dict[str, tuple[str, ...]]
+    ) -> Candidate:
+        """Attach a hint only when it is eligible (feasible) for the candidate's profile."""
 
         profile = str(candidate.parameter_domain.get(_PROFILE_KEY) or "")
         if not profile:
@@ -88,12 +106,15 @@ class LLMCandidateProducer:
         action = hints.get(profile)
         if not action:
             return candidate
-        if action not in self.profile_action_vocab.get(profile, ()):  # ineligible
+        if action not in vocab.get(profile, ()):  # ineligible / infeasible this turn
             return candidate
         return dataclasses.replace(candidate, action_hint=action)
 
     def _build_messages(
-        self, base: list[Candidate], deliberation_input: DeliberationInput
+        self,
+        base: list[Candidate],
+        deliberation_input: DeliberationInput,
+        vocab: dict[str, tuple[str, ...]],
     ) -> list[dict[str, str]]:
         """Build a compact, bounded chat request enumerating per-posture options."""
 
@@ -103,9 +124,9 @@ class LLMCandidateProducer:
             if c.parameter_domain.get(_PROFILE_KEY)
         ]
         options = {
-            profile: list(self.profile_action_vocab.get(profile, ())[:_MAX_VOCAB_IN_PROMPT])
+            profile: list(vocab.get(profile, ())[:_MAX_VOCAB_IN_PROMPT])
             for profile in profiles
-            if profile in self.profile_action_vocab
+            if profile in vocab
         }
         drive = deliberation_input.drive_broadcast
         situation = {

@@ -145,6 +145,28 @@ class LLMCandidateProducerTests(unittest.TestCase):
         self.assertEqual([c.candidate_id for c in produced], self.base_ids)
         self.assertTrue(all(c.action_hint is None for c in produced))
 
+    def test_callable_vocab_resolved_per_produce_filters_infeasible_hint(self) -> None:
+        # round-1i (a2): a per-turn callable vocab that omits make_iron_sword from
+        # escalate (infeasible) -> the LLM's escalate hint is dropped; stabilize's
+        # sleep (in vocab) is attached. Proves the producer honors the dynamic vocab.
+        calls = {"n": 0}
+
+        def vocab_fn():
+            calls["n"] += 1
+            return {
+                "escalate_first": ("do", "move_left"),  # make_iron_sword NOT feasible
+                "stabilize_first": ("sleep", "noop"),
+                "observe_first": ("noop", "move_right"),
+            }
+
+        chat = _StubChat('{"action_hints": {"escalate_first": "make_iron_sword", "stabilize_first": "sleep"}}')
+        producer = LLMCandidateProducer(chat_fn=chat, profile_action_vocab=vocab_fn)
+        produced = producer.produce(self.domain, self.di)
+        self.assertEqual(calls["n"], 1)  # callable resolved exactly once this produce
+        by_profile = {c.parameter_domain.get("candidate_profile"): c.action_hint for c in produced}
+        self.assertIsNone(by_profile.get("escalate_first"))  # infeasible hint dropped
+        self.assertEqual(by_profile.get("stabilize_first"), "sleep")  # feasible hint kept
+
 
 if __name__ == "__main__":
     unittest.main()
