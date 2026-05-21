@@ -753,6 +753,8 @@ It has three main functions:
 
 The output is a ranked candidate set, not an execution order.
 
+> Implementation note (Round 1.G): an early implementation placed the model as a ≤0.12 post-hoc advisory bias plus an inert reorder-proposer (round-1e), which round-1f showed was drift — the model did not actually *form candidates*. This is superseded by a `CandidateProducer` seam where the dlPFC forms the candidate set within the anchor-bounded domain; selection (peer-circuit) and release (mediator) authority are unchanged.
+
 ![L3 reasoning core](./assets/architecture/l3_reasoning_core_overview.svg)
 
 ### 7.5 Peer circuit / basal ganglia analog

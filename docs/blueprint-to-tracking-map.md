@@ -36,7 +36,7 @@ It answers one question: **for each blueprint commitment, where is its tracking 
 | Mediator as independent peer circuit | 1.4 `Mediator as independent peer circuit (default inhibition + selective release)` | landed | — |
 | Runtime-only release token boundary | 1.4 `Runtime-only release token boundary` | landed | — |
 | Drive-weighted candidate assessment | 1.4 `Drive-weighted candidate assessment with bounded learned overlays` | landed | — |
-| L3 reasoning core forms candidates (proposal path) | 1.4 `L3 reasoning proposal path (anchor-bounded proposer shapes the considered candidate set)` | landed (mechanism) | Round 1.E (blueprint §7.4): an anchor-bounded proposer shapes the considered candidate set; model influence rises from a ≤0.12 post-hoc bias to considered-set shaping, still bounded by anchor admission + peer-circuit selection + mediator release. LLM-reasoning long-run validation deferred (§8). |
+| L3 reasoning core forms candidates (dlPFC producer) | 1.4 `L3 reasoning core — dlPFC candidate producer` | landed (phase-1 seam) | Round 1.G (blueprint §7.4): round-1e reorder-proposer + ≤0.12 advisory superseded (drift, round-1f); replaced by a behavior-preserving `CandidateProducer` seam (`HeuristicCandidateProducer`). Live-LLM producer = phase 2 (awaits A+user). |
 | Canonical multi-dimensional outcome support | 1.4 `Append-only learning outcome records with canonical OutcomeVector support` | landed | — |
 | RPE as internal update signal | 1.4 `RPE-like learning as internal update signal` | landed | Tracking uses “RPE-like” wording; blueprint is stricter about vector semantics. |
 | Habit shaping and skill crystallization | 1.4 `Habit shaping and skill crystallization through habit track` | landed | — |
