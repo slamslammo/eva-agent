@@ -279,17 +279,28 @@ class DeliberationAuditRecord:
     assessments: list[dict[str, Any]]
     release_decision: dict[str, Any]
     release_token: ReleaseToken | None = None
+    # Round 1.E (additive): reasoning-layer proposals that shaped the considered
+    # candidate set, and proposals rejected at normalization (out-of-domain). Both
+    # omitted from to_dict when empty so an inert/heuristic-off pass is byte-identical
+    # to the pre-1.E audit (behavior-preserving).
+    proposals: list[dict[str, Any]] = field(default_factory=list)
+    rejected_proposals: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the deliberation audit record."""
 
-        return {
+        payload: dict[str, Any] = {
             "recorded_at": self.recorded_at,
             "deliberation_input": dict(self.deliberation_input),
             "candidates": [dict(candidate) for candidate in self.candidates],
             "assessments": [dict(assessment) for assessment in self.assessments],
             "release_decision": dict(self.release_decision),
         }
+        if self.proposals:
+            payload["proposals"] = [dict(proposal) for proposal in self.proposals]
+        if self.rejected_proposals:
+            payload["rejected_proposals"] = [dict(rejection) for rejection in self.rejected_proposals]
+        return payload
 
 
 def build_deliberation_audit_record(
@@ -298,6 +309,9 @@ def build_deliberation_audit_record(
     candidates: list[Candidate],
     assessments: list[CandidateAssessment],
     release_decision: ReleaseDecision,
+    *,
+    proposals: list[dict[str, Any]] | None = None,
+    rejected_proposals: list[dict[str, Any]] | None = None,
 ) -> DeliberationAuditRecord:
     """Build the append-only L3 deliberation audit artifact from current pass artifacts."""
 
@@ -308,6 +322,8 @@ def build_deliberation_audit_record(
         assessments=[assessment.to_dict() for assessment in assessments],
         release_decision=release_decision.to_dict(),
         release_token=release_decision.release_token,
+        proposals=list(proposals or []),
+        rejected_proposals=list(rejected_proposals or []),
     )
 
 
