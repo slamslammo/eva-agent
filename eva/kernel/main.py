@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,8 +15,16 @@ from .config import AppendOnlyArtifactsConfig, ExternalLifeConfig, LifecycleConf
 from .instance import InstanceGuard
 from .lifecycle import ExternalActionRuntime, LifecycleRuntime
 from ..l3_deliberation.reasoning.candidate_producer import CandidateProducer
+from ..observability import (
+    CONTINUITY_ALIVE,
+    CONTINUITY_NEW_INDIVIDUAL,
+    CONTINUITY_TERMINATED,
+    RunIdentity,
+    build_trace_sink,
+    write_run_meta,
+)
 from .state import EventRecord, StateStore, emit_log_line, utc_now
-from ..scenario_bundle import get_active_runtime_scenario
+from ..scenario_bundle import get_active_existence_semantics, get_active_runtime_scenario
 from ..l1_sensing.sensor_registry import SensorRegistry
 from ..l3_deliberation import (
     ADAPTER_MODE_HEURISTIC,
@@ -64,6 +73,7 @@ def run_runtime(
     extra_shared_facts_provider: Callable[[], dict[str, Any] | None] | None = None,
     action_runtime: ExternalActionRuntime | None = None,
     candidate_producer: CandidateProducer | None = None,
+    seed: int | None = None,
     periodic_hook: Callable[..., tuple[bool, str | None]] | None = None,
     hook_interval_sec: float = 1800.0,
 ) -> RunSummary:
@@ -134,6 +144,19 @@ def run_runtime(
         resolved_adapter=resolved_adapter,
         explicit_adapter=working_memory_adapter,
     )
+    # Round 1.H: opt-in cognitive telemetry (EVA_TRACE). NullTraceSink when off ->
+    # byte-equivalent to a non-traced run. run_meta is written once per run (schema §1).
+    trace_sink = build_trace_sink(
+        config.paths.runtime_dir,
+        identity=RunIdentity(
+            run_id=instance_id,
+            individual_id=individual_id,
+            individual_boundary=get_active_existence_semantics().individual_boundary,
+            continuity_state=CONTINUITY_NEW_INDIVIDUAL if individual_newly_born else CONTINUITY_ALIVE,
+        ),
+    )
+    if trace_sink.enabled:
+        write_run_meta(config.paths.runtime_dir, _build_run_meta(config, instance_id, seed, now))
     runtime = LifecycleRuntime(
         store,
         instance_guard,
@@ -146,6 +169,7 @@ def run_runtime(
         extra_shared_facts_provider,
         action_runtime,
         candidate_producer=candidate_producer,
+        trace_sink=trace_sink,
     )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()
@@ -177,6 +201,7 @@ def run_runtime(
                 # 区别于 substrate 级的 max_ticks/max_runtime（进程被叫停）。
                 if action_runtime is not None and getattr(action_runtime, "terminated", False):
                     exit_reason = "individual_terminated"
+                    trace_sink.set_continuity_state(CONTINUITY_TERMINATED)
                     break
 
                 if config.control.max_ticks is not None and ticks >= config.control.max_ticks:
@@ -354,6 +379,39 @@ def _write_individual_record(
         ),
         encoding="utf-8",
     )
+
+
+def _build_run_meta(
+    config: RuntimeConfig,
+    run_id: str,
+    seed: int | None,
+    now: datetime,
+) -> dict[str, Any]:
+    """Assemble the per-run telemetry metadata header (telemetry-schema.md §1)."""
+
+    scenario = get_active_runtime_scenario()
+    es = get_active_existence_semantics()
+    is_live = (
+        config.working_memory_backend == "llm_assisted"
+        and config.working_memory_model_client_mode == MODEL_CLIENT_MODE_LIVE
+    )
+    model = os.environ.get("EVA_LLM_MODEL") if is_live else config.working_memory_model_client_mode
+    return {
+        "run_id": run_id,
+        "scenario": scenario.name,
+        "model": model,
+        "memory_backend": config.working_memory_backend,
+        "candidate_producer_version": "llm_action_hint_v1" if is_live else "heuristic_v1",
+        "anchor_policy": f"{scenario.name}_compatibility",
+        "seed": seed,
+        "existence_semantics": {
+            "reset_semantics": es.reset_semantics,
+            "clock_source": es.clock_source,
+            "individual_boundary": es.individual_boundary,
+            "inheritance_channel": es.inheritance_channel,
+        },
+        "started_at": now.isoformat(),
+    }
 
 
 def _resolve_working_memory_adapter(

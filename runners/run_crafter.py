@@ -129,6 +129,7 @@ def run_crafter_runtime(
             extra_shared_facts_provider=session.build_shared_facts,
             action_runtime=session,
             candidate_producer=resolved_producer,
+            seed=seed,
             periodic_hook=periodic_hook,
             hook_interval_sec=hook_interval_sec,
         )

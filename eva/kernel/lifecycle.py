@@ -24,6 +24,7 @@ from ..l3_deliberation import (
 )
 from ..l3_deliberation.contracts import DeliberationAuditRecord, ReleaseDecision, ReleaseToken
 from ..l3_deliberation.reasoning.candidate_producer import CandidateProducer
+from ..observability import NullTraceSink, TraceSink
 from ..l3_deliberation.memory import (
     append_cognitive_memory_stub,
     append_habit_bias,
@@ -150,6 +151,7 @@ class LifecycleRuntime:
         extra_shared_facts_provider: Callable[[], dict[str, Any] | None] | None = None,
         action_runtime: ExternalActionRuntime | None = None,
         candidate_producer: CandidateProducer | None = None,
+        trace_sink: TraceSink | None = None,
     ) -> None:
         self.store = store
         self.instance_guard = instance_guard
@@ -165,6 +167,9 @@ class LifecycleRuntime:
         # lever). ``None`` -> run_deliberation defaults to the deterministic
         # HeuristicCandidateProducer (model-off byte-equivalent).
         self.candidate_producer = candidate_producer
+        # Round 1.H: opt-in cognitive-trace sink. ``None`` -> NullTraceSink (no-op,
+        # byte-equivalent). H-2/H-3 emit transform/snapshot events from runtime seams.
+        self.trace_sink: TraceSink = trace_sink or NullTraceSink()
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
