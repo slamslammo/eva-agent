@@ -472,6 +472,7 @@ class CrafterP1aTraceIntegrationTests(unittest.TestCase):
             self.assertIn("bridge.resolve_action", transform_ids)
             snapshot_types = {r["snapshot_type"] for r in records if r["event_type"] == "snapshot"}
             self.assertIn("drive_state", snapshot_types)
+            self.assertIn("candidate_scoring", snapshot_types)  # H-3b owner-hook #2
             # H-2b: raw observation grid persisted under raw_observations/.
             raw_files = list((runtime_dir / "raw_observations").glob("turn-*.json"))
             self.assertGreaterEqual(len(raw_files), 1)

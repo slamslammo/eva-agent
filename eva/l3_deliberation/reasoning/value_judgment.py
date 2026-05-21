@@ -8,6 +8,7 @@ from .candidate_generation import current_anchor_profiles
 from .conflict_detection import build_candidate_conflict_context
 from ..contracts import Candidate, CandidateAssessment, DeliberationInput
 from ..peer_circuit.rpe import build_learned_impact_overlay
+from ...observability import current_trace_sink, current_trace_turn_index
 
 
 def assess_candidates(candidates: list[Candidate], deliberation_input: DeliberationInput) -> list[CandidateAssessment]:
@@ -29,6 +30,13 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         score = 0.0
         learning_bias = 0.0
         bias_reasons: list[str] = []
+        # Round 1.H H-3b: score-decomposition components for the candidate_scoring
+        # snapshot (owner-hook #2). Initialized here so the read-only emit below always
+        # has them; the allow branch reassigns the live values. Purely additive — the
+        # returned CandidateAssessment is unaffected (byte-equivalent).
+        drive_score = 0.0
+        projection_score = 0.0
+        habit_priority_bonus = 0.0
         conflict = build_candidate_conflict_context(
             candidate,
             top_drive=top_drive,
@@ -101,6 +109,26 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                 bias_reasons=tuple(bias_reasons),
             )
         )
+        # Round 1.H H-3b: flag-gated read-only owner-hook (A-approved exception #2).
+        # The per-candidate score decomposition (drive_weighted / projection / habit /
+        # advisory) is local here and invisible at any seam — only ``score`` +
+        # ``learning_bias`` survive on CandidateAssessment. Gated on the process-current
+        # trace sink (NullTraceSink off → no-op → byte-equivalent); never reads back.
+        _trace = current_trace_sink()
+        if _trace.enabled:
+            _trace.emit_snapshot(
+                snapshot_type="candidate_scoring",
+                turn_index=current_trace_turn_index(),
+                values={
+                    "candidate_id": candidate.candidate_id,
+                    "drive_weighted": round(drive_score, 6),
+                    "projection": round(projection_score, 6),
+                    "learning_bias": round(learning_bias, 6),
+                    "habit": round(habit_priority_bonus, 6),
+                    "advisory": 0.0,  # retired in Round 1.G (drift)
+                    "final_score": round(score, 6),
+                },
+            )
     return assessments
 
 
