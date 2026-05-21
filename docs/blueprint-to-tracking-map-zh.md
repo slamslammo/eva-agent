@@ -36,7 +36,7 @@
 | Mediator 作为独立 peer circuit | 1.4 `Mediator as independent peer circuit (default inhibition + selective release)` | landed | — |
 | Runtime-only release token boundary | 1.4 `Runtime-only release token boundary` | landed | — |
 | 带 learned overlay 的 drive-weighted candidate assessment | 1.4 `Drive-weighted candidate assessment with bounded learned overlays` | landed | — |
-| L3 reasoning core 形成候选（dlPFC 产出器） | 1.4 `L3 reasoning core — dlPFC candidate producer` | landed (phase-1 seam) | Round 1.G（蓝图 §7.4）：round-1e reorder-proposer + ≤0.12 advisory 退役（drift，round-1f）；改为 behavior-preserving 的 `CandidateProducer` seam（`HeuristicCandidateProducer`）。live-LLM 产出器 = phase 2（待 A+用户）。 |
+| L3 reasoning core 形成候选（dlPFC 产出器） | 1.4 `L3 reasoning core — dlPFC candidate producer` | landed (phase 2 (a)) | Round 1.G（蓝图 §7.4）：round-1e reorder-proposer + ≤0.12 advisory 退役（drift，round-1f）；改为 behavior-preserving 的 `CandidateProducer` seam（`HeuristicCandidateProducer`）。phase 2 (a) 已落地（G2 通过）：live `LLMCandidateProducer` 给每个候选标注 `action_hint`——LLM 的因果杠杆，即 drive 锁定 posture 内的具体动作——经 `release_context` 串到 Crafter bridge 消费（优先于 default/prior）。因果路径已在 live DeepSeek 上证实（LLM hint=X → 执行=X）；model-off 字节等价。 |
 | 规范多维 outcome 支持 | 1.4 `Append-only learning outcome records with canonical OutcomeVector support` | landed | — |
 | RPE 作为内部更新信号 | 1.4 `RPE-like learning as internal update signal` | landed | tracking 用的是 “RPE-like” 表述；blueprint 对 vector semantics 更严格。 |
 | Habit shaping 与 skill crystallization | 1.4 `Habit shaping and skill crystallization through habit track` | landed | — |
