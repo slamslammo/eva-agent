@@ -1,6 +1,6 @@
 # Round 1.I — Instrumented 短跑 → 分析 → 修可行性（计划②）— Progress（B）
 
-**当前状态**：**I-2 DONE → 暂停待用户跑 I-3 live 确认**。I-1（短跑+分析）+ G1（A 定 a2）+ I-2（动态可行 vocab + trace 缺口补，535 绿、字节等价）完成；I-3 = 同参再短跑确认（~¥0.03、用户在场）。
+**当前状态**：**I-3 DONE → G2_REQUESTED**（全 slice 完成）。I-1（分析）+ G1（A 定 a2）+ I-2（动态可行 vocab，535 绿）+ I-3（live 确认：make_iron_* no-op 8/9→0/9、得 1 achievement、0 塌缩）完成。待 A 终审。
 **分支**：`claude/recursing-hertz-7c4029`。指令 `eva-coordination/round-1i-instrumented-shortrun-craftability-fix-startup-instruction.md`。
 
 ---
@@ -42,5 +42,16 @@ A/用户裁定 = **(a2) 动态可行 vocab 为主、不带 (b)**。实现：
 
 **→ I-2 DONE。暂停交用户跑 I-3 live 确认**（同参再短跑 ~¥0.03，用户在场）。
 
-## I-3 — 再短跑确认（待用户起手）
-同 I-1 参数（`EVA_TRACE=1`+live+seed=1+~12turn）再跑，读原始 trace 确认：make_iron_* no-op 显著减少 / LLM 选合理可行动作 / 仍 0 sleep / 无回归 → 置 `G2_REQUESTED`（A gate；G2 专核红线 ④ feasibility-only）。
+## I-3 — 再短跑确认 ✅（2026-05-22，用户唤醒跑）
+
+同 I-1 参数（`EVA_TRACE=1`+live+seed=1+12turn，`validation-runs/round-1i/i3-live`，~¥0.03）。读原始 trace，**I-1 vs I-3 对比**：
+
+| 指标 | I-1（修前） | I-3（修后 a2） |
+|---|---|---|
+| `make_iron_*` no-op | **8/9** | **0/9** ✅ |
+| LLM 选动作 | 全 iron 工具（造不出） | `do`×6（真交互）/ sleep×2 / noop×1 |
+| achievements | 0 | **1**（t6 `do`→collect_sapling，inv+sapling） |
+| action_hint 因果 | exec==hint | exec==hint（仍完好） |
+| sleep | 0/9 | 2/9（stabilize posture 内合理、非 round-1f 塌缩） |
+
+**结论**：(a2) 动态可行 vocab **彻底消除造不出的 no-op**（make_iron_* 0/9），LLM 改选可行 `do` 并拿到 1 个 achievement（真进展）；action_hint 因果完好；无 passivity 塌缩（escalate `do` 主导）。残留 `unchanged` = pressure-relief 指标 + 未链式推进科技树（§7.4 多步规划、后轮范围、A 已注非本轮）。**本轮目标（消 no-op）达成 → 置 `G2_REQUESTED`**（A 终审，专核红线 ④ feasibility-only：vocab 只剔物理不可行）。
