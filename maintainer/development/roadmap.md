@@ -15,6 +15,13 @@
 - `maintainer/development/roadmap.md`：本地完整 v0.5 开发落地方案
 - `maintainer/development/*-progress.md`：本地当前落地进展
 
+> **时间边界（重要）**：本路线图的阶段叙述截至 **Stage H closeout**。其后的工作
+> —— Stage I（working / semantic memory 深化）、Round 1.A–1.D（Crafter 能力落地 +
+> 长跑基础设施）、Phase 1.7（LLM client 通用化到 OpenAI Chat Completions）、
+> Phase 2（observation_tools 黑盒子查看器）—— **不在本文件展开**，以各自的 commit、
+> `maintainer/development/*-progress.md` 与 `.claude/plans/federated-snacking-engelbart.md`
+> 主索引为准。本文件保留为 Stage H 及之前的历史路线参考。
+
 ## 1. 当前阶段判断
 
 当前仓库已经具备：
