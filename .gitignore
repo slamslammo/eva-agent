@@ -7,3 +7,5 @@ venv/
 .venv/
 .local-archive/
 maintainer/
+.claude/
+validation-runs/
