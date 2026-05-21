@@ -187,16 +187,19 @@ class LifecycleRuntime:
         deliberation_input: Any,
         deliberation_audit: DeliberationAuditRecord,
         extra_shared_facts: dict[str, Any] | None = None,
+        patrol_snapshot: Any = None,
     ) -> None:
-        """Round 1.H H-2a/H-2b: emit the seam-assembled P1a batch-1 transforms.
+        """Round 1.H H-2a/b/d: emit the seam-assembled P1a batch-1 transforms.
 
         Assembled purely from data the deliberation pass + patrol already returned —
         no frozen-owner function body is touched (red-line #2). Only called when
         ``trace_sink.enabled``; ``_trace_turn_index`` advances only while tracing,
-        so a non-traced run is byte-identical. H-2b adds ``l1.raw_observation`` here
-        (the symbolic grid the agent consumes, from ``extra_shared_facts``). The
-        ``l2.approach_delta`` owner-hook + ``l1.rate_sense`` / ``l1.threshold_classify``
-        land in H-2c (they read patrol-time owner-internal values).
+        so a non-traced run is byte-identical. Covers ``l1.raw_observation`` (H-2b,
+        from ``extra_shared_facts``), ``l1.threshold_classify`` + ``l1.rate_sense``
+        (H-2d, from ``patrol_snapshot.dimensions`` status/evidence — seam-visible, no
+        owner-hook), ``l1.signal_publish`` / ``l2.broadcast`` / ``anchor.admit`` +
+        ``drive_state`` snapshot (H-2a). The ``l2.approach_delta`` owner-hook (H-2c)
+        emits separately from drive_state during patrol with the same turn_index.
         """
 
         # turn_index is allocated once per patrol turn (set_current_trace below)
@@ -231,12 +234,43 @@ class LifecycleRuntime:
         drive = dict(getattr(deliberation_input, "drive_broadcast", {}) or {})
         drive_levels = drive.get("drive_levels") if isinstance(drive.get("drive_levels"), dict) else {}
 
+        # H-2d: dimension threshold classification + rate sensing are visible on the
+        # patrol snapshot's DimensionSnapshots (status / evidence.reason / rate_context),
+        # so they are seam-assembled here — no L1 owner-hook needed.
+        dimensions = getattr(patrol_snapshot, "dimensions", None)
+        if isinstance(dimensions, dict) and dimensions:
+            classify: dict[str, Any] = {}
+            rates: dict[str, Any] = {}
+            for name, dim in dimensions.items():
+                evidence = getattr(dim, "evidence", {}) or {}
+                classify[str(name)] = {"status": getattr(dim, "status", None), "reason": evidence.get("reason")}
+                if isinstance(evidence.get("rate_context"), dict):
+                    rates[str(name)] = evidence["rate_context"]
+            self.trace_sink.emit_transform(
+                layer="L1",
+                transform_id="l1.threshold_classify",
+                code_anchor="scenarios/crafter/sensors/avatar_state.py",
+                turn_index=turn_index,
+                parents=[{"id": "l1.raw_observation", "edge_type": "pressure"}],
+                outputs={"dimensions": classify},
+            )
+            if rates:
+                self.trace_sink.emit_transform(
+                    layer="L1",
+                    transform_id="l1.rate_sense",
+                    code_anchor="eva/l1_sensing/rate_sensors.py:build_rate_context",
+                    turn_index=turn_index,
+                    parents=[{"id": "l1.threshold_classify", "edge_type": "pressure"}],
+                    outputs={"dimensions": rates},
+                )
+
         self.trace_sink.emit_transform(
             layer="L1",
             transform_id="l1.signal_publish",
             code_anchor="eva/l1_sensing/signal_bus.py",
             turn_index=turn_index,
             inputs=gate_inputs,
+            parents=[{"id": "l1.threshold_classify", "edge_type": "pressure"}],
             outputs={"summary": dict(summary)},
         )
         self.trace_sink.emit_transform(
@@ -703,7 +737,9 @@ class LifecycleRuntime:
                     now, deliberation_input, producer=self.candidate_producer
                 )
                 if self.trace_sink.enabled:
-                    self._emit_p1a_seam_trace(deliberation_input, deliberation_audit, extra_shared_facts)
+                    self._emit_p1a_seam_trace(
+                        deliberation_input, deliberation_audit, extra_shared_facts, patrol_result.snapshot
+                    )
                 self.store.append_deliberation_audit(deliberation_audit.to_dict())
                 if memory_stub is not None:
                     append_cognitive_memory_stub(self.store, memory_stub)
