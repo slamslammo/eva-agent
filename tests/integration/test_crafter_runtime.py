@@ -484,6 +484,85 @@ class CrafterP1aTraceIntegrationTests(unittest.TestCase):
             first_turn = [r for r in records if r["turn_index"] == 0]
             self.assertTrue(any(r.get("transform_id") == "anchor.admit" for r in first_turn))
 
+    def test_full_chain_schema_conformance_and_replay(self) -> None:
+        """Round 1.H H-4: a traced run is schema-conformant and replayable — every
+        event satisfies the §2 envelope + §3/§4 shape, turn_index is monotonic, and
+        run_meta §1 is fully populated. 0-token (stub)."""
+
+        envelope_keys = {
+            "run_id", "individual_id", "individual_boundary", "continuity_state",
+            "inherited_from", "episode_step", "turn_index", "event_type", "ts",
+        }
+        valid_layers = {"L1", "L2", "L3", "anchor", "mediator", "bridge", "kernel"}
+        valid_continuity = {"alive", "terminated", "new_individual", "inherited"}
+        valid_edges = {
+            "top_drive_bias", "pressure", "habit_override", "inherited_prior",
+            "llm_advisory", "projection_fallback", "drive_floor",
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=6, max_runtime_sec=2.0, idle_sleep_sec=0.01),
+            )
+            with patch.dict(os.environ, {"EVA_TRACE": "1"}), patch.object(
+                CrafterRuntimeSession, "start", return_value=StubCrafterSession()
+            ):
+                run_crafter_runtime(config)
+            runtime_dir = Path(config.paths.runtime_dir)
+            meta = json.loads((runtime_dir / "run_meta.json").read_text())
+            records = [
+                json.loads(line)
+                for line in (runtime_dir / "cognitive_trace.jsonl").read_text().splitlines()
+                if line.strip()
+            ]
+
+        # run_meta §1 fully populated.
+        for key in ("run_id", "scenario", "memory_backend", "candidate_producer_version", "anchor_policy", "started_at"):
+            self.assertTrue(meta.get(key), key)
+        for key in ("reset_semantics", "clock_source", "individual_boundary", "inheritance_channel"):
+            self.assertIn(key, meta["existence_semantics"])
+
+        # Every event is envelope-conformant and turn_index is monotonic non-decreasing.
+        last_turn = -1
+        emitted_ids: set[str] = set()
+        for record in records:
+            self.assertTrue(envelope_keys.issubset(record), record.get("transform_id") or record.get("snapshot_type"))
+            self.assertIn(record["continuity_state"], valid_continuity)
+            self.assertGreaterEqual(record["turn_index"], last_turn)
+            last_turn = record["turn_index"]
+            if record["event_type"] == "transform":
+                self.assertIn(record["layer"], valid_layers)
+                self.assertTrue(record["transform_id"])
+                self.assertTrue(record["code_anchor"])
+                self.assertIsInstance(record["parents"], list)
+                for parent in record["parents"]:
+                    self.assertIn("id", parent)
+                    self.assertIn(parent["edge_type"], valid_edges)
+                emitted_ids.add(record["transform_id"])
+            else:
+                self.assertEqual(record["event_type"], "snapshot")
+                self.assertTrue(record["snapshot_type"])
+                self.assertIsInstance(record["values"], dict)
+
+        # Chain connectivity: non-root parents reference transform_ids actually emitted.
+        for record in records:
+            if record["event_type"] != "transform":
+                continue
+            for parent in record["parents"]:
+                self.assertIn(parent["id"], emitted_ids)
+
 
 if __name__ == "__main__":
     unittest.main()
