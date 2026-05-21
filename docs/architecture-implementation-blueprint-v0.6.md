@@ -43,6 +43,8 @@ The move from theory to implementation is therefore not a translation into featu
 
 “Continuous existence” here is read in its active sense, per v0.6: what is preserved is the agent's projected capacity to continue existing, not the current state values themselves. State preservation and persistence are not the same thing.
 
+**EVA is an architecture, not an ontology.** EVA-Agent does not decide on behalf of a scenario what counts as alive or dead, and it does not hardcode any fixed existence criterion into the framework. The framework provides the **mechanisms** required to sustain continuous existence (cadence, legitimacy, partitioned persistence, anchor, mediator, memory, inheritance, and so on) and **consistently honors the existence semantics declared by the scenario**; the existence semantics themselves are declared by the scenario as a field condition (see §2.7 and §12.7). This boundary is what lets the same framework carry existence fields as different as an always-on deployed agent and a one-life Crafter individual — without disturbing the structural invariants.
+
 ### 0.2 What EVA-Agent v0.6 is
 
 EVA-Agent v0.6 is not a generic task orchestrator centered on completion. It is an **existence-centered agent architecture** whose first constraint is continuous, bounded, durable operation.
@@ -65,6 +67,21 @@ This blueprint answers four questions:
 2. How do the framework/scenario split, five layers, Anchor System, and Kernel divide responsibility?
 3. How do sensing, drive, deliberation, release, memory, and learning form a continuous closed loop?
 4. How should such a system be validated, measured, and deployed?
+
+### 0.4 Document positioning (architectural contract vs landed status)
+
+This blueprint is the **architectural contract** for EVA-Agent v0.6, and it carries two kinds of commitment at once:
+
+- **Landed and binding**: structural invariants and boundaries already implemented in code — new development must not deviate from them; deviating requires updating the blueprint and the tracking documents first.
+- **Target architecture**: theoretical commitments that are non-negotiable in intent but not yet fully implemented — they guide subsequent phase work.
+
+The precise boundary between the two **is not carried by this document**; it is carried by the completeness tiers in `implementation-tracking.md`: `production` (landed, treat as canonical) / `partial` (landed with a stated limitation) / `skeleton` (interface or placeholder only) / `deferred` (theory commits, runtime not implemented). For any development action, read the following three documents together to decide "what must be followed" vs "what must be built":
+
+- **This blueprint** — the contract ("what, why, where the boundaries are")
+- **`implementation-tracking.md`** — the status ("what is landed, what is still missing")
+- **`scenarios-SPEC.md` / `scenarios/<name>/SPEC.md`** — the scenario-side implementation detail of the contract
+
+`blueprint-to-tracking-map.md` provides a direct row-by-row mapping from blueprint commitments to tracking entries. When the blueprint is edited, the tracking and map must be checked for sync; the reverse holds too.
 
 ---
 
@@ -93,6 +110,19 @@ That choice has architectural consequences:
 - state without rate is insufficient in non-trivial environments
 - evaluation must consider projected trajectories, not only present values
 - exploration, when implemented, is a bounded viability-supporting mechanism rather than a terminal objective
+
+#### 1.2.1 Continuous existence ≠ continuous execution
+
+Active persistence is not the same as uninterrupted execution. Two cases must be structurally distinguished:
+
+- **Recoverable interruption**: state, structural invariants, and the provenance chain can be consistently restored (crash-then-restart, migration, recharge after a flat battery, hot upgrade). The same individual continues to exist.
+- **Terminal failure**: state, a structural invariant, or the provenance chain is irrecoverably lost, or the scenario-declared continuity criterion no longer holds. That individual terminates.
+
+The determination of “same individual” is anchored in three things: **legitimacy chain + recoverable state + provenance** — **not** in whether the process kept running, whether ticks never stopped, or whether any content was passed forward to a successor. The framework provides those three mechanisms; which interruptions count as recoverable, and which events constitute terminal failure, is declared by the scenario (see §2.7 and §12.7).
+
+#### 1.2.2 The individual as the persisting subject
+
+The persisting subject is the **individual**, not the “process” or the “code instance.” One runtime activation corresponds to one individual living from birth to terminal; multiple activations (even if they share a process or filesystem) constitute a **population**. Inheritance and designer-side improvement are population-level information-continuity mechanisms; they do not constitute multiple lives of the same individual (see §7.9 and §13.5).
 
 ### 1.3 Core engineering invariants
 
@@ -195,6 +225,8 @@ Two points are load-bearing:
 - **Infrastructure / Kernel is not an implementation detail beneath L1.** It is the condition under which the same agent instance continues through time.
 - **Anchor System is not a sixth cognitive layer or a post-hoc filter.** It restricts the visible candidate domain before generation.
 
+One further point applies across all layers: **the seven layers are a categorization language, not a structural failure verdict.** Whether a failure at any given layer constitutes terminal failure for an individual is determined by scenario declaration, not by structural invariants. Every deployment must declare which layers are activated in that field, and what “recoverable interruption” and “terminal failure” mean at each activated layer. The framework executes the corresponding termination / recovery paths according to that declaration; it does not pre-judge life and death on behalf of the scenario (see §2.7, §12.7).
+
 ### 2.3 Functional roles by layer
 
 - **Infrastructure / Kernel**: cadence, legitimacy, state persistence, append-only audit, communication substrate, persistence-target registration
@@ -233,6 +265,8 @@ The scenario enters framework execution through a single scenario bundle contrac
 
 The framework owns the structures those surfaces fill. The scenario owns the content and policy that populate them.
 
+In addition to the content surfaces, the scenario must also provide an **existence semantics declaration** (the eight items in §12.7), which tells the framework how to determine recoverable interruption and terminal failure in that field. Declaration and content surfaces are two distinct kinds of constraint, but both are mandatory in scenario onboarding.
+
 ### 2.6 Why the split exists
 
 Without this split, world-specific content tends to invade structural code, and structural invariants become tied to one environment. v0.6 makes the opposite commitment:
@@ -241,6 +275,27 @@ Without this split, world-specific content tends to invade structural code, and 
 - scenario owns what makes the agent operate in a particular world
 
 That rule is what allows scenario specification to be the default response to new environments.
+
+### 2.7 Framework provides mechanisms; scenario declares semantics
+
+The deepest layer of the framework / scenario split is this: **existence semantics themselves are declared by the scenario**, while the framework provides mechanisms and consistently honors the declaration. The table below gives the minimum mapping of that division of labor:
+
+| Dimension | EVA Framework (scenario-agnostic, structural invariants) | Scenario declaration (field condition, consumed by framework) |
+|---|---|---|
+| Existence semantics | Mechanisms + consistent enforcement of declaration (**no hardcoded life/death**) | **Existence semantics declaration (eight items)** — see §12.7 |
+| Persistence-target hierarchy | The 7-level categorization; audit / drive / value-judgment operate over activated levels | Which levels this scenario activates (e.g. Crafter: embodied + capability) |
+| Instance identity | Instance legitimacy (lock / generation / lease) + recoverable state + provenance; `_resolve_individual_id` decides mint-new vs continue-existing based on `reset_semantics` | Which interruptions count as recoverable; which events count as terminal; `identity_continuity` declares what counts as "same individual" across substrate changes |
+| Sensing signals | **Mechanisms** for sensing / rate-sensing (registry, normalization, urgency routing) | Mapping of signal → dimension / drive / outcome, rate cadence, cadence configuration (avatar vitals → dimension, **not** → substrate viability) |
+| Clock | Single kernel cadence authority; **contractually intended** to read the scenario-declared `clock_source` for its tick rhythm (the current kernel cadence is still wall-clock; consumption of `clock_source` to drive step-vs-wall-clock cadence selection is not yet landed — see the "Kernel consumption of declared `clock_source`" row in tracking); per-scenario forks of cadence logic remain forbidden | `clock_source = "step"` (turn-driven, Crafter) or `"wall_clock"` (wall-clock seconds, Linux runtime); per-step rate and the like remain configured in the scenario adapter |
+| Inheritance | Registry for receiving a prior bundle; provenance and structural-invariant validation | Whether an inheritance channel exists; how distillation aggregates terminated-individual traces |
+
+> **Declaration vs configuration**: Of the eight existence-semantics items, the first seven (continuity criterion, recoverable interruption, terminal failure, individual boundary, reset semantics, inheritance channel, identity continuity) are **human-readable / audit declarations** — the framework records and validates against them, but does not fork runtime logic on them. The eighth item, `clock_source`, is **contractually** a framework-consumed configuration — the kernel is to read it to pick the life-clock source. **Note**: the current kernel cadence path is still wall-clock; the `clock_source` field has landed as part of the `ExistenceSemantics` dataclass and is declared by scenarios, but the kernel's actual consumption of that field (to switch between step and wall-clock cadence) is not yet implemented and remains a target item — see tracking for the current status. See §12.7.
+
+Three derived constraints follow from this division, and both framework implementations and scenario onboarding must respect them:
+
+1. **No P1 / P2 runtime modes for existence semantics.** Existence semantics are scenario declarations, not runtime mode switches; any design that downgrades continuity semantics into "toggle via configuration" drifts structural invariants into engineering preferences.
+2. **Do not promote scenario-internal vitals into substrate viability.** Quantities like avatar HP, energy, saturation belong to the embodied / capability dimensions, entering L1 dimensions and L2 drive; whether their depletion constitutes terminal failure is declared by the scenario in the existence semantics, and **does not** alter the meaning of Level 1 substrate.
+3. **Kernel cadence must not fork per scenario.** Kernel cadence authority is single; the difference between step-driven and wall-clock rhythms is **contractually** to be expressed by **the scenario declaring `clock_source` for the kernel to read** — that is the correct way to honor this constraint, **not** a violation (today the kernel does not yet consume `clock_source` and runs wall-clock; that consumption is a target item — see tracking). What is forbidden is "adding `if-scenario-is-crafter` branches inside the kernel scheduler," "rewriting kernel cadence paths for a specific scenario," or letting per-step rate / scenario-side timing config leak into the kernel; declaring `clock_source` for the kernel to read in a uniform way does not fall in this category.
 
 ---
 
@@ -326,9 +381,28 @@ v0.6 makes explicit that the agent preserves not one thing but a hierarchy of th
 
 The architecture does not require every deployment to activate all seven levels. It requires that deployments declare which levels they activate and that Kernel expose a registration surface for them.
 
-### 3.8 What Kernel ultimately decides
+For each activated level, what “recoverable interruption” and “terminal failure” mean is declared by the scenario in the existence semantics of §12.7. The framework does not pre-decide on the scenario's behalf — for instance, the framework does not declare that “a Level 2 embodied failure must be a recoverable episode boundary,” nor that “a Level 1 process exit must be terminal.”
 
-Kernel decides whether the rest of the architecture may continue to exist as the same legitimate agent at all.
+### 3.8 Substrate continuity and individual identity
+
+Substrate continuity is not the same as ticks-never-stopping or process-never-exiting. Whether the same individual is still in existence is determined jointly by three things:
+
+1. **Legitimacy chain**: lock / generation / lease remain monotonically consistent across the interruption;
+2. **Recoverable state**: atomic current state can be coherently reconstructed after the interruption;
+3. **Provenance**: the append-only history chain is not broken, and the new instance's origin lines up with the prior identity.
+
+From this, two boundary judgments follow:
+
+- **Recoverable interruption**: crash-then-restart, node migration, recharge after a flat battery, hot upgrade, temporary suspension followed by resumption — as long as all three above hold, this is the same individual continuing to exist.
+- **Terminal failure**: the legitimacy chain breaks, atomic state cannot be reconstructed, the provenance chain breaks, or the scenario-declared continuity criterion no longer holds — that individual terminates.
+
+`individual_id` is the engineering carrier for this judgment: `_resolve_individual_id` (`eva/kernel/main.py`) decides, based on the active scenario's `reset_semantics`, whether to restore an existing identity from the persisted `individual.json` and append a new substrate to the chain (`"same_individual_recovery"`) or mint a fresh id (`"new_individual"` or otherwise). `RunSummary` records this run's `individual_id` and `exit_reason`, so post-hoc audit can decide whether the run was a continuation of the same individual or the beginning of a new one.
+
+> **Important**: Whether a failure at the embodied layer (Level 2) constitutes terminal is a scenario declaration. For example, a one-life Crafter world declares `HP = 0 ⇒ terminal individual death`; in that scenario, HP reaching zero is not an episode boundary, not the RL-paradigm "done," but the actual death of that individual — `CrafterRuntimeSession` reports `terminated=True` to the kernel, which exits the run with `exit_reason="individual_terminated"` (archive trace, end this run) and **does not call `wrapper.reset()` to extend life**. The next activation is a **new individual** (`_resolve_individual_id` mints a fresh id), which may load distilled priors over the inheritance channel. The framework does not treat avatar vitals as a substrate viability signal — it accepts the scenario declaration and executes accordingly.
+
+### 3.9 What Kernel ultimately decides
+
+Kernel decides whether the rest of the architecture may continue to exist as the same legitimate agent at all; and it **consistently honors the scenario's declaration of existence semantics**, anchoring the “same individual?” judgment in legitimacy + recoverable state + provenance, rather than in whether execution was interrupted.
 
 ---
 
@@ -783,10 +857,17 @@ Properties of habit shaping:
 
 v0.6 specifies an implementable L3 path for inherited priors.
 
+**Key positioning**: inheritance is a **cross-individual** population-level information-continuity mechanism — flowing from one or more **terminated past individuals** into a **distinct new individual**. It is **not** a continuation of the same individual across multiple lives:
+
+- the receiving party is a new individual, not a “revival” or “extended life” of the original;
+- “process never stopped” / “any content was passed forward” does **not** constitute existence continuity of the same individual;
+- the continuity of the same individual is always anchored in legitimacy + recoverable state + provenance, per §3.8;
+- inheritance changes the initial capability and prior content of the new individual; it does not change the identity it belongs to.
+
 The mechanism has two phases:
 
-1. **offline distillation** from past-life traces into a prior bundle
-2. **online loading and bounded use** during a new activation
+1. **offline distillation** from the traces of one or more terminated past individuals into a prior bundle
+2. **online loading and bounded use** during the activation of a distinct new individual
 
 #### Distillation path
 
@@ -1098,6 +1179,44 @@ Theory extension should be considered only when scenario specification is **prov
 
 The burden of proof is on the extension, not on the scenario.
 
+### 12.7 Existence Semantics Declaration (eight items)
+
+At onboarding, every scenario **must** declare the following eight items; the framework reads and consistently enforces this declaration rather than applying any default process-level life/death semantics. The code carrier is `eva/scenario_bundle.py::ExistenceSemantics`, exposed on the runtime bundle as the required field `RuntimeScenarioBundle.existence_semantics`.
+
+| # | Declaration item | Kind | Meaning | How the framework consumes it |
+|---|---|---|---|---|
+| 1 | **continuity criterion** | declaration | The criterion under which an individual is "still in existence" in this field | Decides when to enter the terminal path (audit + validation) |
+| 2 | **recoverable interruption** | declaration | Which interruptions count as recoverable (same individual continues); `()` means none | Kernel takes the recovery path instead of the termination path (audit + validation) |
+| 3 | **terminal failure** | declaration | Which events constitute irrecoverable termination | Triggers trace archiving and ends the individual (audit) |
+| 4 | **individual boundary** | declaration | Where one individual begins and ends (one run / one period / …) | Used for identity scope and metrics aggregation |
+| 5 | **reset semantics** | declaration | What "reset" means after termination: `"new_individual"` / `"same_individual_recovery"` / `"not_applicable"` | `_resolve_individual_id` uses this to decide mint-new vs continue-existing |
+| 6 | **inheritance channel** | declaration | Whether a cross-individual inheritance channel exists, and the input / scope of distillation | Determines the prior-bundle loading strategy |
+| 7 | **identity continuity** | declaration | What counts as the same individual across restarts / substrate changes | Combines with the three things in §3.8 (legitimacy + recoverable state + provenance) to make identity judgments |
+| 8 | **clock_source** | **framework-consumed config** (target; not yet consumed) | Life-clock source: `"step"` (turn-driven) or `"wall_clock"` (wall-clock seconds); default `"wall_clock"` | **Contract target**: kernel reads this to choose its cadence source (it does **not** fork scheduling logic per scenario). **Today**: kernel cadence is still wall-clock; the field has landed and is declared by scenarios, but kernel consumption of `clock_source` to switch cadence is not yet implemented — see tracking |
+
+**Declaration vs configuration (important)**: items 1–7 are declarations — the framework **records and validates** against them, but does not fork runtime logic on them; only item 8, `clock_source`, is **contractually** a framework-consumed configuration — the kernel is to read the field to choose its cadence source. **Today**: the kernel cadence path is still wall-clock; the `clock_source` field has landed as part of the `ExistenceSemantics` dataclass and is declared by scenarios, but the kernel's consumption of that field (to switch between step and wall-clock cadence) is not yet implemented — see tracking. They live in the same `ExistenceSemantics` dataclass because they share the same commitment ("how this individual survives in this field"), but their consumption modes differ (items 1–7 take effect once landed — the framework records and validates them; item 8's landing covers only the field and the declaration, while actual consumption is tracked separately as a deferred row). This boundary is consistent with derived constraint #3 in §2.7 — what is forbidden is "kernel cadence forking per scenario," **not** "scenarios declaring their own clock source."
+
+This declaration is itself a mandatory scenario surface (parallel to but semantically distinct from the six content surfaces in §2.5). If any deployment is missing these eight items, the framework should fail at scenario activation rather than fall back to defaults; the one exception is that `clock_source` has a dataclass-level default of `"wall_clock"` (to accommodate the Linux runtime baseline), but scenarios should still declare it explicitly to close the audit loop.
+
+**Example — Crafter** (one-life world):
+
+- continuity criterion = `HP > 0` with required vitals not depleted
+- recoverable interruption = `()` — **none** (no in-life revival exists in a one-life world)
+- terminal failure = `HP = 0`
+- individual boundary = one episode = one individual from birth to terminal
+- reset semantics = `"new_individual"` (the next activation in the same process is not a continuation of the original individual)
+- inheritance channel = trace of terminated individual → distillation → inherited priors of the new individual (optional to enable)
+- identity continuity = no cross-substrate continuation inside a one-life world; once terminal, the next individual is fresh
+- clock_source = `"step"` (turn-driven; rate and cadence are computed per step and do **not** alter kernel cadence authority)
+
+> Engineering implication: when integrating Crafter, on `done=True` from the env, `CrafterRuntimeSession.step_action()` sets `self.terminated = True` and **does not call `wrapper.reset()`** to extend life; the kernel loop reads that flag and exits the run with `exit_reason="individual_terminated"`. The next activation is explicitly recorded as a new individual by `_resolve_individual_id` (a fresh `individual_id` is minted), and the inheritance channel decides whether to load priors. Avatar vitals enter L1 dimensions and L2 drive, and are **not** promoted to substrate viability.
+
+**Example — Linux runtime** (long-running deployment, survives substrate restart):
+
+- reset semantics = `"same_individual_recovery"` (after a process crash or node migration, the same `individual_id` is recovered from `individual.json`)
+- clock_source = `"wall_clock"`
+- The remaining declarations live in `scenarios/linux_runtime/__init__.py`
+
 ---
 
 ## §13 Validation and Stability {#s13}
@@ -1144,6 +1263,17 @@ These metrics are meant to enable comparison without assuming EVA's internal cat
 v0.6 introduces a comparative stability hypothesis: that an existence-centered agent architecture with these structural commitments should exhibit stronger stability behavior than a matched task-centered baseline under relevant conditions.
 
 This is a **falsifiable hypothesis**, not a verified conclusion.
+
+### 13.5 Aligning run-level and individual-level semantics
+
+Stability metrics themselves **do not define existence semantics** — they measure how architectural properties behave under the existence semantics declared by the scenario. Experimental harnesses and metric design must adopt the following reading:
+
+- **One run = one individual living from birth to terminal** (terminal is determined by the scenario's continuity criterion / terminal failure declaration);
+- **Multiple runs = statistics over a population**, analogous to per-capita lifespan or group survival rate — not "multiple lives of the same subject";
+- **Aggregating metrics across resets does not constitute single-individual survival**: if a scenario declares reset = new individual (as Crafter does), any metric that reads "across resets" as "continuous survival of one agent" is a paradigm error;
+- **Whether the inheritance channel is enabled does not alter the three points above**: a new individual receiving priors is not the continuation of the original individual.
+
+The six observable-stability metrics (§13.3) should be reportable in both **per-individual** (within a lifetime) and **population** (aggregated across individuals) dimensions. Mixing the two dimensions without annotation lets "continuous existence" collapse back into task-agent-style throughput metrics.
 
 ---
 
@@ -1220,6 +1350,16 @@ Grow capabilities only after continuity boundaries, release boundaries, and the 
 
 Scenario specification is the default path. Theory extension is the exception.
 
+### 15.4 Evolution guardrails (what not to do)
+
+The following are not permitted inside the v0.6 framework. Violating any of them constitutes a paradigm error and should be rejected at review:
+
+1. **Do not introduce P1 / P2 runtime modes to express existence semantics.** Existence semantics are scenario declarations (§12.7), not runtime mode switches; using configuration toggles to flip continuity meaning degrades structural invariants into engineering preferences.
+2. **Do not promote scenario-internal vitals to substrate viability.** Avatar HP / energy / saturation enter L1 dimensions and L2 drive; whether their depletion constitutes terminal failure is declared by the scenario in §12.7, and does not rewrite the meaning of Level 1 substrate.
+3. **Kernel cadence must not fork per scenario.** Kernel cadence authority is single; the difference between step-driven and wall-clock rhythms is **contractually** expressed by the scenario declaring `clock_source` (item 8 in §12.7) for the kernel to read — this is the correct way to honor this constraint (today the kernel does not yet consume `clock_source` and runs wall-clock; that consumption is a target item — see tracking). What is forbidden is "adding `if-scenario-is-X` branches inside the kernel scheduler," "rewriting kernel cadence paths for a specific scenario," or letting per-step rate / scenario-side timing config leak into the kernel — not "scenarios declaring their own clock source."
+4. **Do not read "process never stopped" or "inheritance happened" as existence continuity of the same individual.** Continuity of the same individual is always anchored in legitimacy + recoverable state + provenance, per §3.8; inheritance is a cross-individual mechanism (§7.9).
+5. **Do not hardcode "done → reset extends life" semantics at the framework level.** The terminal path and the new-individual path must be dispatched according to the scenario declaration; any scenario-adapter code that quietly treats terminal as an episode boundary and extends life must go back to §12.7 and redeclare first.
+
 ---
 
 ## Appendix A. v0.5 Source-Material Reuse Map {#app-a}
@@ -1248,8 +1388,15 @@ Scenario specification is the default path. Theory extension is the exception.
 | Structural invariants vs operational content | §1, §4, §6, §7 |
 | Rate-aware sensing | §5, §11 |
 | Four-layer memory | §7, §10 |
-| Inherited priors L3 mechanism | §7, §11, §15 |
+| Inherited priors L3 mechanism (cross-individual) | §7, §11, §15 |
 | Multi-dimensional outcome | §7, §13 |
 | Observable stability | §13 |
 | Scenario specification discipline | §2, §12 |
 | Extension discipline | §12, §15 |
+| EVA as architecture, not ontology (rev2) | §0, §2.7 |
+| Continuous existence ≠ continuous execution (rev2) | §1.2.1, §3.8 |
+| Individual as the persisting subject (rev2) | §1.2.2, §7.9, §13.5 |
+| Framework mechanisms vs scenario declaration (rev2) | §2.7, §3.7, §3.8, §12.7 |
+| Existence Semantics Declaration eight items / declaration vs config (rev2) | §2.7, §12.7 |
+| Evolution guardrails (rev2) | §15.4 |
+| Architectural contract vs landed status (rev2) | §0.4 |

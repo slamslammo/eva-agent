@@ -51,16 +51,13 @@
 1. 改动属于哪一层：`kernel / anchor / l1_sensing / l2_drive / l3_deliberation / l4_self_model / l5_social`
 2. 目标 canonical owner 是什么
 3. 当前触及的是 stable / transitional / reserved owner 中的哪一类
-4. 该改动属于 `codebase-realignment-plan.md` 的 R1 / R2 / R3，还是独立 feature slice
+4. 该改动是当前激活 round 的一个 slice，还是独立 feature slice
 5. 需要冻结哪些 tests
 6. 需要同步哪些文档
 
 当前 intake 与后续实现，统一优先参照：
-- `maintainer/development/development-standards.md`
-- `maintainer/development/module-organization-contract.md`
-- `maintainer/development/codebase-realignment-plan.md`
-- `maintainer/development/current-intake.md`
-- `maintainer/development/change-intake-template.md`
+- `maintainer/development/current-intake.md`（当前激活的单项 intake）
+- 当前激活 round 的 `maintainer/development/round-*-progress.md`
 
 若目标 owner 不清晰，先补文档判断，不直接写代码。
 若触及 transitional owner，只允许收窄、拆分、迁移或降级，不允许继续扩大其长期职责。
@@ -75,3 +72,9 @@
 ## 边界
 - 持续执行、实现和文档沉淀都在 `eva-agent/` 项目目录内推进
 - `chat/` 只保留 portfolio 层摘要与关键判断
+
+## EVA 多 agent 协作（角色触发）
+**仅当用户明确给你指派了 EVA 协作角色时本节才生效**（**A 架构师** / **B 代码开发** / C 理论文档）：
+- 先读 `/Users/mojiawen/Documents/claude_projects/eva-coordination/COLLABORATION-PROTOCOL.md` 与 `task-board.md`，按你的角色 + 状态机行事，并启动协议 §5 的监控（**A = 入站 watcher**；**B = `/loop` self-pace + 盯 board 的事件驱动 wake**）；除 `NEEDS_HUMAN` 外不经人传话。
+- 在 `eva-agent` 里被指派的协作角色通常是 **A（架构师，main）** 或 **B（代码开发，分支 `claude/recursing-hertz-7c4029`）**。
+- **未被指派角色（含默认）→ 忽略本节，正常工作**，不读 / 不写 coordination。
