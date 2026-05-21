@@ -170,6 +170,9 @@ class LifecycleRuntime:
         # Round 1.H: opt-in cognitive-trace sink. ``None`` -> NullTraceSink (no-op,
         # byte-equivalent). H-2/H-3 emit transform/snapshot events from runtime seams.
         self.trace_sink: TraceSink = trace_sink or NullTraceSink()
+        # Monotonic trace turn index (one per deliberating turn); events within a
+        # turn share it so the viewer replays them aligned. Only advanced when tracing.
+        self._trace_turn_index = 0
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -178,6 +181,75 @@ class LifecycleRuntime:
         self._conservative_until_next_patrol = False
         self._tick_counter = 0
         self._turn_counter = 0
+
+    def _emit_p1a_seam_trace(
+        self,
+        deliberation_input: Any,
+        deliberation_audit: DeliberationAuditRecord,
+    ) -> None:
+        """Round 1.H H-2a: emit the seam-assembled P1a batch-1 transforms.
+
+        Assembled purely from data the deliberation pass already returned — no
+        frozen-owner function body is touched (red-line #2). Only called when
+        ``trace_sink.enabled``; ``_trace_turn_index`` advances only while tracing,
+        so a non-traced run is byte-identical. Deeper L1 sensor emits + the
+        ``l2.approach_delta`` owner-hook + ``raw_observations`` land in H-2b.
+        """
+
+        turn_index = self._trace_turn_index
+        self._trace_turn_index += 1
+        gate = dict(getattr(deliberation_input, "runtime_gate_context", {}) or {})
+        gate_inputs = {
+            key: gate.get(key)
+            for key in ("instance_valid", "turn_allowed", "critical_blocked", "conservative_mode", "life_state")
+        }
+        signal_batch = dict(getattr(deliberation_input, "signal_batch", {}) or {})
+        summary = signal_batch.get("summary") if isinstance(signal_batch.get("summary"), dict) else {}
+        drive = dict(getattr(deliberation_input, "drive_broadcast", {}) or {})
+        drive_levels = drive.get("drive_levels") if isinstance(drive.get("drive_levels"), dict) else {}
+
+        self.trace_sink.emit_transform(
+            layer="L1",
+            transform_id="l1.signal_publish",
+            code_anchor="eva/l1_sensing/signal_bus.py",
+            turn_index=turn_index,
+            inputs=gate_inputs,
+            outputs={"summary": dict(summary)},
+        )
+        self.trace_sink.emit_transform(
+            layer="L2",
+            transform_id="l2.broadcast",
+            code_anchor="eva/l2_drive/broadcast.py:build_drive_broadcast",
+            turn_index=turn_index,
+            parents=[{"id": "l1.signal_publish", "edge_type": "pressure"}],
+            outputs={
+                "top_drive": drive.get("top_drive"),
+                "drive_levels": dict(drive_levels),
+                "drive_trends": dict(drive.get("drive_trends") or {}),
+            },
+        )
+        self.trace_sink.emit_snapshot(
+            snapshot_type="drive_state",
+            values=dict(drive_levels),
+            turn_index=turn_index,
+        )
+        admitted = [
+            {
+                "candidate_id": candidate.get("candidate_id"),
+                "candidate_profile": (candidate.get("parameter_domain") or {}).get("candidate_profile"),
+                "action_hint": candidate.get("action_hint"),
+            }
+            for candidate in deliberation_audit.candidates
+        ]
+        self.trace_sink.emit_transform(
+            layer="anchor",
+            transform_id="anchor.admit",
+            code_anchor="eva/anchor/domain_restriction.py:build_action_domain",
+            turn_index=turn_index,
+            inputs=gate_inputs,
+            parents=[{"id": "l2.broadcast", "edge_type": "top_drive_bias"}],
+            outputs={"admitted_candidates": admitted, "count": len(admitted)},
+        )
 
     def activate_conservative_until_next_patrol(self) -> None:
         """Pause ordinary turn work until one later patrol finishes."""
@@ -602,6 +674,8 @@ class LifecycleRuntime:
                 deliberation_audit, memory_stub = run_deliberation(
                     now, deliberation_input, producer=self.candidate_producer
                 )
+                if self.trace_sink.enabled:
+                    self._emit_p1a_seam_trace(deliberation_input, deliberation_audit)
                 self.store.append_deliberation_audit(deliberation_audit.to_dict())
                 if memory_stub is not None:
                     append_cognitive_memory_stub(self.store, memory_stub)

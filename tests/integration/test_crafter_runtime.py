@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -417,6 +418,58 @@ class CrafterActionHintWiringIntegrationTests(unittest.TestCase):
             profile = posture_to_profile.get(record.get("selected_posture"))
             self.assertIsNotNone(profile)
             self.assertEqual(record.get("selected_action"), hints[profile])
+
+
+class CrafterP1aTraceIntegrationTests(unittest.TestCase):
+    """Round 1.H H-2a: under EVA_TRACE=1 the slow-lane seam emits the P1a batch-1
+    transforms (l1.signal_publish / l2.broadcast / anchor.admit + drive_state
+    snapshot), aligned by turn_index, with run_meta written. 0-token (stub)."""
+
+    def setUp(self) -> None:
+        activate_crafter_scenario()
+
+    def test_eva_trace_emits_p1a_batch1_seam_events(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2,
+                    lease_duration_sec=1.0,
+                    recovering_window_sec=0.05,
+                    turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01,
+                    deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03,
+                    recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=6, max_runtime_sec=2.0, idle_sleep_sec=0.01),
+            )
+            stub_session = StubCrafterSession()
+            with patch.dict(os.environ, {"EVA_TRACE": "1"}), patch.object(
+                CrafterRuntimeSession, "start", return_value=stub_session
+            ):
+                run_crafter_runtime(config)
+            runtime_dir = Path(config.paths.runtime_dir)
+            self.assertTrue((runtime_dir / "run_meta.json").exists())
+            trace_path = runtime_dir / "cognitive_trace.jsonl"
+            self.assertTrue(trace_path.exists())
+            records = [json.loads(line) for line in trace_path.read_text().splitlines() if line.strip()]
+            self.assertGreaterEqual(len(records), 4)
+            transform_ids = {r["transform_id"] for r in records if r["event_type"] == "transform"}
+            self.assertIn("l1.signal_publish", transform_ids)
+            self.assertIn("l2.broadcast", transform_ids)
+            self.assertIn("anchor.admit", transform_ids)
+            snapshot_types = {r["snapshot_type"] for r in records if r["event_type"] == "snapshot"}
+            self.assertIn("drive_state", snapshot_types)
+            # Every event carries the common envelope + a turn_index.
+            for record in records:
+                self.assertIn("run_id", record)
+                self.assertIsInstance(record["turn_index"], int)
+            # The first deliberating turn's events share one turn_index (aligned replay).
+            first_turn = [r for r in records if r["turn_index"] == 0]
+            self.assertTrue(any(r.get("transform_id") == "anchor.admit" for r in first_turn))
 
 
 if __name__ == "__main__":
