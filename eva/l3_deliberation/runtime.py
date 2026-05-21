@@ -10,7 +10,8 @@ from ..anchor import build_action_domain
 from .contracts import DeliberationAuditRecord, DeliberationInput, build_deliberation_audit_record, build_deliberation_input
 from .memory import WorkingMemoryAdapter, build_memory_stub
 from .peer_circuit import decide_release
-from .reasoning import assess_candidates, build_candidates, build_working_memory_context_from_store
+from .reasoning import assess_candidates, build_working_memory_context_from_store
+from .reasoning.candidate_producer import CandidateProducer, HeuristicCandidateProducer
 
 def build_deliberation_input_from_store(
     store: StateStore,
@@ -49,19 +50,26 @@ def build_deliberation_input_from_store(
     )
 
 
-def run_deliberation(now: datetime, deliberation_input: DeliberationInput) -> tuple[DeliberationAuditRecord, dict[str, Any] | None]:
+def run_deliberation(
+    now: datetime,
+    deliberation_input: DeliberationInput,
+    *,
+    producer: CandidateProducer | None = None,
+) -> tuple[DeliberationAuditRecord, dict[str, Any] | None]:
     """Run the minimal L3 pass and return audit plus optional memory-stub payloads.
 
-    Round 1.G: the round-1e reorder-proposer is retired (superseded — round-1f proved
-    it causally inert: the mediator's selection is order-independent max-by-score).
-    Candidate generation is `build_candidates(action_domain)`; the dlPFC candidate
-    *producer* (phase 2) will replace it. Selection (peer-circuit) + release (mediator)
-    authority below are unchanged.
+    Round 1.G: the dlPFC candidate *producer* forms the candidate set within the
+    anchor-bounded domain (theory v0.5 §8.6.3 / blueprint §7.4). ``producer`` None
+    defaults to the deterministic ``HeuristicCandidateProducer`` (= pre-1.G behavior),
+    so ``local_rule_based`` / model-off is behavior-preserving; the live-LLM producer
+    (phase 2) injects here. Selection (peer-circuit) + release (mediator) authority
+    below are unchanged — the producer only forms candidates, never releases.
     """
 
     recorded_at = to_iso8601(now) or now.isoformat()
     action_domain = build_action_domain(deliberation_input)
-    candidates = build_candidates(action_domain)
+    active_producer = producer or HeuristicCandidateProducer()
+    candidates = active_producer.produce(action_domain, deliberation_input)
     assessments = assess_candidates(candidates, deliberation_input)
     release_decision = decide_release(
         assessments,
