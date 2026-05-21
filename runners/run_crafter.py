@@ -83,11 +83,12 @@ def run_crafter_runtime(
     sensor_registry: SensorRegistry | None = None,
     periodic_hook: Callable[..., tuple[bool, str | None]] | None = None,
     hook_interval_sec: float = 1800.0,
+    seed: int | None = None,
 ) -> RunSummary:
     """Activate the Crafter scenario and execute the generic framework loop."""
 
     activate_crafter_scenario(inherited_priors_path=config.inherited_priors_path)
-    session = CrafterRuntimeSession.start()
+    session = CrafterRuntimeSession.start(seed=seed)
     try:
         return run_runtime(
             config,
@@ -112,6 +113,7 @@ def main() -> None:
         config,
         periodic_hook=periodic_hook,
         hook_interval_sec=args.longrun_hook_interval_sec,
+        seed=args.seed,
     )
     print_run_summary(summary)
 

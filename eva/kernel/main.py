@@ -460,6 +460,7 @@ def parse_args() -> argparse.Namespace:
                         help="Audit-only model id label. Live mode's actual model is set via EVA_LLM_MODEL env var.")
     parser.add_argument("--working-memory-model-client-timeout-sec", type=float, default=5.0)
     parser.add_argument("--inherited-priors-path")
+    parser.add_argument("--seed", type=int, default=None, help="Scenario env seed for reproducible runs (e.g. Crafter world). Default None = random.")
     # Round 1.D: long-run validation snapshot + tripwire CLI options.
     parser.add_argument(
         "--longrun-snapshot-dir",
