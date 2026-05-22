@@ -1,6 +1,6 @@
 # Round 1.I — Instrumented 短跑 → 分析 → 修可行性（计划②）— Progress（B）
 
-**当前状态**：**I-3 DONE → G2_REQUESTED**（全 slice 完成）。I-1（分析）+ G1（A 定 a2）+ I-2（动态可行 vocab，535 绿）+ I-3（live 确认：make_iron_* no-op 8/9→0/9、得 1 achievement、0 塌缩）完成。待 A 终审。
+**当前状态**：**G2_APPROVED → DONE**（A 亲核码 + I-3 trace 后通过，2026-05-22；"LLM 真正驱动可行决策"目标达成）。I-1（分析）+ G1（A 定 a2）+ I-2（动态可行 vocab，535 绿）+ I-3（live 确认：make_iron_* no-op 8/9→0/9、得 1 achievement、0 塌缩）全完成。计划②收口；后续计划③长跑待 token 预算。
 **分支**：`claude/recursing-hertz-7c4029`。指令 `eva-coordination/round-1i-instrumented-shortrun-craftability-fix-startup-instruction.md`。
 
 ---

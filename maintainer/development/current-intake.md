@@ -1,8 +1,10 @@
 # Current Intake
 
-> **当前执行项 = Round 1.H — Viz P1 全链路埋点（P1a+P1b）**。G1 intake + slice 计划全文见 `round-1h-viz-instrumentation-progress.md`（状态：G1_REQUESTED、待 A 批；0-token、opt-in `EVA_TRACE`、发射纯 additive、flag-off 字节等价）。
-> 上一项 Round 1.G（L3 reasoning-core rebuild / dlPFC action_hint）已 **G2_APPROVED → DONE**（因果路径 live 证实 7/7、冻结 owner 净、model-off 等价）。见 `round-1g-progress.md`。
-> 再上一项 Round 1.F（proposer eval）已 G2（结论：proposer 因果惰性 + live LLM 经 ≤0.12 推 passivity）。见 `round-1f-progress.md`。
+> **当前无激活执行项**（round-1g/1h/1i 全 G2_APPROVED→DONE）。下一项 = 计划③ 中长跑验证，待用户定 token 预算后另起轮。
+> 最近完成：**Round 1.I — 计划② instrumented 短跑→分析→修可行性** G2_APPROVED→DONE（(a2) 动态可行 vocab：make_iron_* no-op 8/9→0/9、得 1 achievement、0 塌缩、535 绿、红线④ feasibility-only 守）。见 `round-1i-progress.md`。
+> 其前：**Round 1.H — Viz P1 全链路埋点** DONE（全链 opt-in `EVA_TRACE` 埋点 + conformance 自证、528 绿、2 处 A 批准 owner-hook）。见 `round-1h-viz-instrumentation-progress.md`。
+> 再前：**Round 1.G — L3 reasoning-core rebuild / dlPFC action_hint** DONE（因果路径 live 证实 7/7、冻结 owner 净、model-off 等价）。见 `round-1g-progress.md`。
+> Round 1.F（proposer eval）G2（结论：proposer 因果惰性 + live LLM 经 ≤0.12 推 passivity）。见 `round-1f-progress.md`。
 
 ## Round 1.G — L3 Reasoning-Core Rebuild（候选产出搬回 LLM/dlPFC）— G1 设计 Intake（B 提交，待 A 核设计 + 卡 token）
 
