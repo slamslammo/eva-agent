@@ -56,6 +56,7 @@ class LLMCandidateProducer:
         *,
         chat_fn: ChatFn | None = None,
         profile_action_vocab: VocabSource | None = None,
+        world_facts_fn: "Callable[[], str] | None" = None,
     ) -> None:
         self.base_producer = base_producer or HeuristicCandidateProducer()
         self.chat_fn = chat_fn
@@ -65,6 +66,11 @@ class LLMCandidateProducer:
         # can return only the actions feasible *this turn* (e.g. filtered by current
         # inventory) — the producer treats it opaquely. A static mapping still works.
         self._vocab_source: VocabSource | None = profile_action_vocab
+        # round-1j: optional zero-arg callable that returns a world-facts string block.
+        # When non-None, its output is prepended to the system message so the LLM has
+        # background knowledge (tech tree, crafting recipes, survival facts) before
+        # choosing an action hint. None = complete backward-compat (no prompt change).
+        self._world_facts_fn: "Callable[[], str] | None" = world_facts_fn
 
     def _resolve_vocab(self) -> dict[str, tuple[str, ...]]:
         """Resolve the per-turn vocabulary (call the source if it is a callable)."""
@@ -144,15 +150,22 @@ class LLMCandidateProducer:
             "a posture if unsure. You cannot release actions or invent new ones.\n"
             f"{json.dumps(situation, ensure_ascii=False, sort_keys=True)}"
         )
+        system_content = (
+            "You are a bounded EVA reasoning core (dlPFC). The posture is "
+            "already chosen by drive; you only pick the concrete action within "
+            "it. Respond with JSON only."
+        )
+        # round-1j: prepend world facts (tech tree, crafting recipes, survival
+        # parameters) to the system message when provided. When world_facts_fn
+        # is None this block is skipped entirely → backward-compatible.
+        if self._world_facts_fn is not None:
+            world_facts = self._world_facts_fn()
+            if world_facts:
+                system_content = (
+                    f"Background world facts:\n{world_facts}\n\n{system_content}"
+                )
         return [
-            {
-                "role": "system",
-                "content": (
-                    "You are a bounded EVA reasoning core (dlPFC). The posture is "
-                    "already chosen by drive; you only pick the concrete action within "
-                    "it. Respond with JSON only."
-                ),
-            },
+            {"role": "system", "content": system_content},
             {"role": "user", "content": user_prompt},
         ]
 
