@@ -854,6 +854,63 @@ class ValueJudgmentTests(unittest.TestCase):
         self.assertIn("unknown_candidate_action", assessments[0].reasons)
         self.assertEqual(assessments[0].score, 0.0)
 
+    def test_raw_action_candidate_scores_without_compatibility_release_shell(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+        )
+        candidates = [
+            Candidate(
+                candidate_id="candidate-crafter-move-left",
+                capability="raw_action",
+                action="move_left",
+                parameter_domain={
+                    "candidate_profile": "raw_action",
+                    "candidate_kind": "raw_action",
+                    "instance_valid": True,
+                    "turn_allowed": True,
+                    "critical_blocked": False,
+                    "conservative_mode": False,
+                    "life_state": "STABLE",
+                    "compatibility_pressure_count": 1,
+                },
+                justification=("raw_action_candidate",),
+                drive_impact_schema={"integrity": 0.5},
+                side_effect_class="crafter_action_surface",
+            )
+        ]
+
+        assessments = assess_candidates(candidates, deliberation_input)
+
+        self.assertEqual(assessments[0].disposition, "allow")
+        self.assertGreater(assessments[0].score, 0.0)
+        self.assertIn("candidate_profile=raw_action", assessments[0].reasons)
+        self.assertIn("raw_action_candidate", assessments[0].reasons)
+        self.assertIn("raw_action=move_left", assessments[0].reasons)
+        self.assertIn("raw_action_projection_present", assessments[0].reasons)
+        self.assertNotIn("unknown_candidate_action", assessments[0].reasons)
+
     def test_semantic_pattern_bias_adds_small_bounded_bonus_for_matching_profile(self) -> None:
         deliberation_input = build_deliberation_input(
             signal_batch={
@@ -1388,4 +1445,3 @@ class ValueJudgmentTests(unittest.TestCase):
             "candidate-compatibility-escalate-first",
             [assessment.candidate_id for assessment in assessments],
         )
-

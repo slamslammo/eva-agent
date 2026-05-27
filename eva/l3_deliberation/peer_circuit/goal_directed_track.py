@@ -10,13 +10,14 @@ from ..contracts import CandidateAssessment
 __all__ = [
     "build_learning_context",
     "build_release_context",
+    "candidate_profile_from_assessment",
     "candidate_profile_from_id",
     "expected_outcome_for_release",
 ]
 
 
 def candidate_profile_from_id(candidate_id: str | None) -> str:
-    """Return the compact candidate profile name used by peer-circuit downstreams."""
+    """Return the legacy compact candidate profile trace label from an id."""
 
     if candidate_id is None:
         return "unknown"
@@ -29,11 +30,28 @@ def candidate_profile_from_id(candidate_id: str | None) -> str:
     return "unknown"
 
 
+def candidate_profile_from_assessment(assessment: CandidateAssessment) -> str:
+    """Return the optional scenario profile/tag carried by an assessment.
+
+    PR-0: ``candidate_id`` is the release-authority identity. Profile remains
+    scenario metadata, so prefer the explicit assessment reason when present and
+    fall back to the legacy id suffix only for existing compatibility candidates.
+    """
+
+    for reason in assessment.reasons:
+        if not reason.startswith("candidate_profile="):
+            continue
+        candidate_profile = reason.split("=", 1)[1].strip()
+        if candidate_profile:
+            return candidate_profile
+    return candidate_profile_from_id(assessment.candidate_id)
+
+
 def build_learning_context(assessment: CandidateAssessment) -> dict[str, Any]:
     """Build the shared learning-context payload from one selected assessment."""
 
     return {
-        "candidate_profile": candidate_profile_from_id(assessment.candidate_id),
+        "candidate_profile": candidate_profile_from_assessment(assessment),
         "learning_bias": assessment.learning_bias,
         "bias_reasons": list(assessment.bias_reasons),
         "habit_narrowed": "habit_candidate_narrowing" in assessment.reasons,

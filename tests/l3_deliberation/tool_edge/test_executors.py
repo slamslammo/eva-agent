@@ -105,6 +105,28 @@ class ExecutorsTests(unittest.TestCase):
             self.assertEqual(result["pressure_outcome"], "unknown")
             self.assertEqual(result["integration_hint"], "needs_human_review")
 
+    def test_execute_response_action_accepts_raw_candidate_identity_token(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(build_runtime_paths(temp_dir))
+            token = ReleaseToken(
+                token_id="release-token::candidate-crafter-move-left",
+                outcome="compatibility_release",
+                candidate_id="candidate-crafter-move-left",
+                candidate_profile="raw_action",
+            )
+
+            result = execute_response_action(
+                store,
+                self._pressure("instance_invalid"),
+                self._state(),
+                self._selection(RECHECK_ACTION),
+                release_token=token,
+                selected_candidate_id="candidate-crafter-move-left",
+            )
+
+            self.assertEqual(result["execution_status"], "failed")
+            self.assertEqual(result["pressure_outcome"], "unknown")
+
     def test_execute_response_action_recheck_relieves_when_pressure_disappears(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = StateStore(build_runtime_paths(temp_dir))

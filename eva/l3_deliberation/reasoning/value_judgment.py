@@ -95,6 +95,36 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                 # showed it had no doctrinal basis and, under live LLM, harmfully biased
                 # selection toward passivity). OFC scoring stays drive-weighted only;
                 # the model's contribution moves to dlPFC candidate production (phase 2).
+        elif "raw_action_candidate" in conflict.reasons:
+            candidate_profile = conflict.candidate_profile
+            disposition = conflict.disposition
+            reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
+            if disposition == "allow":
+                effective_drive_impact_schema, impact_reasons = _effective_drive_impact_schema(
+                    deliberation_input,
+                    candidate_profile=candidate_profile,
+                    top_drive=top_drive,
+                    drive_impact_schema=candidate.drive_impact_schema,
+                )
+                reasons.extend(reason for reason in impact_reasons if reason not in reasons)
+                drive_score = _drive_weighted_score(effective_drive_impact_schema, normalized_drive_levels)
+                score = drive_score
+                projection_score = _projection_fallback_score(
+                    conflict.score_delta,
+                    drive_score=drive_score,
+                )
+                if projection_score != 0.0:
+                    score += projection_score
+                    reasons.append("projection_fallback")
+                learning_bias, bias_reasons = _learning_bias_for_candidate_profile(
+                    deliberation_input,
+                    candidate_profile=candidate_profile,
+                )
+                score += learning_bias
+                habit_priority_bonus = _habit_skill_priority_bonus(candidate.parameter_domain)
+                if habit_priority_bonus != 0.0:
+                    score += habit_priority_bonus
+                    reasons.append("crystallized_habit_skill_hint")
         else:
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)

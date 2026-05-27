@@ -55,6 +55,13 @@ def build_candidate_conflict_context(
     """Return structural conflict and pressure-tension context for one candidate."""
 
     if candidate.action != "compatibility_release":
+        if _is_raw_action_candidate(candidate):
+            return _build_raw_action_conflict_context(
+                candidate,
+                top_drive=top_drive,
+                threat_count=threat_count,
+                drive_levels=drive_levels or {},
+            )
         return CandidateConflictContext(
             candidate_profile="unknown",
             disposition="withhold",
@@ -162,6 +169,98 @@ def build_candidate_conflict_context(
         disposition="allow",
         reasons=tuple(pressure_reasons),
         score_delta=score_delta,
+    )
+
+
+def _build_raw_action_conflict_context(
+    candidate: Candidate,
+    *,
+    top_drive: str,
+    threat_count: int,
+    drive_levels: dict[str, float],
+) -> CandidateConflictContext:
+    """Return release-gate context for an explicitly marked raw-action candidate."""
+
+    candidate_profile = str(candidate.parameter_domain.get("candidate_profile") or "raw_action")
+    reasons = [f"candidate_profile={candidate_profile}", "raw_action_candidate", f"raw_action={candidate.action}"]
+    turn_allowed = bool(candidate.parameter_domain.get("turn_allowed", False))
+    instance_valid = bool(candidate.parameter_domain.get("instance_valid", False))
+    critical_blocked = bool(candidate.parameter_domain.get("critical_blocked", False))
+    life_state = str(candidate.parameter_domain.get("life_state") or "unknown")
+    conservative_mode = bool(candidate.parameter_domain.get("conservative_mode", False))
+
+    if not instance_valid:
+        return CandidateConflictContext(
+            candidate_profile=candidate_profile,
+            disposition="withhold",
+            reasons=tuple([*reasons, "instance_not_valid"]),
+        )
+    if not turn_allowed:
+        return CandidateConflictContext(
+            candidate_profile=candidate_profile,
+            disposition="withhold",
+            reasons=tuple([*reasons, "turn_not_allowed"]),
+        )
+    if critical_blocked:
+        return CandidateConflictContext(
+            candidate_profile=candidate_profile,
+            disposition="defer",
+            reasons=tuple([*reasons, "critical_runtime_boundary"]),
+        )
+    if life_state == "CRITICAL":
+        return CandidateConflictContext(
+            candidate_profile=candidate_profile,
+            disposition="defer",
+            reasons=tuple([*reasons, "critical_life_state"]),
+        )
+    if conservative_mode:
+        return CandidateConflictContext(
+            candidate_profile=candidate_profile,
+            disposition="defer",
+            reasons=tuple([*reasons, "conservative_mode_active"]),
+        )
+
+    compatibility_pressure_count = int(candidate.parameter_domain.get("compatibility_pressure_count", 0))
+    top_drive_level = _coerce_drive_level((drive_levels or {}).get(top_drive))
+    if top_drive_level < DRIVE_LEVEL_RELEASE_THRESHOLD and threat_count <= 0:
+        return CandidateConflictContext(
+            candidate_profile=candidate_profile,
+            disposition="withhold",
+            reasons=tuple([*reasons, "no_release_pressure"]),
+        )
+
+    score_delta = float(threat_count)
+    pressure_reasons = [*reasons, "raw_action_projection_present"]
+    if top_drive_level >= HIGH_DRIVE_PROJECTION_THRESHOLD:
+        score_delta += 0.25
+        pressure_reasons.append("high_drive_projection_for_raw_action")
+    if compatibility_pressure_count > 0:
+        score_delta += 0.25
+        pressure_reasons.append("pressure_projection_for_raw_action")
+
+    drive_tension_reasons = _drive_tension_reasons(
+        candidate.drive_impact_schema,
+        drive_levels=drive_levels,
+    )
+    for reason in drive_tension_reasons:
+        if reason not in pressure_reasons:
+            pressure_reasons.append(reason)
+
+    return CandidateConflictContext(
+        candidate_profile=candidate_profile,
+        disposition="allow",
+        reasons=tuple(pressure_reasons),
+        score_delta=score_delta,
+    )
+
+
+def _is_raw_action_candidate(candidate: Candidate) -> bool:
+    """Return whether a candidate is an explicit scenario raw-action candidate."""
+
+    return (
+        candidate.capability == "raw_action"
+        or candidate.parameter_domain.get("candidate_kind") == "raw_action"
+        or candidate.parameter_domain.get("raw_action_candidate") is True
     )
 
 

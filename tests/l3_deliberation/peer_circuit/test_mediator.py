@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from eva.l3_deliberation import CandidateAssessment, ReleaseToken, build_action_domain, build_deliberation_input
+from eva.l3_deliberation import Candidate, CandidateAssessment, ReleaseToken, build_action_domain, build_deliberation_input
 from eva.l3_deliberation.peer_circuit.mediator import decide_release, mint_reflex_release, validate_release_token
 from eva.l3_deliberation.reasoning.candidate_generation import build_candidates
 from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
@@ -399,6 +399,79 @@ class MediatorTests(unittest.TestCase):
             selected_candidate_id="candidate-compatibility-observe-first",
             expected_outcome="compatibility_release",
         )
+
+    def test_validate_release_token_uses_candidate_id_not_profile_as_identity(self) -> None:
+        token = ReleaseToken(
+            token_id="release-token::candidate-crafter-move-left",
+            outcome="compatibility_release",
+            candidate_id="candidate-crafter-move-left",
+            candidate_profile="legacy_trace_tag_only",
+        )
+
+        validate_release_token(
+            token,
+            selected_candidate_id="candidate-crafter-move-left",
+            expected_outcome="compatibility_release",
+        )
+
+    def test_raw_action_candidate_can_assess_select_and_release(self) -> None:
+        deliberation_input = build_deliberation_input(
+            signal_batch={
+                "signals": [{"class": "status"}, {"class": "threat"}],
+                "summary": {
+                    "signal_count": 2,
+                    "status_signal_count": 1,
+                    "threat_signal_count": 1,
+                    "background_signal_count": 0,
+                    "has_threat_signal": True,
+                },
+            },
+            drive_broadcast={
+                "top_drive": "integrity",
+                "drive_levels": {"integrity": 0.8},
+                "drive_trends": {"integrity": "worsening"},
+            },
+            runtime_gate_context={
+                "instance_valid": True,
+                "turn_allowed": True,
+                "critical_blocked": False,
+                "conservative_mode": False,
+                "life_state": "STABLE",
+                "seconds_to_heartbeat": 10.0,
+            },
+        )
+        candidates = [
+            Candidate(
+                candidate_id="candidate-crafter-move-left",
+                capability="raw_action",
+                action="move_left",
+                parameter_domain={
+                    "candidate_profile": "raw_action",
+                    "candidate_kind": "raw_action",
+                    "instance_valid": True,
+                    "turn_allowed": True,
+                    "critical_blocked": False,
+                    "conservative_mode": False,
+                    "life_state": "STABLE",
+                    "compatibility_pressure_count": 1,
+                },
+                justification=("raw_action_candidate", "top_drive=integrity"),
+                drive_impact_schema={"integrity": 0.5},
+                side_effect_class="crafter_action_surface",
+            )
+        ]
+
+        assessments = assess_candidates(candidates, deliberation_input)
+        decision = decide_release(assessments)
+
+        self.assertEqual(assessments[0].disposition, "allow")
+        self.assertGreater(assessments[0].score, 0.0)
+        self.assertEqual(decision.outcome, "compatibility_release")
+        self.assertEqual(decision.selected_action, "move_left")
+        self.assertEqual(decision.selected_candidate_id, "candidate-crafter-move-left")
+        self.assertEqual(decision.release_token.candidate_id, "candidate-crafter-move-left")
+        self.assertEqual(decision.release_token.candidate_profile, "raw_action")
+        self.assertEqual(decision.expected_outcome, "bounded_pressure_response")
 
     def test_mint_reflex_release_uses_protective_reflex_context(self) -> None:
         decision = mint_reflex_release(
