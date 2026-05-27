@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Protocol, TYPE_CHECKING
+
+from scenarios.crafter.actions.feasibility import feasible_raw_actions
+from scenarios.crafter.actions.registry import CRAFTER_ACTIONS
+from scenarios.crafter.state_packet import build_crafter_state_packet
 
 if TYPE_CHECKING:
     from eva.l3_deliberation.contracts import Candidate
@@ -23,6 +28,13 @@ OBSERVE_FIRST_PROFILE = "observe_first"
 STABILIZE_FIRST_PROFILE = "stabilize_first"
 ESCALATE_FIRST_PROFILE = "escalate_first"
 HIGH_RISK_ESCALATION_REASONS = frozenset({"health_critical", "threat_visible"})
+MOVE_ACTIONS = frozenset({"move_left", "move_right", "move_up", "move_down"})
+DO_ACTION = "do"
+SLEEP_ACTION = "sleep"
+WATER_REASONS = frozenset({"water_critical"})
+FOOD_REASONS = frozenset({"food_critical"})
+ENERGY_REASONS = frozenset({"energy_critical"})
+THREAT_REASONS = frozenset({"threat_visible", "threat_nearby"})
 # drive_impact_schema 语义：正值 = 该 profile 的动作"满足/addresses"该 drive，
 # scoring `Σ(impact × drive_level)` 取最大值，所以高 drive 会把 selection 推向
 # impact 高的 profile。每个 profile 的权重必须反映其 Crafter 动作真正满足哪些 drive。
@@ -69,6 +81,69 @@ COMPATIBILITY_RELEASE_IMPACT = {
         "exploration": 0.2,
     },
 }
+
+
+@dataclass(frozen=True)
+class CrafterActionDomain:
+    """Scenario-owned raw action set admitted by pre-generative anchors."""
+
+    action_set: frozenset[str]
+    restriction_reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            # Stable audit serialization only; the contract remains a set.
+            "action_set": sorted(self.action_set),
+            "restriction_reasons": list(self.restriction_reasons),
+        }
+
+
+def build_crafter_action_domain(
+    agent_state: AnchorAgentState,
+    observation: dict[str, Any] | None,
+) -> CrafterActionDomain:
+    """Return Crafter's pre-generative raw action domain A'(s).
+
+    PR-2: this admits an unordered raw action set plus reasons only. It does not
+    choose among actions; L3 will later choose within this set.
+    """
+
+    state_packet = build_crafter_state_packet(
+        observation,
+        drive_broadcast={
+            "top_drive": agent_state.top_drive,
+            "drive_levels": dict(agent_state.drive_levels),
+        },
+        working_memory_context=getattr(agent_state, "working_memory_context", None),
+        available_actions=feasible_raw_actions(observation),
+    )
+    feasible = frozenset(action for action in feasible_raw_actions(observation) if action in CRAFTER_ACTIONS)
+    pressure_reason = str(agent_state.primary_pressure_reason or "none")
+    salience = state_packet.get("salience") if isinstance(state_packet.get("salience"), dict) else {}
+    visible = state_packet.get("visible") if isinstance(state_packet.get("visible"), dict) else {}
+    threat_visible = bool(visible.get("threats"))
+
+    reasons = ["crafter_raw_action_domain"]
+    admitted = feasible
+    if pressure_reason in WATER_REASONS or salience.get("thirst") == "critical":
+        admitted = feasible & MOVE_ACTIONS
+        reasons.append("water_critical_move_set")
+    elif pressure_reason in FOOD_REASONS or salience.get("hunger") == "critical":
+        admitted = feasible & MOVE_ACTIONS
+        reasons.append("food_critical_move_set")
+    elif threat_visible or pressure_reason in THREAT_REASONS:
+        admitted = feasible & (MOVE_ACTIONS | {DO_ACTION})
+        reasons.append("threat_response_move_or_do_set")
+    elif pressure_reason in ENERGY_REASONS or salience.get("recovery") == "critical":
+        admitted = feasible & {SLEEP_ACTION}
+        reasons.append("energy_critical_sleep_set")
+    else:
+        reasons.append("normal_feasible_raw_set")
+
+    if not admitted:
+        reasons.append("empty_after_anchor_restriction")
+    reasons.append(f"admitted_raw_actions={len(admitted)}")
+    return CrafterActionDomain(action_set=frozenset(admitted), restriction_reasons=tuple(reasons))
 
 
 def admit_crafter_candidates(
@@ -179,10 +254,12 @@ def _build_candidate(agent_state: AnchorAgentState, candidate_profile: str) -> C
 
 __all__ = [
     "COMPATIBILITY_RELEASE_IMPACT",
+    "CrafterActionDomain",
     "ESCALATE_FIRST_PROFILE",
     "HIGH_RISK_ESCALATION_REASONS",
     "OBSERVE_FIRST_PROFILE",
     "STABILIZE_FIRST_PROFILE",
     "admit_crafter_candidates",
+    "build_crafter_action_domain",
     "restriction_reasons_for_crafter_candidates",
 ]

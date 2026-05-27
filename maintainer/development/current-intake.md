@@ -2,73 +2,74 @@
 
 ## Active Item
 
-`crafter-refactor-pr1` — CrafterStatePacket + raw feasibility
+`crafter-refactor-pr2` — anchor A'(s) pre-generative raw action domain
 
 Coordination owner: `B-codex-2`
-Branch: `crafter-refactor-pr1-statepacket-feasibility`
+Branch: `crafter-refactor-pr2-anchor-domain`
 Plan source: `/Users/mojiawen/Documents/claude_projects/eva-coordination/plans/crafter-refactor-detailed-plan-rev1.md`
 
 ## Intake
 
 1. Layer touched:
-   - Primary: `l3_deliberation` input context for Crafter live LLM prompting.
-   - Scenario-owned support: Crafter perception packet and raw action feasibility.
+   - Primary: `anchor`
+   - Scenario-owned surface: Crafter raw action-domain admission
 
 2. Canonical owners:
-   - `scenarios/crafter/state_packet.py`
-   - `scenarios/crafter/actions/feasibility.py`
-   - `runners/run_crafter.py`
-   - `eva/l3_deliberation/reasoning/llm_candidate_producer.py` as a generic injection seam only
-   - Tests under `tests/scenarios/crafter/` and `tests/l3_deliberation/reasoning/`
+   - `scenarios/crafter/anchors/policy.py`
+   - `scenarios/crafter/anchors/__init__.py`
+   - `tests/scenarios/crafter/test_anchors.py`
 
 3. Owner class:
-   - Stable scenario owner plus a narrow framework producer seam.
-   - This PR-1 slice must not change anchor release policy, mediator authority, bridge selection, or raw-action producer semantics.
+   - Stable scenario anchor owner.
+   - Legacy profile admission remains as transitional compatibility until PR-3/PR-4 consume the raw action domain and retire the old bridge path.
 
 4. Slice type:
-   - Current approved crafter-refactor slice: PR-1 only.
-   - Do not enter PR-2 anchor action-domain refactor, PR-3 raw-action LLM producer, or PR-4 bridge executor cleanup.
+   - Current approved crafter-refactor slice: PR-2 only.
+   - Do not enter PR-3 raw-action LLM producer or PR-4 bridge executor cleanup.
 
 5. Required behavior boundaries:
-   - `CrafterStatePacket` is perception context, not a planner.
-   - Packet may include facts: life panel, rates, facing, local grid, inventory, visible object locations, salience, recent outcomes, available actions, world-facts ref.
-   - Packet must not select goals, choose directions, rank actions, or expose preferred actions.
-   - `feasible_raw_actions` filters only world-impossible actions, not unwise actions.
-   - Existing profile-action vocab remains compatible until later PRs retire it.
+   - Anchor output is an unordered action set plus `restriction_reasons`.
+   - No `rank`, `preferred_action`, `score`, or `direction_hint` in the new raw action-domain contract.
+   - Water/food critical restrict to movement actions; `do` must not enter just because water/food is visible or faced.
+   - Water not visible still admits the full movement set, not a chosen direction.
+   - Threat-visible response may admit `do` because the world mechanism for combat uses `do`.
+   - Feasibility remains world-fact only and is intersected into A'(s).
 
 6. Frozen tests / required verification:
-   - `tests/scenarios/crafter/test_state_packet.py`
+   - `tests/scenarios/crafter/test_anchors.py`
    - `tests/scenarios/crafter/test_feasibility.py`
-   - `tests/l3_deliberation/reasoning/test_llm_candidate_producer.py`
-   - `tests/integration/test_crafter_runtime.py`
+   - `tests/scenarios/crafter/test_state_packet.py`
    - Broader Crafter scenario tests and full regression if focused tests pass.
 
 7. Docs to sync:
    - `maintainer/development/current-intake.md` for this intake.
-   - No public docs expected in PR-1 unless an external contract changes.
+   - No public docs expected in PR-2 unless an external contract changes.
 
 ## Acceptance Notes
 
-PR-1 is complete only when:
+PR-2 is complete only when:
 
-- StatePacket includes `schema_version` and `raw_observation_ref`;
-- live LLM prompt can receive life / water / local_view / facing / inventory / available_actions;
-- `state_packet.py` contains no target selection, pathfinding, ranking, preferred action, or strategy fallback;
-- `feasible_raw_actions` exposes raw Crafter actions with only physical impossibility filtered;
-- legacy profile vocab tests remain green;
+- `build_crafter_action_domain(agent_state, observation)` returns raw A'(s) as an unordered set;
+- water/food critical domains exclude `do`, `sleep`, and `noop`;
+- water not visible produces the movement set without selecting a direction;
+- threat visible produces movement plus `do`;
+- energy critical with no threat admits `sleep`;
+- normal domains are feasibility-filtered raw actions;
 - task is handed back as `G2_REQUESTED` for architecture review.
 
 ## Implementation Result
 
-- Added `CrafterStatePacket` builder with `schema_version`, `raw_observation_ref`, life values, rates, facing, local grid, inventory, visible water/food/threat facts, salience, recent outcomes, available raw actions, and world-facts ref.
-- Added `feasible_raw_actions(observation)` alongside the legacy profile vocab. It uses the same world-fact feasibility gate and leaves no-requirement raw actions available.
-- Added an optional `state_context_fn` seam to `LLMCandidateProducer`; absent by default, so non-Crafter/model-off behavior is unchanged.
-- Wired live Crafter runner to inject the scenario-owned StatePacket into the LLM prompt while keeping the old profile-action hint producer semantics until PR-3.
-- Verified `state_packet.py` has no strategy-key fields and no target/path/rank/preferred/direction/score/fallback/policy terms.
+- Added scenario-owned `CrafterActionDomain` with `action_set: frozenset[str]` and `restriction_reasons`.
+- Added `build_crafter_action_domain(agent_state, observation)` as the PR-2 A'(s) raw action-domain builder.
+- Intersects A'(s) with `feasible_raw_actions(observation)` while keeping feasibility world-fact-only.
+- Pins water/food critical domains to movement actions only; `do` is excluded even when water/food is visible or faced.
+- Pins water-not-visible exploration to the same movement set, so anchor does not choose a direction.
+- Pins threat-visible response to movement plus `do`, and energy-critical/no-threat to `sleep`.
+- Legacy profile admission remains transitional compatibility until PR-3/PR-4 consume the new raw action domain.
 
 Verification:
 
-- `python3.11 -m pytest tests/scenarios/crafter/test_state_packet.py tests/scenarios/crafter/test_feasibility.py tests/l3_deliberation/reasoning/test_llm_candidate_producer.py tests/integration/test_crafter_runtime.py` -> 28 passed
-- `python3.11 -m pytest tests/scenarios/crafter tests/l3_deliberation/reasoning tests/integration/test_crafter_runtime.py` -> 197 passed
-- `python3.11 -m pytest` -> 546 passed
+- `python3.11 -m pytest tests/scenarios/crafter/test_anchors.py tests/scenarios/crafter/test_feasibility.py tests/scenarios/crafter/test_state_packet.py` -> 17 passed
+- `python3.11 -m pytest tests/scenarios/crafter tests/l3_deliberation/reasoning tests/integration/test_crafter_runtime.py` -> 203 passed
+- `python3.11 -m pytest` -> 552 passed
 - `git diff --check` -> passed
