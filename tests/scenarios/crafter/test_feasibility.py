@@ -10,7 +10,7 @@ from __future__ import annotations
 import unittest
 
 from scenarios.crafter.actions.compatibility import PROFILE_DEFAULT_ACTION, PROFILE_ELIGIBLE_ACTIONS
-from scenarios.crafter.actions.feasibility import action_is_feasible, feasible_profile_action_vocab
+from scenarios.crafter.actions.feasibility import action_is_feasible, feasible_profile_action_vocab, feasible_raw_actions
 
 
 def _obs(inventory: dict, cells: list[list[str]] | None = None) -> dict:
@@ -64,6 +64,20 @@ class FeasibilityTests(unittest.TestCase):
         self.assertFalse(action_is_feasible("make_iron_sword", {"wood": 9}, {"table", "furnace"}))  # no iron/coal
         self.assertTrue(action_is_feasible("make_iron_sword", {"wood": 1, "coal": 1, "iron": 1}, {"table", "furnace"}))
         self.assertFalse(action_is_feasible("make_iron_sword", {"wood": 1, "coal": 1, "iron": 1}, {"table"}))  # no furnace
+
+    def test_feasible_raw_actions_filters_only_world_impossible_actions(self) -> None:
+        actions = feasible_raw_actions(_obs({"wood": 1}, cells=[["table", "grass"]]))
+
+        self.assertIn("noop", actions)
+        self.assertIn("move_left", actions)
+        self.assertIn("move_right", actions)
+        self.assertIn("move_up", actions)
+        self.assertIn("move_down", actions)
+        self.assertIn("do", actions)
+        self.assertIn("sleep", actions)
+        self.assertIn("make_wood_pickaxe", actions)
+        self.assertNotIn("place_table", actions)  # needs wood x2
+        self.assertNotIn("make_iron_sword", actions)  # needs iron/coal/furnace
 
 
 if __name__ == "__main__":

@@ -7,7 +7,9 @@ game mechanics). It does NOT contain behavioral advice or strategic recommendati
 
 from __future__ import annotations
 
-__all__ = ["get_crafter_world_facts_context"]
+CRAFTER_WORLD_FACTS_REF = "crafter_world_facts_v1"
+
+__all__ = ["CRAFTER_WORLD_FACTS_REF", "get_crafter_world_facts_context"]
 
 _WORLD_FACTS = """\
 === Crafter World Facts ===

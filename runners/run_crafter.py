@@ -25,7 +25,8 @@ from eva.l3_deliberation.reasoning.candidate_producer import CandidateProducer
 from eva.l3_deliberation.reasoning.llm_candidate_producer import LLMCandidateProducer
 from runners.longrun_validation import longrun_hook_from_args
 from scenarios.crafter import activate_crafter_scenario
-from scenarios.crafter.actions.feasibility import feasible_profile_action_vocab
+from scenarios.crafter.actions.feasibility import feasible_profile_action_vocab, feasible_raw_actions
+from scenarios.crafter.state_packet import build_crafter_state_packet
 from scenarios.crafter.world_facts import get_crafter_world_facts_context
 from scenarios.crafter.wrapper import CrafterEnvWrapper, StepResult
 
@@ -116,6 +117,12 @@ def _build_candidate_producer(
         chat_fn=chat_fn,
         profile_action_vocab=lambda: feasible_profile_action_vocab(session.latest_agent_observation),
         world_facts_fn=get_crafter_world_facts_context,
+        state_context_fn=lambda deliberation_input, _vocab: build_crafter_state_packet(
+            session.latest_agent_observation,
+            drive_broadcast=deliberation_input.drive_broadcast,
+            working_memory_context=deliberation_input.working_memory_context,
+            available_actions=feasible_raw_actions(session.latest_agent_observation),
+        ),
     )
 
 

@@ -23,6 +23,7 @@ from .compatibility import (
     select_response_action,
 )
 from .registry import ACTION_METADATA, CRAFTER_ACTIONS, ActionAdapter, action_names
+from .feasibility import feasible_raw_actions
 
 __all__ = [
     "ACTION_METADATA",
@@ -46,6 +47,7 @@ __all__ = [
     "action_names",
     "build_integrity_response_candidates",
     "execute_crafter_action",
+    "feasible_raw_actions",
     "filter_response_candidates",
     "select_integrity_response",
     "select_response_action",

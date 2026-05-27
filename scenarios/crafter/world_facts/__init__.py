@@ -1,3 +1,3 @@
-from .crafter_knowledge import get_crafter_world_facts_context
+from .crafter_knowledge import CRAFTER_WORLD_FACTS_REF, get_crafter_world_facts_context
 
-__all__ = ["get_crafter_world_facts_context"]
+__all__ = ["CRAFTER_WORLD_FACTS_REF", "get_crafter_world_facts_context"]

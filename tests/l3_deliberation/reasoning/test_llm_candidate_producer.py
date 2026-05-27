@@ -9,6 +9,7 @@ transport / parse failure or missing vocab degrades to the heuristic base
 
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import datetime, timezone
 
@@ -166,6 +167,35 @@ class LLMCandidateProducerTests(unittest.TestCase):
         by_profile = {c.parameter_domain.get("candidate_profile"): c.action_hint for c in produced}
         self.assertIsNone(by_profile.get("escalate_first"))  # infeasible hint dropped
         self.assertEqual(by_profile.get("stabilize_first"), "sleep")  # feasible hint kept
+
+    def test_state_context_fn_injects_life_local_view_inventory_and_available_actions(self) -> None:
+        packet = {
+            "schema_version": "crafter_state_packet_v1",
+            "raw_observation_ref": "symbolic_observation_v0:episode=e:step=3",
+            "life": {"health": 9, "food": 7, "water": 2, "energy": 8},
+            "facing": "left",
+            "local_view": {"cells": [["grass", "water"], ["player", "cow"]]},
+            "inventory": {"wood": 1},
+            "available_actions": ["noop", "move_left", "do"],
+        }
+        chat = _StubChat('{"action_hints": {"observe_first": "move_left"}}')
+        producer = LLMCandidateProducer(
+            chat_fn=chat,
+            profile_action_vocab=_VOCAB,
+            state_context_fn=lambda _deliberation_input, _vocab: packet,
+        )
+
+        producer.produce(self.domain, self.di)
+
+        user_content = chat.last_messages[1]["content"]
+        payload = json.loads(user_content.rsplit("\n", 1)[1])
+        state_context = payload["state_packet"]
+        self.assertEqual(state_context["schema_version"], "crafter_state_packet_v1")
+        self.assertEqual(state_context["life"]["water"], 2)
+        self.assertEqual(state_context["facing"], "left")
+        self.assertEqual(state_context["local_view"]["cells"][0][1], "water")
+        self.assertEqual(state_context["inventory"]["wood"], 1)
+        self.assertEqual(state_context["available_actions"], ["noop", "move_left", "do"])
 
 
 if __name__ == "__main__":

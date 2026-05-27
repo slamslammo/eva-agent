@@ -29,7 +29,7 @@ from .candidate_producer import CandidateProducer, HeuristicCandidateProducer
 if TYPE_CHECKING:
     from ...anchor.domain_restriction import ActionDomain
 
-__all__ = ["LLMCandidateProducer", "ChatFn", "VocabSource"]
+__all__ = ["LLMCandidateProducer", "ChatFn", "StateContextFn", "VocabSource"]
 
 # Injected transport seam: takes OpenAI-style ``messages`` and returns the
 # assistant's text. The framework stays vendor-neutral; the live wiring builds
@@ -42,6 +42,7 @@ ChatFn = Callable[[list[dict[str, str]]], str]
 # return only the actions feasible *this turn*, e.g. filtered by current inventory).
 # The producer treats it opaquely and never imports the scenario.
 VocabSource = Mapping[str, Sequence[str]] | Callable[[], Mapping[str, Sequence[str]]]
+StateContextFn = Callable[[DeliberationInput, Mapping[str, Sequence[str]]], Mapping[str, Any] | None]
 
 _PROFILE_KEY = "candidate_profile"
 _MAX_VOCAB_IN_PROMPT = 16
@@ -57,6 +58,7 @@ class LLMCandidateProducer:
         chat_fn: ChatFn | None = None,
         profile_action_vocab: VocabSource | None = None,
         world_facts_fn: "Callable[[], str] | None" = None,
+        state_context_fn: StateContextFn | None = None,
     ) -> None:
         self.base_producer = base_producer or HeuristicCandidateProducer()
         self.chat_fn = chat_fn
@@ -71,6 +73,10 @@ class LLMCandidateProducer:
         # background knowledge (tech tree, crafting recipes, survival facts) before
         # choosing an action hint. None = complete backward-compat (no prompt change).
         self._world_facts_fn: "Callable[[], str] | None" = world_facts_fn
+        # PR-1: optional scenario-owned state context packet. The producer treats this
+        # as opaque prompt context; no framework owner imports scenario code or changes
+        # candidate/release semantics when it is absent.
+        self._state_context_fn = state_context_fn
 
     def _resolve_vocab(self) -> dict[str, tuple[str, ...]]:
         """Resolve the per-turn vocabulary (call the source if it is a callable)."""
@@ -143,6 +149,9 @@ class LLMCandidateProducer:
         wm = deliberation_input.working_memory_context or {}
         if isinstance(wm.get("situation_key"), str) and wm["situation_key"]:
             situation["situation_key"] = wm["situation_key"]
+        state_context = self._build_state_context(deliberation_input, vocab)
+        if state_context:
+            situation["state_packet"] = state_context
         user_prompt = (
             "For each posture key, choose the single most useful concrete action "
             "STRICTLY from that posture's options list. Return only a JSON object "
@@ -168,6 +177,19 @@ class LLMCandidateProducer:
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_prompt},
         ]
+
+    def _build_state_context(
+        self,
+        deliberation_input: DeliberationInput,
+        vocab: dict[str, tuple[str, ...]],
+    ) -> dict[str, Any]:
+        if self._state_context_fn is None:
+            return {}
+        try:
+            context = self._state_context_fn(deliberation_input, vocab)
+        except Exception:
+            return {}
+        return dict(context) if isinstance(context, Mapping) else {}
 
 
 def _parse_action_hints(text: str) -> dict[str, str]:

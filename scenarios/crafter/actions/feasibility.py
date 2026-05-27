@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .compatibility import PROFILE_DEFAULT_ACTION, PROFILE_ELIGIBLE_ACTIONS
+from .registry import CRAFTER_ACTIONS
 
 # Crafter recipe requirements (crafter/data.yaml ``place`` + ``make`` tables).
 # action -> {"uses": {inventory_item: min_count}, "nearby": (material, ...)}.
@@ -39,7 +40,7 @@ _CRAFT_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "make_iron_sword": {"uses": {"wood": 1, "coal": 1, "iron": 1}, "nearby": ("table", "furnace")},
 }
 
-__all__ = ["feasible_profile_action_vocab", "action_is_feasible"]
+__all__ = ["feasible_profile_action_vocab", "feasible_raw_actions", "action_is_feasible"]
 
 
 def _inventory(observation: Mapping[str, Any] | None) -> dict[str, int]:
@@ -107,3 +108,16 @@ def feasible_profile_action_vocab(
             feasible = (default,) + feasible
         vocab[profile] = feasible
     return vocab
+
+
+def feasible_raw_actions(observation: Mapping[str, Any] | None) -> tuple[str, ...]:
+    """Return raw Crafter actions that are physically possible right now.
+
+    PR-1: this is world-layer feasibility only. It drops actions only when the
+    world facts make them impossible now (missing materials / missing visible
+    table or furnace for recipes). It does not judge whether an action is wise.
+    """
+
+    inventory = _inventory(observation)
+    nearby = _nearby_cell_names(observation)
+    return tuple(action for action in CRAFTER_ACTIONS if action_is_feasible(action, inventory, nearby))
