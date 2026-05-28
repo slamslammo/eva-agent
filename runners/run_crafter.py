@@ -109,12 +109,17 @@ def _build_candidate_producer(
     transcript_sink = build_transcript_sink_from_env(config.paths.runtime_dir)
     import os as _os
     model_label = _os.environ.get("EVA_LLM_MODEL", "unknown")
+    # PR-Β: wire CRAFTER_SCENARIO_ONTOLOGY so live runs get the canonical
+    # 6-section dlPFC system prompt (role / drive / salience / action /
+    # effect / world facts).
+    from scenarios.crafter.ontology import CRAFTER_SCENARIO_ONTOLOGY
     return CrafterLLMActionProducer(
         chat_fn=chat_fn,
         world_facts_fn=get_crafter_world_facts_context,
         observation_fn=lambda: session.latest_agent_observation,
         transcript_sink=transcript_sink,
         model_label=model_label,
+        scenario_ontology=CRAFTER_SCENARIO_ONTOLOGY,
     )
 
 

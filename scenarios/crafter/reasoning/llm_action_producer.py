@@ -19,6 +19,7 @@ from typing import Any, Callable, TYPE_CHECKING
 
 from eva.l3_deliberation.contracts import Candidate, DeliberationInput
 from eva.l3_deliberation.llm_transcript import LLMTranscriptSink, NoOpTranscriptSink
+from eva.l3_deliberation.ontology import ScenarioOntology, build_dlpfc_system_prompt
 from scenarios.crafter.anchors.policy import CrafterActionDomain, build_crafter_action_domain
 from scenarios.crafter.state_packet import build_crafter_state_packet
 
@@ -67,6 +68,7 @@ class CrafterLLMActionProducer:
         transcript_sink: LLMTranscriptSink | None = None,
         identity_provider: Callable[[], dict[str, Any]] | None = None,
         model_label: str = "unknown",
+        scenario_ontology: ScenarioOntology | None = None,
     ) -> None:
         self.chat_fn = chat_fn
         self._world_facts_fn = world_facts_fn
@@ -77,6 +79,9 @@ class CrafterLLMActionProducer:
         # PR-Α: identity (run_id, individual_id, turn_index) closure for transcript metadata.
         self._identity_provider = identity_provider
         self._model_label = model_label
+        # PR-Β: optional 6-section dlPFC system prompt. When None the legacy
+        # 2-section (system + world_facts) layout is preserved (Linux compat).
+        self._scenario_ontology = scenario_ontology
 
     def set_identity_provider(self, identity_provider: Callable[[], dict[str, Any]]) -> None:
         """PR-Α: rebind identity_provider after construction.
@@ -120,7 +125,9 @@ class CrafterLLMActionProducer:
         )
         recent_memory = _extract_recent_memory(deliberation_input.working_memory_context)
 
-        messages = self._build_messages(state_packet, crafter_domain, recent_memory)
+        messages, sections_present = self._build_messages_with_metadata(
+            state_packet, crafter_domain, recent_memory
+        )
         text, parsed, parse_status, errors = _call_chat_safely(self.chat_fn, messages)
 
         # PR-Α: record transcript (sink failure must NOT propagate — R3).
@@ -130,6 +137,7 @@ class CrafterLLMActionProducer:
             parsed_response=parsed,
             parse_status=parse_status,
             errors=errors,
+            prompt_sections_present=sections_present,
         )
 
         if parse_status != "ok" or parsed is None:
@@ -151,6 +159,7 @@ class CrafterLLMActionProducer:
         parsed_response: dict[str, Any] | None,
         parse_status: str,
         errors: list[str],
+        prompt_sections_present: dict[str, bool],
     ) -> str | None:
         """Record transcript with swallow-on-fail semantics (R3)."""
         try:
@@ -167,23 +176,29 @@ class CrafterLLMActionProducer:
                 parsed_response=parsed_response,
                 parse_status=parse_status,  # type: ignore[arg-type]
                 errors=errors,
-                # PR-Α placeholder; PR-Β fills properly when ontology sections are injected.
-                prompt_sections_present={
-                    "state_packet": True,
-                    "admitted_actions": True,
-                    "world_facts": bool(self._world_facts_fn),
-                },
+                prompt_sections_present=prompt_sections_present,
             )
         except Exception as exc:  # noqa: BLE001 — R3: swallow
             _logger.warning("transcript_sink_record_failed err=%s", exc)
             return None
 
-    def _build_messages(
+    def _build_messages_with_metadata(
         self,
         state_packet: dict[str, Any],
         crafter_domain: CrafterActionDomain,
         recent_memory: str,
-    ) -> list[dict[str, str]]:
+    ) -> tuple[list[dict[str, str]], dict[str, bool]]:
+        """Build chat messages + prompt_sections_present metadata.
+
+        PR-Β: when ``scenario_ontology`` is provided, the system prompt is the
+        canonical 6-section dlPFC system prompt (role contract / drive
+        ontology / salience spec / action ontology / action effect schema /
+        world facts) and the metadata reflects each section's presence.
+
+        When ``scenario_ontology`` is None, falls back to the PR-Α 2-section
+        layout (legacy system stub + optional world_facts) so Linux scenarios
+        and existing tests keep their byte-equivalent prompt.
+        """
         admitted = sorted(crafter_domain.action_set)
         situation: dict[str, Any] = {
             "state_packet": state_packet,
@@ -198,22 +213,45 @@ class CrafterLLMActionProducer:
             '{"candidates": [{"action": "<action>", "reason": "<reason>"}, ...]}\n'
             f"{json.dumps(situation, ensure_ascii=False)}"
         )
-        system_content = (
-            "You are the Crafter reasoning core (dlPFC). The anchor layer has "
-            "pre-selected the admitted action set A'(s). Choose concrete raw actions "
-            "only from admitted_actions; never invent or return an action not listed. "
-            "Respond with JSON only."
-        )
-        if self._world_facts_fn is not None:
-            world_facts = self._world_facts_fn()
-            if world_facts:
-                system_content = (
-                    f"Background world facts:\n{world_facts}\n\n{system_content}"
-                )
-        return [
+
+        if self._scenario_ontology is not None:
+            # PR-Β 6-section dlPFC system prompt.
+            system_content = build_dlpfc_system_prompt(self._scenario_ontology)
+            sections: dict[str, bool] = {
+                "dlpfc_role_contract": True,
+                "drive_ontology": True,
+                "salience_spec": True,
+                "action_ontology": True,
+                "action_effect_schema": True,
+                "world_facts": self._scenario_ontology.world_facts_fn is not None,
+                "state_packet": True,
+                "admitted_actions": True,
+            }
+        else:
+            # PR-Α legacy 2-section layout (Linux / no-ontology compat).
+            system_content = (
+                "You are the Crafter reasoning core (dlPFC). The anchor layer has "
+                "pre-selected the admitted action set A'(s). Choose concrete raw actions "
+                "only from admitted_actions; never invent or return an action not listed. "
+                "Respond with JSON only."
+            )
+            if self._world_facts_fn is not None:
+                world_facts = self._world_facts_fn()
+                if world_facts:
+                    system_content = (
+                        f"Background world facts:\n{world_facts}\n\n{system_content}"
+                    )
+            sections = {
+                "state_packet": True,
+                "admitted_actions": True,
+                "world_facts": bool(self._world_facts_fn),
+            }
+
+        messages = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
         ]
+        return messages, sections
 
 
 # ---------------------------------------------------------------------------
