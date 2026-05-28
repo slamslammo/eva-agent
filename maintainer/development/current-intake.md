@@ -2,74 +2,70 @@
 
 ## Active Item
 
-`crafter-refactor-pr2` — anchor A'(s) pre-generative raw action domain
+`crafter-refactor-pr3` — CrafterLLMActionProducer raw-action candidates
 
-Coordination owner: `B-codex-2`
-Branch: `crafter-refactor-pr2-anchor-domain`
-Plan source: `/Users/mojiawen/Documents/claude_projects/eva-coordination/plans/crafter-refactor-detailed-plan-rev1.md`
+Coordination owner: `B-claude-2`
+Branch: `crafter-refactor-pr3-llm-action-producer`
+Plan source: `/Users/mojiawen/Documents/claude_projects/eva-coordination/plans/crafter-refactor-detailed-plan-rev1.md` §5 PR-3
 
 ## Intake
 
 1. Layer touched:
-   - Primary: `anchor`
-   - Scenario-owned surface: Crafter raw action-domain admission
+   - Primary: `l3_deliberation` (scenario-owned reasoning component)
+   - New package: `scenarios/crafter/reasoning/`
 
 2. Canonical owners:
-   - `scenarios/crafter/anchors/policy.py`
-   - `scenarios/crafter/anchors/__init__.py`
-   - `tests/scenarios/crafter/test_anchors.py`
+   - `scenarios/crafter/reasoning/llm_action_producer.py`
+   - `scenarios/crafter/reasoning/__init__.py`
+   - `tests/scenarios/crafter/test_llm_action_producer.py`
 
 3. Owner class:
-   - Stable scenario anchor owner.
-   - Legacy profile admission remains as transitional compatibility until PR-3/PR-4 consume the raw action domain and retire the old bridge path.
+   - New scenario reasoning owner.
+   - Depends on PR-2 `CrafterActionDomain` and PR-0 raw-action assessment path.
+   - Does NOT touch bridge executor/fallback (that is PR-4).
 
 4. Slice type:
-   - Current approved crafter-refactor slice: PR-2 only.
-   - Do not enter PR-3 raw-action LLM producer or PR-4 bridge executor cleanup.
+   - Current approved crafter-refactor slice: PR-3 only.
+   - Do not enter PR-4 bridge executor cleanup.
 
 5. Required behavior boundaries:
-   - Anchor output is an unordered action set plus `restriction_reasons`.
-   - No `rank`, `preferred_action`, `score`, or `direction_hint` in the new raw action-domain contract.
-   - Water/food critical restrict to movement actions; `do` must not enter just because water/food is visible or faced.
-   - Water not visible still admits the full movement set, not a chosen direction.
-   - Threat-visible response may admit `do` because the world mechanism for combat uses `do`.
-   - Feasibility remains world-fact only and is intersected into A'(s).
+   - Only selects actions from A'(s); candidates outside A'(s) silently discarded.
+   - Candidate.action directly carries raw action ("move_left", "do", etc.) — no compatibility_release shell.
+   - Returns [] on LLM unavailability or any failure (default inhibition, not fallback heuristic).
+   - drive_impact_schema set by action category for scoring compatibility with value_judgment.
+   - parameter_domain carries gate fields + raw_action_candidate=True for conflict_detection routing.
 
 6. Frozen tests / required verification:
-   - `tests/scenarios/crafter/test_anchors.py`
-   - `tests/scenarios/crafter/test_feasibility.py`
-   - `tests/scenarios/crafter/test_state_packet.py`
-   - Broader Crafter scenario tests and full regression if focused tests pass.
+   - `tests/scenarios/crafter/test_llm_action_producer.py` (21 new tests)
+   - Full regression.
 
 7. Docs to sync:
-   - `maintainer/development/current-intake.md` for this intake.
-   - No public docs expected in PR-2 unless an external contract changes.
+   - `maintainer/development/current-intake.md` (this file).
 
 ## Acceptance Notes
 
-PR-2 is complete only when:
+PR-3 is complete only when:
 
-- `build_crafter_action_domain(agent_state, observation)` returns raw A'(s) as an unordered set;
-- water/food critical domains exclude `do`, `sleep`, and `noop`;
-- water not visible produces the movement set without selecting a direction;
-- threat visible produces movement plus `do`;
-- energy critical with no threat admits `sleep`;
-- normal domains are feasibility-filtered raw actions;
-- task is handed back as `G2_REQUESTED` for architecture review.
+- `CrafterLLMActionProducer` produces Candidate objects with raw actions in A'(s);
+- candidates outside A'(s) are discarded;
+- candidate carries no compatibility_release shell;
+- raw-action candidates are assessable by PR-0's value_judgment path;
+- all 21 unit tests pass; full regression green;
+- task handed back as `G2_REQUESTED` for architecture review.
 
 ## Implementation Result
 
-- Added scenario-owned `CrafterActionDomain` with `action_set: frozenset[str]` and `restriction_reasons`.
-- Added `build_crafter_action_domain(agent_state, observation)` as the PR-2 A'(s) raw action-domain builder.
-- Intersects A'(s) with `feasible_raw_actions(observation)` while keeping feasibility world-fact-only.
-- Pins water/food critical domains to movement actions only; `do` is excluded even when water/food is visible or faced.
-- Pins water-not-visible exploration to the same movement set, so anchor does not choose a direction.
-- Pins threat-visible response to movement plus `do`, and energy-critical/no-threat to `sleep`.
-- Legacy profile admission remains transitional compatibility until PR-3/PR-4 consume the new raw action domain.
+- Added `scenarios/crafter/reasoning/llm_action_producer.py` with `CrafterLLMActionProducer`.
+- Producer implements CandidateProducer protocol; builds CrafterStatePacket + calls build_crafter_action_domain for A'(s).
+- Injects world_facts via world_facts_fn into system prompt; recent memory into user payload.
+- Discards any LLM-returned action outside A'(s); deduplicates; caps at 3 candidates.
+- Candidate.action is raw Crafter action; capability="raw_action"; side_effect_class="crafter_raw_action".
+- drive_impact_schema by action category (move=metabolic+acquisition, sleep=recovery, do=acquisition+metabolic, make_*=capability+acquisition, place_*=capability).
+- parameter_domain has gate fields (turn_allowed, instance_valid, critical_blocked, life_state, conservative_mode) + raw_action_candidate=True for conflict_detection._is_raw_action_candidate().
+- Returns [] on chat_fn=None or any LLM/parse exception.
 
 Verification:
 
-- `python3.11 -m pytest tests/scenarios/crafter/test_anchors.py tests/scenarios/crafter/test_feasibility.py tests/scenarios/crafter/test_state_packet.py` -> 17 passed
-- `python3.11 -m pytest tests/scenarios/crafter tests/l3_deliberation/reasoning tests/integration/test_crafter_runtime.py` -> 203 passed
-- `python3.11 -m pytest` -> 552 passed
+- `python3.11 -m pytest tests/scenarios/crafter/test_llm_action_producer.py -v` -> 21 passed
+- `python3.11 -m pytest` -> 573 passed
 - `git diff --check` -> passed
