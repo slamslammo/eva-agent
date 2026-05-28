@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
+
+_logger = logging.getLogger(__name__)
 
 from ..kernel import StateStore, to_iso8601
 from ..anchor import build_action_domain
@@ -64,6 +67,8 @@ def run_deliberation(
     deliberation_input: DeliberationInput,
     *,
     producer: CandidateProducer | None = None,
+    ofc_transcript_sink: Any | None = None,
+    ofc_identity_provider: Callable[[], dict[str, Any]] | None = None,
 ) -> tuple[DeliberationAuditRecord, dict[str, Any] | None]:
     """Run the minimal L3 pass and return audit plus optional memory-stub payloads.
 
@@ -83,11 +88,20 @@ def run_deliberation(
     # PR-Α: compute auditable refs to thread into the mediator's ReleaseToken.
     anchor_domain_ref = _compute_anchor_domain_ref(action_domain)
     dlpfc_proposal_ref = _extract_dlpfc_proposal_ref(candidates)
+    # PR-Γ §6.2: record OFC_classical transcript and capture its ref to thread
+    # into the mediator's ReleaseToken. Failures swallowed (R3).
+    ofc_assessment_ref = _record_ofc_transcript_safely(
+        sink=ofc_transcript_sink,
+        identity_provider=ofc_identity_provider,
+        assessments=assessments,
+        deliberation_input=deliberation_input,
+    )
     release_decision = decide_release(
         assessments,
         working_memory_context=deliberation_input.working_memory_context,
         anchor_domain_ref=anchor_domain_ref,
         dlpfc_proposal_ref=dlpfc_proposal_ref,
+        ofc_assessment_ref=ofc_assessment_ref,
     )
     release_decision = _thread_selected_action_hint(release_decision, candidates)
     memory_stub = build_memory_stub(recorded_at, deliberation_input, release_decision)
@@ -173,6 +187,69 @@ def _compute_anchor_domain_ref(action_domain: Any) -> str:
     parts.append("reasons=" + ",".join(sorted(str(r) for r in reasons)))
     digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return f"sha256:{digest[:16]}"
+
+
+def _record_ofc_transcript_safely(
+    *,
+    sink: Any | None,
+    identity_provider: Callable[[], dict[str, Any]] | None,
+    assessments: list[Any],
+    deliberation_input: DeliberationInput,
+) -> str | None:
+    """PR-Γ §6.2: record OFC_classical assessment to transcript sink.
+
+    Returns the sink-returned ref string, or None when sink is absent / None
+    / failed. R3 contract: any failure is swallowed + logged; the deliberation
+    chain is never broken.
+    """
+
+    if sink is None:
+        return None
+    try:
+        identity = identity_provider() if identity_provider is not None else {}
+        drive_broadcast = deliberation_input.drive_broadcast or {}
+        drive_levels = drive_broadcast.get("drive_levels") or {}
+        parsed_response = {
+            "assessments": [
+                {
+                    "candidate_id": a.candidate_id,
+                    "action": a.action,
+                    "score": a.score,
+                    "disposition": a.disposition,
+                    "reasons": list(a.reasons),
+                    "learning_bias": a.learning_bias,
+                    "bias_reasons": list(a.bias_reasons),
+                    "score_decomposition": (
+                        a.score_decomposition.to_dict()
+                        if a.score_decomposition is not None
+                        else None
+                    ),
+                }
+                for a in assessments
+            ],
+            "drive_levels": dict(drive_levels),
+        }
+        return sink.record(
+            run_id=str(identity.get("run_id", "")),
+            individual_id=str(identity.get("individual_id", "")),
+            turn_index=int(identity.get("turn_index", 0) or 0),
+            llm_role="OFC_classical",
+            scenario=str(identity.get("scenario", "crafter")),
+            model="drive_weighted_formula_v1",
+            messages=[],
+            raw_response="",
+            parsed_response=parsed_response,
+            parse_status="ok",
+            errors=[],
+            prompt_sections_present={
+                "drive_levels": True,
+                "drive_impact_schema": True,
+                "candidates": True,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — R3: swallow
+        _logger.warning("ofc_transcript_record_failed err=%s", exc)
+        return None
 
 
 def _extract_dlpfc_proposal_ref(candidates: list[Candidate]) -> str | None:

@@ -20,6 +20,7 @@ def decide_release(
     working_memory_context: dict[str, object] | None = None,
     anchor_domain_ref: str | None = None,
     dlpfc_proposal_ref: str | None = None,
+    ofc_assessment_ref: str | None = None,
 ) -> ReleaseDecision:
     """Apply default inhibition and return one mediator decision.
 
@@ -59,7 +60,7 @@ def decide_release(
                 candidate_profile=candidate_profile,
                 anchor_domain_ref=anchor_domain_ref,
                 dlpfc_proposal_ref=dlpfc_proposal_ref,
-                # ofc_assessment_ref left None — PR-Γ
+                ofc_assessment_ref=ofc_assessment_ref,  # PR-Γ filled
             ),
         )
 

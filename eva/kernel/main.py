@@ -157,6 +157,13 @@ def run_runtime(
     )
     if trace_sink.enabled:
         write_run_meta(config.paths.runtime_dir, _build_run_meta(config, instance_id, seed, now))
+    # PR-Γ §6.2: OFC classical transcript sink reuses build_transcript_sink_from_env
+    # so a single EVA_LLM_TRANSCRIPT=raw run produces both dlPFC and OFC outputs.
+    from ..l3_deliberation.llm_transcript import build_transcript_sink_from_env as _build_sink
+    _ofc_sink = _build_sink(config.paths.runtime_dir)
+    _resolved_run_id_outer = instance_id
+    _resolved_individual_id_outer = individual_id
+
     runtime = LifecycleRuntime(
         store,
         instance_guard,
@@ -170,7 +177,18 @@ def run_runtime(
         action_runtime,
         candidate_producer=candidate_producer,
         trace_sink=trace_sink,
+        ofc_transcript_sink=_ofc_sink,
+        # ofc_identity_provider bound below once `runtime` exists (it reads
+        # runtime._trace_turn_index live).
     )
+    # PR-Γ: bind OFC identity provider after runtime is constructed so the
+    # closure can read the live ``_trace_turn_index`` per turn.
+    runtime.ofc_identity_provider = lambda: {
+        "run_id": _resolved_run_id_outer,
+        "individual_id": _resolved_individual_id_outer,
+        "turn_index": getattr(runtime, "_trace_turn_index", 0),
+        "scenario": getattr(get_active_existence_semantics(), "individual_boundary", "").split()[0] or "crafter",
+    }
     # PR-Α: bind identity onto the producer if it exposes set_identity_provider.
     # Linux producers without the method are untouched (duck typing → no breakage).
     if candidate_producer is not None and hasattr(candidate_producer, "set_identity_provider"):

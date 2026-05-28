@@ -6,7 +6,7 @@ from typing import Any
 
 from .candidate_generation import current_anchor_profiles
 from .conflict_detection import build_candidate_conflict_context
-from ..contracts import Candidate, CandidateAssessment, DeliberationInput
+from ..contracts import Candidate, CandidateAssessment, DeliberationInput, ScoreDecomposition
 from ..peer_circuit.rpe import build_learned_impact_overlay
 from ...observability import current_trace_sink, current_trace_turn_index
 
@@ -128,6 +128,21 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         else:
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
+        # PR-Γ §6.1: explicit ScoreDecomposition for OFC_classical observability.
+        # ``semantic_overlay_blend`` is currently 0.0 (the semantic overlay blend
+        # is applied to drive_impact_schema upstream of scoring rather than as a
+        # separate scalar term); reserved here so future single-source drive
+        # metadata can fill it.
+        score_decomposition = ScoreDecomposition(
+            drive_weighted=round(drive_score, 6),
+            projection_fallback=round(projection_score, 6),
+            learning_bias=round(learning_bias, 6),
+            habit_priority_bonus=round(habit_priority_bonus, 6),
+            semantic_overlay_blend=0.0,
+            advisory=0.0,  # retired in Round 1.G
+            final_score=round(score, 6),
+            reasons=tuple(reasons),
+        )
         assessments.append(
             CandidateAssessment(
                 candidate_id=candidate.candidate_id,
@@ -137,6 +152,7 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                 reasons=tuple(reasons),
                 learning_bias=round(learning_bias, 6),
                 bias_reasons=tuple(bias_reasons),
+                score_decomposition=score_decomposition,
             )
         )
         # Round 1.H H-3b: flag-gated read-only owner-hook (A-approved exception #2).

@@ -173,6 +173,38 @@ class Candidate:
 
 
 @dataclass(frozen=True)
+class ScoreDecomposition:
+    """Explicit decomposition of an OFC drive-weighted candidate score (PR-Γ §6.1).
+
+    Promotes the existing per-candidate trace snapshot (drive_weighted /
+    projection / learning_bias / habit / advisory / final_score) to a typed
+    schema so OFC_classical transcripts can replay the exact arithmetic that
+    produced each candidate's score.
+    """
+
+    drive_weighted: float
+    projection_fallback: float
+    learning_bias: float
+    habit_priority_bonus: float
+    semantic_overlay_blend: float
+    advisory: float  # retired in Round 1.G; kept for schema completeness
+    final_score: float
+    reasons: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "drive_weighted": self.drive_weighted,
+            "projection_fallback": self.projection_fallback,
+            "learning_bias": self.learning_bias,
+            "habit_priority_bonus": self.habit_priority_bonus,
+            "semantic_overlay_blend": self.semantic_overlay_blend,
+            "advisory": self.advisory,
+            "final_score": self.final_score,
+            "reasons": list(self.reasons),
+        }
+
+
+@dataclass(frozen=True)
 class CandidateAssessment:
     """Rule-based value judgment result for one candidate."""
 
@@ -183,6 +215,9 @@ class CandidateAssessment:
     reasons: tuple[str, ...] = ()
     learning_bias: float = 0.0
     bias_reasons: tuple[str, ...] = ()
+    # PR-Γ §6.1: explicit per-candidate score decomposition. Default ``None``
+    # keeps legacy construction sites byte-equivalent (Linux compat).
+    score_decomposition: ScoreDecomposition | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize one candidate assessment."""
@@ -198,6 +233,8 @@ class CandidateAssessment:
             payload["learning_bias"] = self.learning_bias
         if self.bias_reasons:
             payload["bias_reasons"] = list(self.bias_reasons)
+        if self.score_decomposition is not None:
+            payload["score_decomposition"] = self.score_decomposition.to_dict()
         return payload
 
 
@@ -298,6 +335,7 @@ def build_deliberation_audit_record(
 __all__ = [
     "Candidate",
     "CandidateAssessment",
+    "ScoreDecomposition",
     "DeliberationAuditRecord",
     "DeliberationInput",
     "OutcomeVector",

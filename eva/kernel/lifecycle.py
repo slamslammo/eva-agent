@@ -152,6 +152,8 @@ class LifecycleRuntime:
         action_runtime: ExternalActionRuntime | None = None,
         candidate_producer: CandidateProducer | None = None,
         trace_sink: TraceSink | None = None,
+        ofc_transcript_sink: Any | None = None,
+        ofc_identity_provider: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
         self.store = store
         self.instance_guard = instance_guard
@@ -167,6 +169,11 @@ class LifecycleRuntime:
         # lever). ``None`` -> run_deliberation defaults to the deterministic
         # HeuristicCandidateProducer (model-off byte-equivalent).
         self.candidate_producer = candidate_producer
+        # PR-Γ §6.2: optional OFC_classical transcript sink + identity provider.
+        # When None (Linux default), run_deliberation skips OFC recording and
+        # mediator's ofc_assessment_ref stays None (byte-equivalent).
+        self.ofc_transcript_sink = ofc_transcript_sink
+        self.ofc_identity_provider = ofc_identity_provider
         # Round 1.H: opt-in cognitive-trace sink. ``None`` -> NullTraceSink (no-op,
         # byte-equivalent). H-2/H-3 emit transform/snapshot events from runtime seams.
         self.trace_sink: TraceSink = trace_sink or NullTraceSink()
@@ -813,7 +820,10 @@ class LifecycleRuntime:
                     response_history=prior_response_history,
                 )
                 deliberation_audit, memory_stub = run_deliberation(
-                    now, deliberation_input, producer=self.candidate_producer
+                    now, deliberation_input,
+                    producer=self.candidate_producer,
+                    ofc_transcript_sink=self.ofc_transcript_sink,
+                    ofc_identity_provider=self.ofc_identity_provider,
                 )
                 if self.trace_sink.enabled:
                     self._emit_p1a_seam_trace(
