@@ -1,14 +1,14 @@
 {
   "life_state": "STABLE",
-  "last_heartbeat_at": "2026-05-28T19:16:59.570793Z",
+  "last_heartbeat_at": "2026-05-28T22:14:36.537088Z",
   "last_tick_id": "tick-0054",
-  "last_turn_id": "turn-0138",
+  "last_turn_id": "turn-0100",
   "heartbeat_age_sec": 0.0,
   "heartbeat_ok": true,
   "state_io_ok": true,
   "tick_ok": true,
   "consecutive_failures": 0,
   "instance_valid": true,
-  "recovering_until": "2026-05-28T18:36:18.494123Z",
-  "updated_at": "2026-05-28T19:16:59.575114Z"
+  "recovering_until": "2026-05-28T21:01:42.749205Z",
+  "updated_at": "2026-05-28T22:14:36.538868Z"
 }

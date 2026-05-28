@@ -9,8 +9,8 @@
   },
   "memory_backend": "llm_assisted",
   "model": "deepseek-v4-pro",
-  "run_id": "eva-20260528183617-db1f7d",
+  "run_id": "eva-20260528210142-1de78f",
   "scenario": "crafter",
   "seed": 1,
-  "started_at": "2026-05-28T18:36:17.994123+00:00"
+  "started_at": "2026-05-28T21:01:42.249205+00:00"
 }
