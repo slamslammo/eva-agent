@@ -1,0 +1,16 @@
+{
+  "anchor_policy": "crafter_compatibility",
+  "candidate_producer_version": "llm_action_hint_v1",
+  "existence_semantics": {
+    "clock_source": "step",
+    "individual_boundary": "one Crafter episode = one individual's lifetime",
+    "inheritance_channel": "dead individual's trace -> distillation -> new individual's inherited priors",
+    "reset_semantics": "new_individual"
+  },
+  "memory_backend": "llm_assisted",
+  "model": "deepseek-v4-pro",
+  "run_id": "eva-20260528183617-db1f7d",
+  "scenario": "crafter",
+  "seed": 1,
+  "started_at": "2026-05-28T18:36:17.994123+00:00"
+}
