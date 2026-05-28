@@ -208,17 +208,23 @@ def _build_candidates(
             continue
         seen.add(action)
         reason = item.get("reason", "")
+        # Keep the LLM-given reason in justification (audit trace) so a short-run
+        # replay can see *why* the model chose this action, not just *what*.
+        reason_excerpt = reason[:80] if reason else ""
+        justification: tuple[str, ...] = (
+            "crafter_llm_action_producer",
+            f"action={action}",
+            "domain_restricted",
+        )
+        if reason_excerpt:
+            justification = (*justification, f"reason={reason_excerpt}")
         candidates.append(
             Candidate(
                 candidate_id=f"candidate-crafter-{action.replace('_', '-')}",
                 capability="raw_action",
                 action=action,
                 parameter_domain={**gate_fields, "reason": reason},
-                justification=(
-                    "crafter_llm_action_producer",
-                    f"action={action}",
-                    "domain_restricted",
-                ),
+                justification=justification,
                 drive_impact_schema=_drive_impact_for_action(action),
                 side_effect_class="crafter_raw_action",
             )

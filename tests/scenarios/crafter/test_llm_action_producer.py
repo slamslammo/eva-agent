@@ -213,6 +213,70 @@ class TestCrafterLLMActionProducerCandidateFormat(unittest.TestCase):
         self.assertTrue(pd.get("raw_action_candidate") is True)
         self.assertEqual(pd.get("candidate_kind"), "raw_action")
 
+    def test_justification_includes_llm_reason(self) -> None:
+        """LLM reason should be carried in justification for audit replay."""
+        chat_fn = _stub_chat(
+            {"candidates": [{"action": "move_left", "reason": "water visible to the left"}]}
+        )
+        obs = _observation()
+        producer = CrafterLLMActionProducer(
+            chat_fn=chat_fn,
+            observation_fn=lambda: obs,
+        )
+        di = _deliberation_input(
+            top_drive="metabolic",
+            drive_levels={
+                "metabolic": 0.5,
+                "safety": 0.1,
+                "recovery": 0.1,
+                "acquisition": 0.2,
+                "capability": 0.1,
+                "exploration": 0.1,
+            },
+        )
+        domain = build_action_domain(di)
+        candidates = producer.produce(domain, di)
+        self.assertTrue(len(candidates) >= 1)
+        justification_text = " ".join(candidates[0].justification)
+        self.assertIn("water visible to the left", justification_text)
+
+    def test_justification_truncates_long_reason(self) -> None:
+        long_reason = "x" * 200
+        chat_fn = _stub_chat(
+            {"candidates": [{"action": "move_left", "reason": long_reason}]}
+        )
+        obs = _observation()
+        producer = CrafterLLMActionProducer(
+            chat_fn=chat_fn,
+            observation_fn=lambda: obs,
+        )
+        di = _deliberation_input()
+        domain = build_action_domain(di)
+        candidates = producer.produce(domain, di)
+        self.assertTrue(len(candidates) >= 1)
+        # Reason in justification capped at 80 chars
+        reason_entry = next(
+            (j for j in candidates[0].justification if j.startswith("reason=")), ""
+        )
+        self.assertTrue(reason_entry)
+        # Strip "reason=" prefix → check truncation
+        self.assertLessEqual(len(reason_entry) - len("reason="), 80)
+
+    def test_justification_omits_empty_reason(self) -> None:
+        chat_fn = _stub_chat({"candidates": [{"action": "move_left", "reason": ""}]})
+        obs = _observation()
+        producer = CrafterLLMActionProducer(
+            chat_fn=chat_fn,
+            observation_fn=lambda: obs,
+        )
+        di = _deliberation_input()
+        domain = build_action_domain(di)
+        candidates = producer.produce(domain, di)
+        self.assertTrue(len(candidates) >= 1)
+        # No "reason=" entry when LLM provided no reason
+        for entry in candidates[0].justification:
+            self.assertFalse(entry.startswith("reason="))
+
     def test_candidate_has_no_compatibility_release_shell(self) -> None:
         chat_fn = _stub_chat(
             {"candidates": [{"action": "do", "reason": "collect resource"}]}
