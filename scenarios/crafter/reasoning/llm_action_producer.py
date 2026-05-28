@@ -13,6 +13,7 @@ Boundary:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from typing import Any, Callable, TYPE_CHECKING
@@ -40,6 +41,11 @@ _MAX_CANDIDATES = 3
 # move_* explores and may find resources; do harvests/crafts; sleep recovers;
 # make_*/place_* build capability. noop and unknowns get no declared impact.
 _MOVE_ACTIONS = frozenset({"move_left", "move_right", "move_up", "move_down"})
+
+
+def _hash16(text: str) -> str:
+    """sha256 hex truncated to 16 chars — compact + sufficient for ontology IDs."""
+    return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _drive_impact_for_action(action: str) -> dict[str, float]:
@@ -130,6 +136,17 @@ class CrafterLLMActionProducer:
         )
         text, parsed, parse_status, errors = _call_chat_safely(self.chat_fn, messages)
 
+        # PR-Β': compute v1.1 ontology hashes (swallow failures — R3, defense in
+        # depth: the helper already returns Nones on internal error, but the
+        # outer try guards against any surprise propagation).
+        try:
+            ontology_hash, world_facts_hash, action_effect_schema_hash = (
+                self._compute_ontology_hashes_safely()
+            )
+        except Exception as exc:  # noqa: BLE001 — R3
+            _logger.warning("ontology_hash_helper_propagated err=%s", exc)
+            ontology_hash = world_facts_hash = action_effect_schema_hash = None
+
         # PR-Α: record transcript (sink failure must NOT propagate — R3).
         transcript_ref = self._record_transcript_safely(
             messages=messages,
@@ -138,6 +155,9 @@ class CrafterLLMActionProducer:
             parse_status=parse_status,
             errors=errors,
             prompt_sections_present=sections_present,
+            ontology_hash=ontology_hash,
+            world_facts_hash=world_facts_hash,
+            action_effect_schema_hash=action_effect_schema_hash,
         )
 
         if parse_status != "ok" or parsed is None:
@@ -160,6 +180,9 @@ class CrafterLLMActionProducer:
         parse_status: str,
         errors: list[str],
         prompt_sections_present: dict[str, bool],
+        ontology_hash: str | None = None,
+        world_facts_hash: str | None = None,
+        action_effect_schema_hash: str | None = None,
     ) -> str | None:
         """Record transcript with swallow-on-fail semantics (R3)."""
         try:
@@ -177,10 +200,45 @@ class CrafterLLMActionProducer:
                 parse_status=parse_status,  # type: ignore[arg-type]
                 errors=errors,
                 prompt_sections_present=prompt_sections_present,
+                ontology_hash=ontology_hash,
+                world_facts_hash=world_facts_hash,
+                action_effect_schema_hash=action_effect_schema_hash,
+                # drive_spec_version / drive_rendering placeholders use sink defaults.
             )
         except Exception as exc:  # noqa: BLE001 — R3: swallow
             _logger.warning("transcript_sink_record_failed err=%s", exc)
             return None
+
+    def _compute_ontology_hashes_safely(
+        self,
+    ) -> tuple[str | None, str | None, str | None]:
+        """Compute sha256:hex16 hashes of the 3 ontology components.
+
+        PR-Β' / plan §5.5b: each hash captures one ontology surface so
+        100-turn replay can detect ontology changes between runs. Returns
+        ``(None, None, None)`` when no scenario_ontology is bound or when
+        any component fails to render — R3 swallow contract.
+        """
+        if self._scenario_ontology is None:
+            return (None, None, None)
+        try:
+            drive_text = self._scenario_ontology.drive_ontology.format_text()
+            action_text = self._scenario_ontology.action_ontology.format_text()
+            effect_text = self._scenario_ontology.action_effect_schema.format_text()
+            world_facts = ""
+            if self._scenario_ontology.world_facts_fn is not None:
+                try:
+                    world_facts = self._scenario_ontology.world_facts_fn() or ""
+                except Exception:  # noqa: BLE001
+                    world_facts = ""
+            # ontology_hash = drive + action ontology (semantic content)
+            ontology_hash = _hash16(drive_text + "\n---\n" + action_text)
+            world_facts_hash = _hash16(world_facts)
+            action_effect_schema_hash = _hash16(effect_text)
+            return (ontology_hash, world_facts_hash, action_effect_schema_hash)
+        except Exception as exc:  # noqa: BLE001 — R3
+            _logger.warning("ontology_hash_compute_failed err=%s", exc)
+            return (None, None, None)
 
     def _build_messages_with_metadata(
         self,

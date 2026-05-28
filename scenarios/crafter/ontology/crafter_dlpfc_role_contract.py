@@ -50,6 +50,14 @@ _BODY = """你是 Crafter scenario 的 dlPFC reasoning core (背外侧前额叶�
   - 但会进入 transcript 供 A review 时发现 anchor 或 state 异常
   - 这是健康 dlPFC 的"金丝雀"能力——执行约束 + 保留诚实报告通道
 
+你允许做的（plausibility 标注 — dlPFC 自己的判断强弱）：
+  - ✅ 可以在每个候选 reason 里**标注 plausibility / confidence / primary_reason**
+       （如 "primary_reason: water visible directly left; plausibility: high"）
+  - dlPFC 不做 **final utility ranking**（那是 OFC 职责）
+  - 但 dlPFC 可以表达"我觉得 move_left 比 move_down 更合理，因为水在左边"
+  - OFC 当前可以不消费此字段（公式版 OFC 不读 reason），但 transcript 必须
+       完整保留——未来 OFC 升级 LLM 后可消费 + A review 时可分析
+
 输出格式（严格 JSON）：
 {"candidates": [{"action": "<admitted_action>", "reason": "<short reason>"}, ...]}"""
 

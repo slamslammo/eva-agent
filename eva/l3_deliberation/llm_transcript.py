@@ -32,7 +32,7 @@ __all__ = [
 
 TranscriptMode = Literal["off", "redacted", "raw"]
 ENV_VAR = "EVA_LLM_TRANSCRIPT"
-SCHEMA_VERSION = "llm_transcript_v1"
+SCHEMA_VERSION = "llm_transcript_v1.1"
 
 _TRANSCRIPT_SUBDIR = "llm_transcripts"
 
@@ -61,6 +61,17 @@ class LLMTranscriptSink(Protocol):
         parse_status: Literal["ok", "parse_error", "transport_error"],
         errors: list[str],
         prompt_sections_present: dict[str, bool],
+        # PR-Β' (schema v1.1, plan §5.5b): optional ontology / world-facts /
+        # effect-schema content hashes so 100-turn replay can match LLM to
+        # exact ontology snapshot. Three drive_* fields are placeholders for
+        # future single-source-scenario-drive-metadata + drive-rendering-layer
+        # tasks; current implementation always writes the safe defaults.
+        ontology_hash: str | None = None,
+        world_facts_hash: str | None = None,
+        action_effect_schema_hash: str | None = None,
+        drive_spec_version: str | None = None,
+        drive_rendering: Any | None = None,
+        drive_rendering_enabled: bool = False,
     ) -> str | None: ...
 
 
@@ -75,7 +86,8 @@ class FileBasedTranscriptSink:
     """``raw`` / ``redacted`` mode sink.
 
     Writes ``{runtime_dir}/llm_transcripts/{llm_role}/turn-{index:06d}.json``
-    in schema ``llm_transcript_v1``. Returns the relative path on success.
+    in schema ``llm_transcript_v1.1`` (v1 superset — see plan §5.5b).
+    Returns the relative path on success.
 
     Write failures (permission, disk full, parent-is-file) are logged and
     swallowed; sink returns ``None`` so the deliberation loop is never broken.
@@ -100,6 +112,13 @@ class FileBasedTranscriptSink:
         parse_status: Literal["ok", "parse_error", "transport_error"],
         errors: list[str],
         prompt_sections_present: dict[str, bool],
+        # PR-Β' (schema v1.1) — see Protocol above.
+        ontology_hash: str | None = None,
+        world_facts_hash: str | None = None,
+        action_effect_schema_hash: str | None = None,
+        drive_spec_version: str | None = None,
+        drive_rendering: Any | None = None,
+        drive_rendering_enabled: bool = False,
     ) -> str | None:
         try:
             relative_path = (
@@ -107,7 +126,7 @@ class FileBasedTranscriptSink:
             )
             absolute_path = self._runtime_dir / relative_path
             absolute_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {
+            payload: dict[str, Any] = {
                 "schema_version": SCHEMA_VERSION,
                 "run_id": run_id,
                 "individual_id": individual_id,
@@ -123,6 +142,19 @@ class FileBasedTranscriptSink:
                 "prompt_sections_present": dict(prompt_sections_present),
                 "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             }
+            # PR-Β' v1.1 additive fields — emitted when provided, else only the
+            # placeholder triple (drive_spec_version / drive_rendering /
+            # drive_rendering_enabled) is written so future readers see the
+            # full v1.1 surface with safe defaults.
+            if ontology_hash is not None:
+                payload["ontology_hash"] = ontology_hash
+            if world_facts_hash is not None:
+                payload["world_facts_hash"] = world_facts_hash
+            if action_effect_schema_hash is not None:
+                payload["action_effect_schema_hash"] = action_effect_schema_hash
+            payload["drive_spec_version"] = drive_spec_version
+            payload["drive_rendering"] = drive_rendering
+            payload["drive_rendering_enabled"] = bool(drive_rendering_enabled)
             absolute_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             return relative_path
         except Exception as exc:  # noqa: BLE001 — R3: swallow all errors

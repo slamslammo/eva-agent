@@ -79,7 +79,8 @@ class FileBasedTranscriptSinkTests(unittest.TestCase):
             expected = Path(temp_dir) / "llm_transcripts" / "dlPFC" / "turn-000042.json"
             self.assertTrue(expected.exists(), f"Expected file at {expected}")
             payload = json.loads(expected.read_text())
-            self.assertEqual(payload["schema_version"], "llm_transcript_v1")
+            # PR-Β' schema bump v1 → v1.1 (v1 superset, plan §5.5b).
+            self.assertEqual(payload["schema_version"], "llm_transcript_v1.1")
             self.assertEqual(payload["run_id"], "r1")
             self.assertEqual(payload["individual_id"], "ind1")
             self.assertEqual(payload["turn_index"], 42)
