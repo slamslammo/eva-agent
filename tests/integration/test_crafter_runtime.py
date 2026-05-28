@@ -155,13 +155,14 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(len(response_history), 1)
             self.assertIn(response_history[-1]["pressure_type"], {"safety", "metabolic", "recovery", "acquisition", "capability"})
 
-    def test_widened_candidates_surface_in_runtime_response_history(self) -> None:
-        """Round 1.A: at runtime, the bridge restricts widening to the
-        candidate_profile L3 selected and produces a candidate_actions list
-        that reflects context-driven widening. Without habit/prior bias the
-        selected action is the first widened candidate (e.g., ``do`` rather
-        than ``noop``), but the bridge's candidate_actions documents the
-        wider set reaching runtime."""
+    def test_bridge_defers_when_no_llm_producer(self) -> None:
+        """PR-4: without a live LLM producer the bridge defers (fallback=defer).
+
+        No raw-action candidates are produced → mediator may still release a
+        heuristic candidate → bridge receives no action_hint → records
+        crafter_bridge_defer_no_raw_action reason. The bridge never invents
+        a baseline action (rev1 §6.3 red line).
+        """
 
         with tempfile.TemporaryDirectory() as temp_dir:
             config = build_runtime_config(
@@ -187,38 +188,13 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
             response_history = store.read_response_history()
             self.assertGreaterEqual(len(response_history), 1)
 
-            # The last response_history entry must record a non-trivial
-            # candidate_actions list. Stage H pinned exactly 3 hardcoded
-            # candidates regardless of pressure; Round 1.A makes the bridge
-            # produce context-resolved candidates whose count and content
-            # vary with the L3-chosen candidate_profile.
-            last_response = response_history[-1]
-            candidate_actions = last_response.get("candidate_actions")
-            self.assertIsInstance(candidate_actions, list)
-            self.assertGreaterEqual(
-                len(candidate_actions),
-                1,
-                f"Bridge must produce at least one widened candidate; got {candidate_actions}",
-            )
-
-            # The selected action must always be one of the produced candidates.
-            self.assertIn(
-                last_response["selected_action"],
-                candidate_actions,
-                f"selected_action {last_response['selected_action']!r} must appear in candidate_actions {candidate_actions!r}",
-            )
-
-            # Profile-aware posture is carried into response_history through
-            # selected_posture so traces can attribute the choice to a profile.
-            selected_posture = last_response.get("selected_posture", "")
-            self.assertTrue(
-                any(selected_posture == token for token in (
-                    "crafter_candidate_observe",
-                    "crafter_candidate_stabilize",
-                    "crafter_candidate_escalate",
-                )),
-                f"selected_posture must carry profile provenance after Round 1.A; got {selected_posture!r}",
-            )
+            # All heuristic-path (no LLM) bridge responses should be defer or raw_action_execution.
+            for record in response_history:
+                self.assertIn(
+                    record.get("selected_action_reason"),
+                    {"crafter_bridge_defer_no_raw_action", "crafter_raw_action_execution"},
+                    f"Unexpected selection reason: {record.get('selected_action_reason')}",
+                )
 
     def test_crafter_runtime_surfaces_loaded_inherited_priors_in_working_memory(self) -> None:
         bundle = {
@@ -359,31 +335,37 @@ class CrafterTerminationSemanticsTests(unittest.TestCase):
             self.assertGreaterEqual(len(stub_session.step_actions), 1)
 
 
-class CrafterActionHintWiringIntegrationTests(unittest.TestCase):
-    """Round 1.G phase 2 (a) G-6b: end-to-end action_hint causal path with a stub
-    producer (no live tokens). Proves producer -> run_deliberation threading ->
-    release_context -> Crafter bridge -> executed action."""
+class CrafterRawActionProducerWiringIntegrationTests(unittest.TestCase):
+    """PR-4: end-to-end raw-action path with a stub CrafterLLMActionProducer.
+
+    Proves CrafterLLMActionProducer -> run_deliberation threading ->
+    release_context["action_hint"] -> Crafter bridge -> executed action.
+    """
 
     def setUp(self) -> None:
         activate_crafter_scenario()
 
-    def test_injected_producer_action_hint_drives_executed_action(self) -> None:
-        from scenarios.crafter.actions import PROFILE_ELIGIBLE_ACTIONS, PROFILE_TO_POSTURE
-        from eva.l3_deliberation.reasoning.llm_candidate_producer import LLMCandidateProducer
+    def test_raw_action_producer_drives_executed_action(self) -> None:
+        from scenarios.crafter.reasoning import CrafterLLMActionProducer
 
-        hints = {
-            "escalate_first": "make_wood_pickaxe",
-            "stabilize_first": "sleep",
-            "observe_first": "move_right",
-        }
+        chosen_action = "move_left"
 
         def stub_chat(messages):
-            return json.dumps({"action_hints": hints})
+            return json.dumps({"candidates": [{"action": chosen_action, "reason": "go left"}]})
 
-        producer = LLMCandidateProducer(
-            chat_fn=stub_chat, profile_action_vocab=PROFILE_ELIGIBLE_ACTIONS
+        observation = {
+            "visible": {
+                "life_panel": {"available": True, "values": {"health": 5, "food": 5, "water": 5, "energy": 5}},
+                "inventory_panel": {"available": True, "items": {}},
+                "local_view": {"nearby_objects": {}, "cells": [["grass"] * 9] * 7, "center": {"row": 3, "col": 4}},
+                "facing": "left",
+            },
+        }
+
+        producer = CrafterLLMActionProducer(
+            chat_fn=stub_chat,
+            observation_fn=lambda: observation,
         )
-        posture_to_profile = {posture: profile for profile, posture in PROFILE_TO_POSTURE.items()}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             config = build_runtime_config(
@@ -408,16 +390,14 @@ class CrafterActionHintWiringIntegrationTests(unittest.TestCase):
             store = StateStore(config.paths)
             response_history = store.read_response_history()
 
-        hinted = [
+        raw_executed = [
             r for r in response_history
-            if r.get("selected_action_reason") == "crafter_llm_action_hint_selection"
+            if r.get("selected_action_reason") == "crafter_raw_action_execution"
         ]
-        # The LLM action_hint reached and drove the bridge's concrete-action choice.
-        self.assertGreaterEqual(len(hinted), 1)
-        for record in hinted:
-            profile = posture_to_profile.get(record.get("selected_posture"))
-            self.assertIsNotNone(profile)
-            self.assertEqual(record.get("selected_action"), hints[profile])
+        # At least one raw-action execution must surface in response history.
+        self.assertGreaterEqual(len(raw_executed), 1)
+        for record in raw_executed:
+            self.assertEqual(record.get("selected_action"), chosen_action)
 
 
 class CrafterP1aTraceIntegrationTests(unittest.TestCase):

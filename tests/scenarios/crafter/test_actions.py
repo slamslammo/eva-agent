@@ -13,7 +13,6 @@ from scenarios.crafter.actions import (
     DEFAULT_RESPONSE_MODE,
     NOOP_ACTION,
     SLEEP_ACTION,
-    build_integrity_response_candidates,
     execute_crafter_action,
     filter_response_candidates,
     select_integrity_response,
@@ -47,41 +46,6 @@ class CrafterActionTests(unittest.TestCase):
         self.assertEqual(len(ALL_ACTIONS), 17)
         self.assertIn(NOOP_ACTION, ACTION_TO_ALLOWED_STATES)
         self.assertIn(SLEEP_ACTION, ACTION_TO_ALLOWED_STATES)
-
-    def test_integrity_candidates_are_bounded_and_filterable(self) -> None:
-        pressure = ActivePressure(
-            pressure_id="pressure-1",
-            type="integrity",
-            severity="degraded",
-            evidence={"reason": "health_critical"},
-            first_seen_at=utc_now(),
-            last_seen_at=utc_now(),
-            trend="worsening",
-        )
-        runtime_state = RuntimeState(life_state="STABLE", instance_valid=True)
-        candidates = build_integrity_response_candidates(pressure, runtime_state)
-
-        # Round 1.A widening: under ``health_critical`` pressure the candidate
-        # set resolves to one observe candidate (noop) + one stabilize
-        # candidate (sleep) + defensive escalate candidates (do plus sword
-        # crafting). The set is still bounded — it does not include resource
-        # acquisition actions like ``place_table`` because those are only
-        # eligible under inventory / tooling pressure.
-        self.assertEqual(
-            [candidate.action for candidate in candidates],
-            ["noop", "sleep", "do", "make_wood_sword", "make_stone_sword"],
-        )
-
-        # Profile-aware posture is encoded on each candidate so downstream
-        # selection / traces can attribute the choice to a candidate profile.
-        action_to_posture = {candidate.action: candidate.posture for candidate in candidates}
-        self.assertEqual(action_to_posture["noop"], "crafter_candidate_observe")
-        self.assertEqual(action_to_posture["sleep"], "crafter_candidate_stabilize")
-        self.assertEqual(action_to_posture["do"], "crafter_candidate_escalate")
-        self.assertEqual(action_to_posture["make_wood_sword"], "crafter_candidate_escalate")
-
-        decisions = filter_response_candidates(pressure, runtime_state, candidates)
-        self.assertTrue(all(decision.result == "allow" for decision in decisions))
 
     def test_execute_crafter_action_derives_real_deltas_from_runtime_step(self) -> None:
         before = {
@@ -201,16 +165,14 @@ class CrafterActionTests(unittest.TestCase):
         self.assertTrue(result["followup_needed"])
 
 
-class CrafterActionHintConsumptionTests(unittest.TestCase):
-    """Round 1.G phase 2 (a): the LLM action_hint is the concrete-action lever
-    within the drive-selected posture (priority over default / prior / habit);
-    an ineligible or absent hint leaves the heuristic path untouched."""
+class CrafterRawActionBridgeTests(unittest.TestCase):
+    """PR-4: bridge executes the mediator-released raw action from release_context."""
 
     def setUp(self) -> None:
         activate_crafter_scenario()
         self.runtime_state = RuntimeState(life_state="STABLE", instance_valid=True)
 
-    def _pressure(self, reason: str) -> ActivePressure:
+    def _pressure(self, reason: str = "") -> ActivePressure:
         return ActivePressure(
             pressure_id=f"pressure-{reason}",
             type="integrity",
@@ -221,49 +183,46 @@ class CrafterActionHintConsumptionTests(unittest.TestCase):
             trend="worsening",
         )
 
-    def _release_context(self, profile: str, action_hint: str | None = None) -> dict:
+    def _release_context(self, action_hint: str | None = None) -> dict:
         ctx: dict[str, object] = {
             "bridge_target": "pressure_led_compatibility",
-            "response_mode": "pressure_led_compatibility",
-            "candidate_profile": profile,
+            "candidate_profile": "crafter_raw_action",
         }
         if action_hint is not None:
             ctx["action_hint"] = action_hint
         return ctx
 
-    def test_valid_action_hint_is_authoritative_within_posture(self) -> None:
-        # escalate_first eligible action that the pressure heuristic alone would
-        # not surface under empty pressure — proves the hint is causal.
+    def test_valid_action_hint_is_executed(self) -> None:
         selection = select_integrity_response(
-            self._pressure(""),
+            self._pressure(),
             self.runtime_state,
-            release_context=self._release_context("escalate_first", action_hint="place_plant"),
+            release_context=self._release_context("place_plant"),
         )
         self.assertEqual(selection.selected_action, "place_plant")
-        self.assertEqual(selection.selected_action_reason, "crafter_llm_action_hint_selection")
+        self.assertEqual(selection.selected_action_reason, "crafter_raw_action_execution")
 
-    def test_no_action_hint_preserves_heuristic_selection(self) -> None:
-        baseline = select_integrity_response(
-            self._pressure(""),
+    def test_no_action_hint_defers(self) -> None:
+        selection = select_integrity_response(
+            self._pressure(),
             self.runtime_state,
-            release_context=self._release_context("escalate_first"),
+            release_context=self._release_context(),
         )
-        self.assertNotEqual(baseline.selected_action_reason, "crafter_llm_action_hint_selection")
+        self.assertEqual(selection.selected_action_reason, "crafter_bridge_defer_no_raw_action")
 
-    def test_ineligible_action_hint_is_ignored(self) -> None:
-        # ``do`` is not eligible under stabilize_first → hint ignored, heuristic stands.
-        baseline = select_integrity_response(
-            self._pressure("threat_visible"),
+    def test_unknown_action_defers(self) -> None:
+        selection = select_integrity_response(
+            self._pressure(),
             self.runtime_state,
-            release_context=self._release_context("stabilize_first"),
+            release_context=self._release_context("nonexistent_action"),
         )
-        hinted = select_integrity_response(
-            self._pressure("threat_visible"),
-            self.runtime_state,
-            release_context=self._release_context("stabilize_first", action_hint="do"),
-        )
-        self.assertEqual(hinted.selected_action, baseline.selected_action)
-        self.assertNotEqual(hinted.selected_action_reason, "crafter_llm_action_hint_selection")
+        self.assertEqual(selection.selected_action_reason, "crafter_bridge_defer_no_raw_action")
+
+    def test_filter_candidates_still_allows_all(self) -> None:
+        from eva.l3_deliberation.tool_edge.tool_registry import ResponseCandidate
+        candidates = [ResponseCandidate(action="move_left", posture="crafter_candidate", allowed_in_states=("STABLE",))]
+        decisions = filter_response_candidates(self._pressure(), self.runtime_state, candidates)
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(decisions[0].result, "allow")
 
 
 if __name__ == "__main__":

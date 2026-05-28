@@ -103,5 +103,61 @@ class ActionHintThreadingTests(unittest.TestCase):
         )
 
 
+class RawActionCandidateThreadingTests(unittest.TestCase):
+    """PR-4: raw-action candidates thread candidate.action as action_hint."""
+
+    def setUp(self) -> None:
+        activate_crafter_scenario()
+        self.now = datetime(2026, 5, 21, tzinfo=timezone.utc)
+
+    def test_raw_action_candidate_action_threaded_as_action_hint(self) -> None:
+        from eva.l3_deliberation.contracts import Candidate
+        from eva.l3_deliberation.peer_circuit.mediator import decide_release
+        from eva.l3_deliberation.reasoning.value_judgment import assess_candidates
+        from eva.anchor import build_action_domain
+
+        raw_candidate = Candidate(
+            candidate_id="candidate-crafter-move-left",
+            capability="raw_action",
+            action="move_left",
+            parameter_domain={
+                "candidate_kind": "raw_action",
+                "raw_action_candidate": True,
+                "candidate_profile": "crafter_raw_action",
+                "turn_allowed": True,
+                "instance_valid": True,
+                "critical_blocked": False,
+                "life_state": "STABLE",
+                "conservative_mode": False,
+                "compatibility_pressure_count": 0,
+                "primary_pressure_reason": "none",
+            },
+            justification=("crafter_llm_action_producer", "action=move_left", "domain_restricted"),
+            drive_impact_schema={"metabolic": 0.15, "acquisition": 0.1},
+            side_effect_class="crafter_raw_action",
+        )
+
+        di = _deliberation_input()
+        assessments = assess_candidates([raw_candidate], di)
+        # Raw-action candidate should be assessed (not skipped)
+        self.assertGreaterEqual(len(assessments), 1)
+
+        release_decision = decide_release(assessments)
+        if release_decision.outcome != "compatibility_release":
+            self.skipTest("mediator withheld — drive config made candidate ineligible")
+
+        from eva.l3_deliberation.runtime import _thread_selected_action_hint
+        threaded = _thread_selected_action_hint(release_decision, [raw_candidate])
+        release_context = threaded.release_decision if hasattr(threaded, "release_decision") else threaded
+        # The raw-action's .action must appear as action_hint in release_context
+        rc = release_decision.release_context if release_decision.outcome == "compatibility_release" else {}
+        threaded_decision = _thread_selected_action_hint(release_decision, [raw_candidate])
+        self.assertEqual(
+            threaded_decision.release_context.get("action_hint"),
+            "move_left",
+            "raw-action candidate.action must be threaded as action_hint for the bridge",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

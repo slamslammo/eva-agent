@@ -1,27 +1,15 @@
-"""Round 1.I (a2): per-turn action feasibility for the live dlPFC producer.
+"""Per-turn action feasibility for the Crafter anchor and LLM producer.
 
-Filters the static ``PROFILE_ELIGIBLE_ACTIONS`` down to the actions that can
-*physically* succeed given the current Crafter observation, per Crafter's own recipe
-requirements (``crafter/data.yaml``: each ``make_*`` / ``place_*`` lists the inventory
-``uses`` it consumes and, for ``make_*``, the ``nearby`` materials it needs).
-
-This is **World-layer feasibility only** — an action is dropped iff the world makes it
-impossible right now (missing materials / no nearby table·furnace). It is **never**
-dropped for being unwise / unhelpful / off-strategy — that is Behavior-layer policy and
-stays the LLM's job (round-1i A red-line ④). Actions with no material requirement
-(``noop`` / ``sleep`` / ``move_*`` / ``do``) are always feasible, so every posture keeps
-at least its default action and the feasible set is never empty.
-
-The producer stays framework-generic: the runtime injects ``feasible_profile_action_vocab``
-(closed over the live session) as a per-turn vocab callable; the producer never imports
-this module.
+World-layer feasibility only — an action is dropped iff the world makes it
+impossible right now (missing materials / no nearby table·furnace per Crafter's
+recipe requirements in crafter/data.yaml). Actions with no material requirement
+(noop / sleep / move_* / do) are always feasible.
 """
 
 from __future__ import annotations
 
 from typing import Any, Mapping
 
-from .compatibility import PROFILE_DEFAULT_ACTION, PROFILE_ELIGIBLE_ACTIONS
 from .registry import CRAFTER_ACTIONS
 
 # Crafter recipe requirements (crafter/data.yaml ``place`` + ``make`` tables).
@@ -40,7 +28,7 @@ _CRAFT_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "make_iron_sword": {"uses": {"wood": 1, "coal": 1, "iron": 1}, "nearby": ("table", "furnace")},
 }
 
-__all__ = ["feasible_profile_action_vocab", "feasible_raw_actions", "action_is_feasible"]
+__all__ = ["feasible_raw_actions", "action_is_feasible"]
 
 
 def _inventory(observation: Mapping[str, Any] | None) -> dict[str, int]:
@@ -90,32 +78,12 @@ def action_is_feasible(action: str, inventory: Mapping[str, int], nearby: set[st
     return True
 
 
-def feasible_profile_action_vocab(
-    observation: Mapping[str, Any] | None,
-) -> dict[str, tuple[str, ...]]:
-    """Per-posture vocab keeping only world-feasible actions (default always kept)."""
-
-    inventory = _inventory(observation)
-    nearby = _nearby_cell_names(observation)
-    vocab: dict[str, tuple[str, ...]] = {}
-    for profile, actions in PROFILE_ELIGIBLE_ACTIONS.items():
-        feasible = tuple(a for a in actions if action_is_feasible(a, inventory, nearby))
-        # Empty-set fallback (round-1i A condition ②): the posture default is itself
-        # always-feasible (noop/sleep/do) — guarantee it is present even if upstream
-        # eligibility ever omitted it, so a posture never collapses to no options.
-        default = PROFILE_DEFAULT_ACTION.get(profile)
-        if default and default not in feasible:
-            feasible = (default,) + feasible
-        vocab[profile] = feasible
-    return vocab
-
-
 def feasible_raw_actions(observation: Mapping[str, Any] | None) -> tuple[str, ...]:
     """Return raw Crafter actions that are physically possible right now.
 
-    PR-1: this is world-layer feasibility only. It drops actions only when the
-    world facts make them impossible now (missing materials / missing visible
-    table or furnace for recipes). It does not judge whether an action is wise.
+    World-layer feasibility only. Drops actions only when the world facts make them
+    impossible now (missing materials / missing visible table or furnace for recipes).
+    Does not judge whether an action is wise.
     """
 
     inventory = _inventory(observation)

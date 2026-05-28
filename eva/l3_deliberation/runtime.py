@@ -128,6 +128,19 @@ def _thread_selected_action_hint(
         ),
         None,
     )
+    # For raw-action candidates the concrete execution target is candidate.action itself
+    # (action_hint is empty); thread it so the bridge can read the released action.
+    if not hint:
+        hint = next(
+            (
+                candidate.action
+                for candidate in candidates
+                if candidate.candidate_id == selected_id
+                and getattr(candidate, "capability", "") == "raw_action"
+                and candidate.action
+            ),
+            None,
+        )
     if not hint:
         return release_decision
     release_context = dict(release_decision.release_context)
