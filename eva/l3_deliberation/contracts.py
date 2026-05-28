@@ -203,12 +203,21 @@ class CandidateAssessment:
 
 @dataclass(frozen=True)
 class ReleaseToken:
-    """Runtime-only release authority threaded from mediator to tool-edge."""
+    """Runtime-only release authority threaded from mediator to tool-edge.
+
+    PR-Α adds three optional auditable-reference fields so the release can
+    be traced back to the anchor domain, the dlPFC LLM transcript, and the
+    OFC assessment. All default ``None`` to keep existing Linux construction
+    sites byte-compatible (red line R4).
+    """
 
     token_id: str
     outcome: str
     candidate_id: str
     candidate_profile: str
+    anchor_domain_ref: str | None = None
+    dlpfc_proposal_ref: str | None = None
+    ofc_assessment_ref: str | None = None  # PR-Γ placeholder
 
 
 @dataclass(frozen=True)

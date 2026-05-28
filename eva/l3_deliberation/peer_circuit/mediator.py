@@ -18,6 +18,8 @@ def decide_release(
     assessments: list[CandidateAssessment],
     *,
     working_memory_context: dict[str, object] | None = None,
+    anchor_domain_ref: str | None = None,
+    dlpfc_proposal_ref: str | None = None,
 ) -> ReleaseDecision:
     """Apply default inhibition and return one mediator decision.
 
@@ -28,6 +30,12 @@ def decide_release(
     ``release_context["bridge_policy"]["selection_context"]`` finally get
     real working-memory inputs in production runtime, not just in unit
     tests that fed the payload manually.
+
+    PR-Α: ``anchor_domain_ref`` + ``dlpfc_proposal_ref`` (both optional, default
+    ``None``) are embedded in the minted ``ReleaseToken`` so each release is
+    back-traceable to its anchor domain and dlPFC LLM transcript. Defer/
+    withhold paths do not mint tokens, so refs there are silently ignored.
+    ``ofc_assessment_ref`` is reserved for PR-Γ and stays ``None`` here.
     """
 
     selected = select_allowed_assessment(assessments)
@@ -49,6 +57,9 @@ def decide_release(
                 outcome="compatibility_release",
                 candidate_id=selected.candidate_id,
                 candidate_profile=candidate_profile,
+                anchor_domain_ref=anchor_domain_ref,
+                dlpfc_proposal_ref=dlpfc_proposal_ref,
+                # ofc_assessment_ref left None — PR-Γ
             ),
         )
 

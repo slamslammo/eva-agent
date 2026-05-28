@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 from datetime import datetime
 from typing import Any
 
@@ -79,9 +80,14 @@ def run_deliberation(
     active_producer = producer or HeuristicCandidateProducer()
     candidates = active_producer.produce(action_domain, deliberation_input)
     assessments = assess_candidates(candidates, deliberation_input)
+    # PR-Α: compute auditable refs to thread into the mediator's ReleaseToken.
+    anchor_domain_ref = _compute_anchor_domain_ref(action_domain)
+    dlpfc_proposal_ref = _extract_dlpfc_proposal_ref(candidates)
     release_decision = decide_release(
         assessments,
         working_memory_context=deliberation_input.working_memory_context,
+        anchor_domain_ref=anchor_domain_ref,
+        dlpfc_proposal_ref=dlpfc_proposal_ref,
     )
     release_decision = _thread_selected_action_hint(release_decision, candidates)
     memory_stub = build_memory_stub(recorded_at, deliberation_input, release_decision)
@@ -146,3 +152,40 @@ def _thread_selected_action_hint(
     release_context = dict(release_decision.release_context)
     release_context["action_hint"] = hint
     return dataclasses.replace(release_decision, release_context=release_context)
+
+
+def _compute_anchor_domain_ref(action_domain: Any) -> str:
+    """PR-Α: deterministic ref hash for the anchor-admitted action domain.
+
+    Hash the sorted admitted candidate schemas + their action sets so any
+    change to A'(s) produces a different ref. Returned as ``sha256:<hex16>``
+    to fit easily into trace records.
+    """
+
+    parts: list[str] = []
+    schemas = getattr(action_domain, "admitted_candidate_schemas", None) or ()
+    for schema in schemas:
+        cp = getattr(schema, "candidate_profile", "") or ""
+        actions = getattr(schema, "permitted_actions", None) or getattr(schema, "action_set", None) or ()
+        actions_sorted = tuple(sorted(str(a) for a in actions))
+        parts.append(f"{cp}:{','.join(actions_sorted)}")
+    reasons = getattr(action_domain, "restriction_reasons", None) or ()
+    parts.append("reasons=" + ",".join(sorted(str(r) for r in reasons)))
+    digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+    return f"sha256:{digest[:16]}"
+
+
+def _extract_dlpfc_proposal_ref(candidates: list[Candidate]) -> str | None:
+    """PR-Α: pull dlpfc_proposal_ref off the first candidate that carries it.
+
+    All candidates produced by a single LLM call share the same ref (attached
+    by ``CrafterLLMActionProducer._build_candidates``), so first non-None wins.
+    Heuristic / model-off paths return None and propagate None through to the
+    mediator, keeping Linux byte-identical.
+    """
+
+    for candidate in candidates:
+        ref = candidate.parameter_domain.get("dlpfc_proposal_ref")
+        if isinstance(ref, str) and ref:
+            return ref
+    return None

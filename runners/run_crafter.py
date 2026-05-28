@@ -17,6 +17,7 @@ from eva.kernel.main import (
 )
 from eva.l1_sensing.sensor_registry import SensorRegistry
 from eva.l3_deliberation import WorkingMemoryAdapter
+from eva.l3_deliberation.llm_transcript import build_transcript_sink_from_env
 from eva.l3_deliberation.memory.working_memory_model_client import (
     MODEL_CLIENT_MODE_LIVE,
     build_live_chat_fn,
@@ -104,10 +105,16 @@ def _build_candidate_producer(
     chat_fn = build_live_chat_fn(timeout_sec=timeout_sec)
     if chat_fn is None:
         return None
+    # PR-Α: wire transcript_sink from EVA_LLM_TRANSCRIPT env (off by default).
+    transcript_sink = build_transcript_sink_from_env(config.paths.runtime_dir)
+    import os as _os
+    model_label = _os.environ.get("EVA_LLM_MODEL", "unknown")
     return CrafterLLMActionProducer(
         chat_fn=chat_fn,
         world_facts_fn=get_crafter_world_facts_context,
         observation_fn=lambda: session.latest_agent_observation,
+        transcript_sink=transcript_sink,
+        model_label=model_label,
     )
 
 

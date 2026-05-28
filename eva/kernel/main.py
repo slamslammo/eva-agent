@@ -171,6 +171,18 @@ def run_runtime(
         candidate_producer=candidate_producer,
         trace_sink=trace_sink,
     )
+    # PR-Α: bind identity onto the producer if it exposes set_identity_provider.
+    # Linux producers without the method are untouched (duck typing → no breakage).
+    if candidate_producer is not None and hasattr(candidate_producer, "set_identity_provider"):
+        _resolved_run_id = instance_id
+        _resolved_individual_id = individual_id
+        candidate_producer.set_identity_provider(
+            lambda: {
+                "run_id": _resolved_run_id,
+                "individual_id": _resolved_individual_id,
+                "turn_index": getattr(runtime, "_trace_turn_index", 0),
+            }
+        )
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()
     last_hook_at = started_at

@@ -14,11 +14,15 @@ Boundary:
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Callable, TYPE_CHECKING
 
 from eva.l3_deliberation.contracts import Candidate, DeliberationInput
+from eva.l3_deliberation.llm_transcript import LLMTranscriptSink, NoOpTranscriptSink
 from scenarios.crafter.anchors.policy import CrafterActionDomain, build_crafter_action_domain
 from scenarios.crafter.state_packet import build_crafter_state_packet
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from eva.anchor.domain_restriction import ActionDomain
@@ -60,18 +64,44 @@ class CrafterLLMActionProducer:
         chat_fn: ChatFn | None = None,
         world_facts_fn: Callable[[], str] | None = None,
         observation_fn: Callable[[], dict[str, Any]] | None = None,
+        transcript_sink: LLMTranscriptSink | None = None,
+        identity_provider: Callable[[], dict[str, Any]] | None = None,
+        model_label: str = "unknown",
     ) -> None:
         self.chat_fn = chat_fn
         self._world_facts_fn = world_facts_fn
         # Injected per-turn observation accessor (closed over live session).
         self._observation_fn = observation_fn
+        # PR-Α: transcript sink (defaults to NoOp = zero overhead).
+        self._sink: LLMTranscriptSink = transcript_sink or NoOpTranscriptSink()
+        # PR-Α: identity (run_id, individual_id, turn_index) closure for transcript metadata.
+        self._identity_provider = identity_provider
+        self._model_label = model_label
+
+    def set_identity_provider(self, identity_provider: Callable[[], dict[str, Any]]) -> None:
+        """PR-Α: rebind identity_provider after construction.
+
+        Called by the framework (``run_runtime``) once the lifecycle is up so
+        each transcript record gets the correct ``run_id`` / ``individual_id``
+        / live ``turn_index``. Keeping this as a method rather than a
+        constructor-only arg lets the producer be built before identity is
+        known (current ``_build_candidate_producer`` flow in run_crafter.py).
+        """
+
+        self._identity_provider = identity_provider
 
     def produce(
         self,
         action_domain: "ActionDomain",
         deliberation_input: DeliberationInput,
     ) -> list[Candidate]:
-        """Generate raw-action candidates. Returns [] when LLM unavailable or fails."""
+        """Generate raw-action candidates. Returns [] when LLM unavailable or fails.
+
+        PR-Α: each LLM call is recorded to ``transcript_sink`` with the
+        parse_status / errors / messages / parsed_response payload; the returned
+        ref is threaded into each emitted Candidate's parameter_domain as
+        ``dlpfc_proposal_ref`` so the mediator can stamp the ReleaseToken.
+        """
         if self.chat_fn is None:
             return []
 
@@ -90,14 +120,63 @@ class CrafterLLMActionProducer:
         )
         recent_memory = _extract_recent_memory(deliberation_input.working_memory_context)
 
-        try:
-            messages = self._build_messages(state_packet, crafter_domain, recent_memory)
-            text = self.chat_fn(messages)
-            raw = _parse_raw_candidates(text)
-        except Exception:
+        messages = self._build_messages(state_packet, crafter_domain, recent_memory)
+        text, parsed, parse_status, errors = _call_chat_safely(self.chat_fn, messages)
+
+        # PR-Α: record transcript (sink failure must NOT propagate — R3).
+        transcript_ref = self._record_transcript_safely(
+            messages=messages,
+            raw_response=text,
+            parsed_response=parsed,
+            parse_status=parse_status,
+            errors=errors,
+        )
+
+        if parse_status != "ok" or parsed is None:
             return []
 
-        return _build_candidates(raw, crafter_domain=crafter_domain, agent_state=agent_state)
+        raw_items = _extract_candidate_items(parsed)
+        return _build_candidates(
+            raw_items,
+            crafter_domain=crafter_domain,
+            agent_state=agent_state,
+            dlpfc_proposal_ref=transcript_ref,
+        )
+
+    def _record_transcript_safely(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        raw_response: str,
+        parsed_response: dict[str, Any] | None,
+        parse_status: str,
+        errors: list[str],
+    ) -> str | None:
+        """Record transcript with swallow-on-fail semantics (R3)."""
+        try:
+            identity = self._identity_provider() if self._identity_provider else {}
+            return self._sink.record(
+                run_id=str(identity.get("run_id", "")),
+                individual_id=str(identity.get("individual_id", "")),
+                turn_index=int(identity.get("turn_index", 0) or 0),
+                llm_role="dlPFC",
+                scenario="crafter",
+                model=self._model_label,
+                messages=messages,
+                raw_response=raw_response,
+                parsed_response=parsed_response,
+                parse_status=parse_status,  # type: ignore[arg-type]
+                errors=errors,
+                # PR-Α placeholder; PR-Β fills properly when ontology sections are injected.
+                prompt_sections_present={
+                    "state_packet": True,
+                    "admitted_actions": True,
+                    "world_facts": bool(self._world_facts_fn),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — R3: swallow
+            _logger.warning("transcript_sink_record_failed err=%s", exc)
+            return None
 
     def _build_messages(
         self,
@@ -152,12 +231,31 @@ def _extract_recent_memory(working_memory_context: dict[str, Any] | None) -> str
     return str(summary).strip() if summary else ""
 
 
-def _parse_raw_candidates(text: str) -> list[dict[str, str]]:
-    """Parse LLM response into [{action, reason}] list, up to _MAX_CANDIDATES."""
+def _call_chat_safely(
+    chat_fn: ChatFn,
+    messages: list[dict[str, str]],
+) -> tuple[str, dict[str, Any] | None, str, list[str]]:
+    """Call chat_fn, capture raw text + parse result + status + errors.
+
+    Returns:
+        (raw_response, parsed_response, parse_status, errors)
+        parse_status ∈ {"ok", "parse_error", "transport_error"}
+    """
+    try:
+        text = chat_fn(messages)
+    except Exception as exc:  # noqa: BLE001 — capture for transcript
+        return ("", None, "transport_error", [f"{type(exc).__name__}: {exc}"])
+    if not isinstance(text, str):
+        return ("", None, "parse_error", ["chat_fn returned non-string response"])
     payload = _first_json_object(text)
     if not isinstance(payload, dict):
-        return []
-    raw = payload.get("candidates")
+        return (text, None, "parse_error", ["response not a JSON object"])
+    return (text, payload, "ok", [])
+
+
+def _extract_candidate_items(parsed: dict[str, Any]) -> list[dict[str, str]]:
+    """Pull [{action, reason}] items from parsed JSON, up to _MAX_CANDIDATES."""
+    raw = parsed.get("candidates")
     if not isinstance(raw, list):
         return []
     result: list[dict[str, str]] = []
@@ -176,6 +274,7 @@ def _build_candidates(
     *,
     crafter_domain: CrafterActionDomain,
     agent_state: Any,
+    dlpfc_proposal_ref: str | None = None,
 ) -> list[Candidate]:
     """Materialize Candidate objects; discard any action not in A'(s)."""
     runtime_gate = getattr(agent_state, "runtime_gate_context", {}) or {}
@@ -218,12 +317,16 @@ def _build_candidates(
         )
         if reason_excerpt:
             justification = (*justification, f"reason={reason_excerpt}")
+        parameter_domain: dict[str, Any] = {**gate_fields, "reason": reason}
+        # PR-Α: thread dlPFC transcript ref so mediator can stamp ReleaseToken.
+        if dlpfc_proposal_ref:
+            parameter_domain["dlpfc_proposal_ref"] = dlpfc_proposal_ref
         candidates.append(
             Candidate(
                 candidate_id=f"candidate-crafter-{action.replace('_', '-')}",
                 capability="raw_action",
                 action=action,
-                parameter_domain={**gate_fields, "reason": reason},
+                parameter_domain=parameter_domain,
                 justification=justification,
                 drive_impact_schema=_drive_impact_for_action(action),
                 side_effect_class="crafter_raw_action",
