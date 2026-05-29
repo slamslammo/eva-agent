@@ -57,6 +57,12 @@ __all__ = [
 # scenarios whose bridge sets ``is_deferred=True`` (clock_source="step").
 MAX_CONSECUTIVE_DEFERRED = 10
 
+# PR-T1 Q3: under clock_source="step" the step loop checkpoints (persists the
+# counters to the append-only artifact) every N env.steps, fixing the rev2 audit
+# gap where scenario_step / attempt counts were not greppable. Non-load-bearing
+# cadence knob; a module default for now (config-exposable later if needed).
+STEP_CHECKPOINT_INTERVAL = 10
+
 
 @dataclass
 class RunSummary:
@@ -424,14 +430,33 @@ def _run_step_loop(
 
     started_at = time.monotonic()
     scenario_step = 0
+    step_attempt = 0
     exit_reason = "normal"
     max_steps = config.control.max_turns
     try:
         try:
             while True:
-                result = runtime.run_step(state)
+                step_attempt += 1
+                # Q4 cadence fold: sense every step ("shallow"); run the heavier
+                # "deep" maintenance (external-life snapshot append) every N steps.
+                checkpoint_due = step_attempt % STEP_CHECKPOINT_INTERVAL == 0
+                cadence = "deep" if checkpoint_due else "shallow"
+                result = runtime.run_step(state, cadence=cadence)
                 if result.env_step_invoked:
                     scenario_step += 1
+                # Q3 / §6 #5: persist counts to the append-only artifact at each
+                # checkpoint so scenario_step / attempt are greppable mid-run
+                # (closes the rev2 audit gap), aligned with the deep-cadence step.
+                if checkpoint_due:
+                    store.append_event(EventRecord(
+                        event_type="step_checkpoint",
+                        timestamp=utc_now(),
+                        details={
+                            "scenario_step": scenario_step,
+                            "attempt_index": getattr(runtime, "_attempt_index", 0),
+                            "scenario_step_index": getattr(runtime, "_scenario_step_index", 0),
+                        },
+                    ))
                 # R-a: scenario reports embodied death (env done) -> the individual's
                 # life ends; archive as one lifetime (next run is a new individual).
                 if result.terminated:
@@ -467,6 +492,8 @@ def _run_step_loop(
             life_state=final_state.life_state,
             details={
                 "scenario_step": scenario_step,
+                "attempt_index": getattr(runtime, "_attempt_index", 0),
+                "scenario_step_index": getattr(runtime, "_scenario_step_index", 0),
                 "exit_reason": exit_reason,
                 "individual_id": individual_id,
                 "clock_source": "step",

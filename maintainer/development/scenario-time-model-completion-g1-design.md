@@ -139,3 +139,22 @@ A G1 review（`eva-coordination/plans/scenario-time-model-completion-g1-review.m
 8. **patrol 折叠**（Q4：列 shallow/deep/full 各功能，证 step 节律下仍发生）。
 9. life-state step={STABLE,NEEDS_HUMAN}（Q1，保 enum 字段）。
 （LLM 掉线→infra 重试 + run-summary 归 PR-T2；R-a 死亡归 T1。）
+
+---
+
+## 8. T1 实现：Q4 patrol 折叠逐项证明（A 要求"折叠节律不折叠功能"）
+
+审计三级 cadence 实际做什么（`eva/l1_sensing/patrol.py::execute_patrol` + `judgment.py::build_external_life_snapshot`）：
+
+| cadence | 实际功能 | step 模式覆盖 |
+|---|---|---|
+| **shallow** | collect inputs → build snapshot（current）→ pressure table → signals → routing → **drive update + write current** snapshot/drive/pressure。**不 append snapshot 到 history**（`append_snapshot=cadence!="shallow"`=False） | **每 step 跑**（run_step 默认 cadence="shallow"）——感知/drive/pressure/signals 每 step 都发生 |
+| **deep** | = shallow **+ append snapshot 到 append-only history**（`append_snapshot=True`），`source_patrol="deep"` | **每 N step 跑**（step loop `step_attempt % N == 0` 传 cadence="deep"）——snapshot-append 维护功能保留 |
+| **full** | 代码核查：`build_external_life_snapshot` 里 cadence **仅作 `source_patrol=cadence` 标签**，full 与 deep **快照内容完全相同**；唯一真实功能差异仍是 shallow(不 append) vs deep/full(append) | full 的功能 = deep（仅 label 不同）→ 折进 deep 每 N step，**零功能丢失** |
+
+**结论（Q4 红线守住）**：折叠的是 cadence **节律**（不再有 shallow/deep/full 三套墙钟间隔），**不是功能**：
+- 感知 + drive + pressure + signals：**每 step**（shallow 全包）
+- snapshot history append（deep/full 唯一独有功能）：**每 N step**（deep）
+- full 相对 deep 无独有功能（仅 `source_patrol` 标签），折进 deep 无损
+
+证据：`judgment.py:57` cadence 只进 `source_patrol`；`patrol.py:133` `append_snapshot=cadence!="shallow"`。L1 sensing 每 step 做（run_step），维护类（snapshot append）每 N step 做（deep）—— 与 G1 §1 "感知每 step / 维护每 N step" 一致。

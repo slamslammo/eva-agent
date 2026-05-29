@@ -1039,7 +1039,7 @@ class LifecycleRuntime:
             details=details,
         )
 
-    def run_step(self, state: RuntimeState, *, now: datetime | None = None) -> StepResult:
+    def run_step(self, state: RuntimeState, *, now: datetime | None = None, cadence: str = "shallow") -> StepResult:
         """PR-T1: run one scenario step under ``clock_source="step"``.
 
         Step IS the pulse: sense (shallow patrol cadence) -> deliberate -> if the
@@ -1067,10 +1067,12 @@ class LifecycleRuntime:
             conservative_mode=False,
             seconds_to_heartbeat=self.lifecycle.heartbeat_interval_sec,
         )
-        # L1 sense + L2 drive: shallow cadence runs every step (Q4 cadence fold —
-        # sensing is per-step; heavier maintenance rides step-checkpoints).
+        # L1 sense + L2 drive: cadence folds onto step rhythm (Q4) — "shallow"
+        # senses every step; the step loop passes "deep" every N steps so the
+        # heavier maintenance function (external-life snapshot append) still
+        # happens. Folding the cadence rhythm, not dropping the function.
         patrol_result = execute_patrol(
-            "shallow",
+            cadence,
             self.store,
             state,
             self.external_life,
@@ -1161,6 +1163,26 @@ class LifecycleRuntime:
         terminated = bool(
             self.action_runtime is not None and getattr(self.action_runtime, "terminated", False)
         )
+        # R-b: a mediated release the bridge could not map to a valid raw action
+        # (no_valid_raw_action) is a should-not-happen anomaly under the raw-action
+        # architecture. Log it structured — NOT a cognitive withhold, NOT an infra
+        # retry — so it surfaces for inspection instead of being silently dropped.
+        if response_summary is not None and not env_step_invoked:
+            self.store.append_event(EventRecord(
+                event_type="step_deferred",
+                timestamp=now,
+                turn_id=step_id,
+                life_state=state.life_state,
+                details={
+                    "deferred_reason": response_summary.get("deferred_reason") or "no_valid_raw_action",
+                    "selected_action": response_summary.get("selected_action"),
+                },
+            ))
+        # Q1: step-mode substrate life-state is {STABLE, NEEDS_HUMAN}. A stepping
+        # agent is STABLE. NB: substrate life-state (process health) is distinct
+        # from the agent's embodied health (food/water/HP), which lives in the
+        # scenario/cognitive layer and is untouched here.
+        state.life_state = LifeState.STABLE.value
         state.last_turn_id = step_id
         state.updated_at = now
         self.store.write_runtime_state(state)

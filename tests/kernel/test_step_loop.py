@@ -121,6 +121,82 @@ class StepLoopTests(unittest.TestCase):
                         yields += 1
             self.assertEqual(yields, 0, "step mode must not yield to a wall-clock heartbeat")
 
+    def test_step_mode_env_done_ends_individual(self) -> None:
+        """R-a: env reporting done (embodied death) ends the individual.
+
+        rev2 always ended at max_turns (the agent never died), so the
+        death -> individual_terminated path was untested. Under step mode the
+        loop must catch env done after a stepped action and exit
+        ``individual_terminated`` (one Crafter life = one individual), not run on
+        to max_steps. The next run is a fresh individual (run-level continuity).
+        """
+        class _TerminatingSession(_StubSession):
+            def step_action(self, action_name: str):
+                result = super().step_action(action_name)
+                self.terminated = True  # env returns done after this step (e.g. HP=0)
+                return result
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2, lease_duration_sec=1.0,
+                    recovering_window_sec=0.05, turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01, deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03, recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=20, max_runtime_sec=5.0, idle_sleep_sec=0.01),
+            )
+            session = _TerminatingSession()
+            producer = _step_producer(session)
+            with patch.object(CrafterRuntimeSession, "start", return_value=session):
+                summary = run_crafter_runtime(config, candidate_producer=producer)
+
+            self.assertEqual(summary.exit_reason, "individual_terminated",
+                             "env done must end the individual, not run to max_steps")
+            # Death happened on the first stepped action, far short of max_steps=20.
+            self.assertGreaterEqual(summary.scenario_step_count, 1)
+            self.assertLess(summary.scenario_step_count, 20)
+
+    def test_step_mode_persists_counts_to_artifact(self) -> None:
+        """§6 #5 / Q3: scenario_step + attempt counts land in the append-only
+
+        artifact (the rev2 audit gap was that these were not greppable). The
+        step-loop shutdown event must carry scenario_step_index + attempt_index.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2, lease_duration_sec=1.0,
+                    recovering_window_sec=0.05, turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01, deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03, recent_event_window_sec=60.0,
+                ),
+                control=LoopControl(max_turns=3, max_runtime_sec=5.0, idle_sleep_sec=0.01),
+            )
+            session = _StubSession()
+            producer = _step_producer(session)
+            with patch.object(CrafterRuntimeSession, "start", return_value=session):
+                summary = run_crafter_runtime(config, candidate_producer=producer)
+
+            shutdown = None
+            with open(f"{temp_dir}/events.jsonl", encoding="utf-8") as handle:
+                for line in handle:
+                    record = json.loads(line)
+                    if record.get("event_type") == "shutdown":
+                        shutdown = record
+            self.assertIsNotNone(shutdown, "a shutdown event must be persisted")
+            self.assertIn("scenario_step_index", shutdown["details"])
+            self.assertIn("attempt_index", shutdown["details"])
+            self.assertEqual(shutdown["details"]["clock_source"], "step")
+            # Counts in the artifact match the in-memory RunSummary.
+            self.assertEqual(shutdown["details"]["scenario_step_index"], summary.scenario_step_count)
+
 
 if __name__ == "__main__":
     unittest.main()

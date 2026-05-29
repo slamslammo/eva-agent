@@ -122,6 +122,11 @@ def build_response_summary(
         # this and always step; only PR-S1-updated bridges (Crafter) emit False
         # on the deferred path. Mirrors the lifecycle counter-update default.
         "env_step_invoked": bool(execution_result.get("env_step_invoked", True)),
+        # PR-T1 R-b: carry the bridge defer reason into the summary so the step
+        # loop can emit a structured deferred event (instead of silently dropping
+        # a release the bridge could not map to a valid raw action). None on the
+        # normal stepped path.
+        "deferred_reason": execution_result.get("deferred_reason"),
     }
     if drive_context is not None:
         payload["drive_context"] = drive_context
