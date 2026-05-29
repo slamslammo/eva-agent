@@ -256,9 +256,11 @@ class AssessCandidatesIntegrationTests(unittest.TestCase):
         # which 1.B-1-b/c will refactor.
         self.assertGreater(
             assessment.score,
-            0.9,
-            "Drive-weighted score on Crafter vocabulary must reach assessment "
-            f"as a primary contributor (>0.9). Got: {assessment.score} with "
+            0.4,
+            "Drive-weighted score on Crafter vocabulary must reach assessment as "
+            "the primary contributor. PR-O1 robust scheme: drive saturates toward "
+            "W_DRIVE=0.5, so a drive-dominant candidate scores >0.4 (was >0.9 under "
+            f"the old unbounded direct sum). Got: {assessment.score} with "
             f"reasons {assessment.reasons}",
         )
 

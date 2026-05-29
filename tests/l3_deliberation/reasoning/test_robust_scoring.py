@@ -19,6 +19,9 @@ import unittest
 from eva.l3_deliberation.reasoning.value_judgment import (
     robust_normalize,
     cap_group_contribution,
+    _robust_aggregate,
+    EXPERIENCE_GROUP_CAP,
+    W_DRIVE,
 )
 
 
@@ -69,6 +72,45 @@ class CapGroupContributionTests(unittest.TestCase):
 
     def test_exactly_cap(self) -> None:
         self.assertEqual(cap_group_contribution(0.2, cap=0.2), 0.2)
+
+
+class RobustAggregateTests(unittest.TestCase):
+    """The robust aggregation: score = w_drive·norm(drive) + w_proj·norm(proj)
+    + cap(experience). Drive dominates; experience can't overturn it; ordering
+    by the dominant factor is preserved; sign is preserved."""
+
+    def _agg(self, drive=0.0, proj=0.0, learn=0.0, habit=0.0):
+        return _robust_aggregate(
+            drive_score=drive, projection_score=proj,
+            learning_bias=learn, habit_priority_bonus=habit,
+        )
+
+    def test_drive_ordering_preserved(self) -> None:
+        # Higher drive → higher score (monotonic), other factors equal.
+        self.assertLess(self._agg(drive=0.1), self._agg(drive=0.3))
+        self.assertLess(self._agg(drive=0.3), self._agg(drive=0.5))
+
+    def test_negative_drive_penalized(self) -> None:
+        # Anti-drive stays a penalty (sign preserved, A Q1).
+        self.assertLess(self._agg(drive=-0.2), self._agg(drive=0.0))
+
+    def test_experience_capped(self) -> None:
+        # Even huge learning+habit, the experience term cannot exceed the cap.
+        huge = self._agg(learn=10.0, habit=10.0)
+        self.assertLessEqual(huge, EXPERIENCE_GROUP_CAP + 1e-9)
+
+    def test_experience_cannot_overturn_drive(self) -> None:
+        # A strong-drive candidate with no experience beats a zero-drive
+        # candidate maxing experience (w_dlpfc>cap invariant; here drive>cap).
+        strong_drive = self._agg(drive=0.5)
+        max_experience = self._agg(drive=0.0, learn=10.0, habit=10.0)
+        self.assertGreater(strong_drive, max_experience)
+
+    def test_drive_is_dominant_weight(self) -> None:
+        # drive's full-saturation contribution ≈ W_DRIVE, the largest single term.
+        near_full = self._agg(drive=100.0)  # tanh saturates → ~W_DRIVE
+        self.assertGreater(near_full, EXPERIENCE_GROUP_CAP)
+        self.assertLessEqual(near_full, W_DRIVE + 0.2)  # + small proj/exp headroom
 
 
 if __name__ == "__main__":

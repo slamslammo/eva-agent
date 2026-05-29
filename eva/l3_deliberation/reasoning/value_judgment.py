@@ -75,23 +75,29 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                 )
                 reasons.extend(reason for reason in impact_reasons if reason not in reasons)
                 drive_score = _drive_weighted_score(effective_drive_impact_schema, normalized_drive_levels)
-                score = drive_score
                 projection_score = _projection_fallback_score(
                     conflict.score_delta,
                     drive_score=drive_score,
                 )
                 if projection_score != 0.0:
-                    score += projection_score
                     reasons.append("projection_fallback")
                 learning_bias, bias_reasons = _learning_bias_for_candidate_profile(
                     deliberation_input,
                     candidate_profile=candidate_profile,
                 )
-                score += learning_bias
                 habit_priority_bonus = _habit_skill_priority_bonus(candidate.parameter_domain)
                 if habit_priority_bonus != 0.0:
-                    score += habit_priority_bonus
                     reasons.append("crystallized_habit_skill_hint")
+                # PR-O1: robust aggregation (tanh-normalized, weighted, experience
+                # group capped) replaces the unbounded direct sum. Raw factors are
+                # still recorded in ScoreDecomposition below; only the combination
+                # changes (plan §3.3).
+                score = _robust_aggregate(
+                    drive_score=drive_score,
+                    projection_score=projection_score,
+                    learning_bias=learning_bias,
+                    habit_priority_bonus=habit_priority_bonus,
+                )
                 # Round 1.G: the ≤0.12 LLM advisory bonus is retired (drift; round-1f
                 # showed it had no doctrinal basis and, under live LLM, harmfully biased
                 # selection toward passivity). OFC scoring stays drive-weighted only;
@@ -109,23 +115,29 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                 )
                 reasons.extend(reason for reason in impact_reasons if reason not in reasons)
                 drive_score = _drive_weighted_score(effective_drive_impact_schema, normalized_drive_levels)
-                score = drive_score
                 projection_score = _projection_fallback_score(
                     conflict.score_delta,
                     drive_score=drive_score,
                 )
                 if projection_score != 0.0:
-                    score += projection_score
                     reasons.append("projection_fallback")
                 learning_bias, bias_reasons = _learning_bias_for_candidate_profile(
                     deliberation_input,
                     candidate_profile=candidate_profile,
                 )
-                score += learning_bias
                 habit_priority_bonus = _habit_skill_priority_bonus(candidate.parameter_domain)
                 if habit_priority_bonus != 0.0:
-                    score += habit_priority_bonus
                     reasons.append("crystallized_habit_skill_hint")
+                # PR-O1: robust aggregation (tanh-normalized, weighted, experience
+                # group capped) replaces the unbounded direct sum. Raw factors are
+                # still recorded in ScoreDecomposition below; only the combination
+                # changes (plan §3.3).
+                score = _robust_aggregate(
+                    drive_score=drive_score,
+                    projection_score=projection_score,
+                    learning_bias=learning_bias,
+                    habit_priority_bonus=habit_priority_bonus,
+                )
         else:
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
@@ -513,3 +525,48 @@ def cap_group_contribution(value: float, *, cap: float) -> float:
     """
 
     return max(-cap, min(cap, value))
+
+
+# Calibrated scales (T3 baseline §1: drive [-0.23,0.55], learning [-0.25,0.25],
+# projection ≤0.15, habit ≤0.1) and weights (A G1 Q2: w_drive 0.5 > experience
+# group cap 0.2; w_dlpfc 0.3 reserved for PR-O2). CONSERVATIVE INITIAL values —
+# PR-O3 re-calibrates against the canonical run (incl. extreme drive regimes,
+# which the gentle T3 run did not exercise — A G1 caveat).
+DRIVE_SCALE = 0.4
+PROJECTION_SCALE = 0.15
+LEARNING_SCALE = 0.25
+HABIT_SCALE = 0.1
+W_DRIVE = 0.5
+W_PROJECTION = 0.1
+W_LEARNING = 0.15
+W_HABIT = 0.10
+EXPERIENCE_GROUP_CAP = 0.2  # A G1 Q3: cap the SUMMED experience contribution
+
+
+def _robust_aggregate(
+    *,
+    drive_score: float,
+    projection_score: float,
+    learning_bias: float,
+    habit_priority_bonus: float,
+) -> float:
+    """PR-O1: robust score aggregation (plan §3.3).
+
+    score = w_drive·norm(drive) + w_proj·norm(proj) + cap(experience group)
+
+    Each factor is tanh-normalized over its calibrated scale (sign-preserving,
+    saturating), then weighted. drive is the dominant weight (0.5); projection is
+    dormant (T3: always 0) but kept at a small weight (A Q4); the experience
+    group (learning + habit + semantic) is weighted then its SUM capped at
+    EXPERIENCE_GROUP_CAP so experience can never overturn the drive+dlpfc main
+    judgment (A Q2/Q3). dlpfc_preference (rank, w 0.3) is added in PR-O2.
+    """
+
+    drive_term = W_DRIVE * robust_normalize(drive_score, scale=DRIVE_SCALE)
+    projection_term = W_PROJECTION * robust_normalize(projection_score, scale=PROJECTION_SCALE)
+    experience_raw = (
+        W_LEARNING * robust_normalize(learning_bias, scale=LEARNING_SCALE)
+        + W_HABIT * robust_normalize(habit_priority_bonus, scale=HABIT_SCALE)
+    )
+    experience_term = cap_group_contribution(experience_raw, cap=EXPERIENCE_GROUP_CAP)
+    return drive_term + projection_term + experience_term

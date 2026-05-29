@@ -1084,7 +1084,9 @@ class ValueJudgmentTests(unittest.TestCase):
             baseline_input,
         )
 
-        self.assertAlmostEqual(assessments[0].score, 0.36)
+        # PR-O1 robust aggregation magnitude (was 0.36 under the old direct sum;
+        # the core assertion is the property below — no learned_impact_overlay).
+        self.assertAlmostEqual(assessments[0].score, 0.340543, places=6)
         self.assertNotIn("learned_impact_overlay", assessments[0].reasons)
 
     def test_thresholded_impact_learning_adds_bounded_overlay_to_drive_score(self) -> None:
