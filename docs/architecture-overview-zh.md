@@ -124,6 +124,11 @@ TICK (kernel)
         任何 action 不经 mediator release gate 不得触达环境
 ```
 
+**scenario time 是否推进取决于 `clock_source`。** 一个 turn 并不总是推进 scenario time。kernel 在构造时读取激活场景的 `clock_source`（存在语义契约，见 scenarios-SPEC §7）并据此记账：
+
+- `wall_clock`（默认，如 Linux）：每个 turn 一起推进；生命时钟是挂钟秒，kernel 维持 `attempt_index == scenario_step_index`。
+- `step`（如 Crafter）：scenario time 仅在 release 到达 `env.step(action)` 时推进。一个 deliberation 落到 deferred（没有有效可执行 action 被释放）的 turn 会让 `attempt_index` +1 但 `scenario_step_index` 不变——下一个 turn 在**同一 scenario step 重新进入**（重试该 step），而非被迫推进。整个过程 kernel 持续跳 heartbeat；只有 scenario time 暂停，liveness 绝不暂停。持续 deferred 连击（默认 10）会退出到 `needs_human_consecutive_deferred`，而不是永远空转。
+
 ### 2.2 循环的关键属性
 
 **Tick/turn 分离是结构性的。** Kernel 拥有 tick；turn 是有界工作片。如果 deliberation 阻塞 tick，循环断裂——这不是性能问题而是架构违规。

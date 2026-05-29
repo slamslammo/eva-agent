@@ -127,6 +127,11 @@ TICK (kernel)
         the mediator release gate
 ```
 
+**Whether a turn advances scenario time depends on `clock_source`.** A turn does not always advance scenario time. The kernel reads the active scenario's `clock_source` at construction (the existence-semantics contract, see scenarios-SPEC §7) and accounts for the turn accordingly:
+
+- `wall_clock` (default, e.g. Linux): every turn advances together; the life clock is wall-clock seconds and the kernel keeps `attempt_index == scenario_step_index`.
+- `step` (e.g. Crafter): scenario time advances only when the release reaches `env.step(action)`. A turn whose deliberation defers (no valid executable action released) bumps `attempt_index` but leaves `scenario_step_index` unchanged — the next turn re-enters at the **same scenario step** (a retry of that step) rather than a forced advance. The kernel keeps ticking heartbeat throughout; only scenario time pauses, never liveness. A persistent defer streak (default 10) exits to `needs_human_consecutive_deferred` instead of spinning forever.
+
 ### 2.2 Critical properties of the loop
 
 **Tick/turn separation is structural.** The kernel owns tick; the turn is one bounded slice. If deliberation blocks tick, the loop is broken — not a performance issue but an architectural violation.
