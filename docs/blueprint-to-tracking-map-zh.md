@@ -14,9 +14,9 @@
 | Atomic current state 与 append-only history 分离 | 1.1 `Separated atomic current-state persistence and append-only audit substrate` | landed | — |
 | Framework / scenario activation boundary | 1.1 `Explicit scenario activation through RuntimeScenarioBundle` | landed | — |
 | Runner-owned startup assembly | 1.1 `Runner-owned startup assembly for shipped scenarios` | landed | — |
-| 存在语义声明（八项数据类字段）（蓝图 §2.7 / §12.7 / §3.8，rev2） | 1.1 `场景声明的存在语义（八项数据类字段...）` | landed | declaration / config 边界写入 §12.7；前 7 项为人类可读声明，第 8 项 `clock_source` 是数据类字段已 land 但 kernel 消费仍为目标态（见下一行）。 |
+| 存在语义声明（八项数据类字段）（蓝图 §2.7 / §12.7 / §3.8，rev2） | 1.1 `场景声明的存在语义（八项数据类字段...）` | landed | declaration / config 边界写入 §12.7；前 7 项为人类可读声明，第 8 项 `clock_source` 是数据类字段已 land，kernel 消费亦已落地（见下一行）。 |
 | Individual 作为持存主体；同一 individual = legitimacy + 可恢复状态 + provenance（蓝图 §1.2.2 / §3.8 / §7.9 / §13.5，rev2） | 1.1 `Individual 身份解析与跨 run 延续 / 新生` | landed | `_resolve_individual_id` 按 `reset_semantics` 决定续旧 id 还是铸新 id；`RunSummary.exit_reason="individual_terminated"` 记录单局个体真死。 |
-| Kernel 消费 `clock_source` 选择 cadence 节拍来源（蓝图 §2.7 表 Clock 行 / §12.7 第 8 项 / §2.7 派生约束 #3 / §15.4 反模式 #3 的契约目标） | 1.1 `Kernel 消费已声明的 clock_source 选择 cadence 节拍来源` | deferred | 字段已 land、场景已声明，但 kernel cadence 仍是 wall-clock；该消费是后续目标项。蓝图 §2.7 / §15.4 反模式 #3 的"声明 clock_source 是正解"是契约目标，不是落地状态。 |
+| Kernel 消费 `clock_source` 选择 cadence 节拍来源（蓝图 §2.7 表 Clock 行 / §12.7 第 8 项 / §2.7 派生约束 #3 / §15.4 反模式 #3 的契约目标） | 1.1 `Kernel 消费已声明的 clock_source 选择 cadence 节拍来源` | landed | kernel 构造时读取 active existence semantics 的 `clock_source` 并据此分叉 cadence 计数：`step` 尊重 bridge deferred 信号（scenario time 仅在 `env.step` 被调用时推进）、`wall_clock` 强制 attempt==scenario_step 不变式；scenario-time freeze 不冻结 heartbeat / lease / liveness。蓝图 §2.7 / §15.4 反模式 #3 的"声明 `clock_source` 是正解"现已是落地状态。 |
 | Fast/slow 双路闭环运行时组合 | 1.1 `Integrated fast/slow closed-loop runtime composition` | landed | — |
 | Persistence-target registration surface | 1.1 `Explicit persistence hierarchy contract` | landed | — |
 | Persistence Levels 5–7 | 1.1 `Persistence target Levels 5–7` | deferred | 理论预留；机制未实现。 |

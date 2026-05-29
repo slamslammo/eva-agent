@@ -34,7 +34,7 @@
 | Shipped 场景的 runner-owned 启动装配 | `runners/run_linux.py`、`runners/run_crafter.py` | production | — | — |
 | 场景声明的存在语义（八项数据类字段，含 `clock_source` 字段本身的 land）（v0.6 rev2） | `eva/scenario_bundle.py::ExistenceSemantics`、`scenarios/<name>/__init__.py` 中的声明 | production | 仅指数据类字段与场景声明的 land；kernel 对 `clock_source` 的实际消费见下一行 | — |
 | Individual 身份解析与跨 run 延续 / 新生（rev2） | `eva/kernel/main.py::_resolve_individual_id`、`eva/kernel/main.py::RunSummary`、`exit_reason="individual_terminated"` 退出路径 | production | — | — |
-| Kernel 消费已声明的 `clock_source` 选择 cadence 节拍来源（蓝图 §2.7 / §12.7 第 8 项） | — | deferred | 字段已 land、场景已声明，但 kernel cadence 路径仍是 wall-clock，未根据 `clock_source` 切换至 step-driven；属后续目标项 | 后续 phase |
+| Kernel 消费已声明的 `clock_source` 选择 cadence 节拍来源（蓝图 §2.7 / §12.7 第 8 项） | `eva/kernel/lifecycle.py::LifecycleRuntime._update_scenario_counters`、`eva/kernel/main.py` | production | kernel 构造时读取 active existence semantics 的 `clock_source` 并据此分叉 cadence 计数：`step` 尊重 bridge 的 deferred 信号（scenario time 仅在 `env.step` 被调用时推进），`wall_clock` 强制 attempt==scenario_step 不变式。scenario-time freeze **绝不**冻结 heartbeat / lease / liveness（仅冻结 `scenario_step_index`）。当前仅 Crafter 声明 step，其余场景沿用 wall_clock 默认 | — |
 | 集成的 fast/slow 双路径闭环运行时组合 | `eva/kernel/main.py`、`eva/l1_sensing/signal_bus.py`、`eva/l2_drive/reflex.py`、`eva/l3_deliberation/contracts.py` | production | — | — |
 | 显式 persistence hierarchy contract | `eva/persistence_targets/__init__.py` | production | — | — |
 | 场景所有者在 shipped 场景中激活 lower persistence levels | `scenarios/linux_runtime/persistence/`、`scenarios/crafter/persistence/` | production | — | — |
