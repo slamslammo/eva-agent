@@ -51,6 +51,13 @@ __all__ = [
 ]
 
 
+# PR-S1 §3.4 R8: maximum consecutive bridge-deferred attempts before raising
+# NEEDS_HUMAN. Defaults to 10 per plan rationale; chosen so transient LLM
+# hiccups don't trip but a persistent broken state does. Honored only on
+# scenarios whose bridge sets ``is_deferred=True`` (clock_source="step").
+MAX_CONSECUTIVE_DEFERRED = 10
+
+
 @dataclass
 class RunSummary:
     """High-level summary returned after one runtime execution."""
@@ -63,6 +70,14 @@ class RunSummary:
     exit_reason: str = "normal"
     # v0.6 rev2 收敛点②：individual 身份（"自我"），区别于 substrate 的 instance_id。
     individual_id: str = ""
+    # PR-S1 §3.5 R6/R7: scenario-time telemetry. ``attempt_index`` reflects
+    # every decision attempt (success + defer); ``scenario_step_index`` only
+    # advances on mediated executable action (env.step invoked). Their
+    # difference equals deferred attempts — the auditable signal that
+    # scenario time advancement is bound to mediated release, not to LLM
+    # success per se.
+    attempt_count: int = 0
+    scenario_step_count: int = 0
 
 
 def run_runtime(
@@ -234,6 +249,14 @@ def run_runtime(
                     trace_sink.set_continuity_state(CONTINUITY_TERMINATED)
                     break
 
+                # PR-S1 §3.4 R8: consecutive_deferred ≥ MAX → NEEDS_HUMAN exit.
+                # Prevents infinite defer loops (e.g. LLM stuck failing every
+                # decision) while preserving the heartbeat-first invariant
+                # (heartbeats continue throughout the deferred streak per R5).
+                if getattr(runtime, "_consecutive_deferred", 0) >= MAX_CONSECUTIVE_DEFERRED:
+                    exit_reason = "needs_human_consecutive_deferred"
+                    break
+
                 if config.control.max_ticks is not None and ticks >= config.control.max_ticks:
                     exit_reason = "max_ticks"
                     break
@@ -307,6 +330,9 @@ def run_runtime(
             runtime_dir=str(config.paths.runtime_dir),
             exit_reason=exit_reason,
             individual_id=individual_id,
+            # PR-S1 §3.5 telemetry: surface dual counters at run boundary.
+            attempt_count=getattr(runtime, "_attempt_index", 0),
+            scenario_step_count=getattr(runtime, "_scenario_step_index", 0),
         )
     finally:
         instance_guard.release()

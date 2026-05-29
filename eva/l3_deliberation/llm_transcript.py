@@ -32,7 +32,7 @@ __all__ = [
 
 TranscriptMode = Literal["off", "redacted", "raw"]
 ENV_VAR = "EVA_LLM_TRANSCRIPT"
-SCHEMA_VERSION = "llm_transcript_v1.1"
+SCHEMA_VERSION = "llm_transcript_v1.2"
 
 _TRANSCRIPT_SUBDIR = "llm_transcripts"
 
@@ -72,6 +72,13 @@ class LLMTranscriptSink(Protocol):
         drive_spec_version: str | None = None,
         drive_rendering: Any | None = None,
         drive_rendering_enabled: bool = False,
+        # PR-S1 (schema v1.2, plan §3.5): scenario-time observability fields.
+        # ``env_step_invoked`` distinguishes effective scenario step advancement
+        # from deferred attempts; ``attempt_index`` / ``scenario_step_index``
+        # let replay tools reconcile the two clocks per turn.
+        env_step_invoked: bool | None = None,
+        attempt_index: int | None = None,
+        scenario_step_index: int | None = None,
     ) -> str | None: ...
 
 
@@ -119,6 +126,13 @@ class FileBasedTranscriptSink:
         drive_spec_version: str | None = None,
         drive_rendering: Any | None = None,
         drive_rendering_enabled: bool = False,
+        # PR-S1 (schema v1.2, plan §3.5): scenario-time observability fields.
+        # ``env_step_invoked`` distinguishes effective scenario step advancement
+        # from deferred attempts; ``attempt_index`` / ``scenario_step_index``
+        # let replay tools reconcile the two clocks per turn.
+        env_step_invoked: bool | None = None,
+        attempt_index: int | None = None,
+        scenario_step_index: int | None = None,
     ) -> str | None:
         try:
             relative_path = (
@@ -155,6 +169,15 @@ class FileBasedTranscriptSink:
             payload["drive_spec_version"] = drive_spec_version
             payload["drive_rendering"] = drive_rendering
             payload["drive_rendering_enabled"] = bool(drive_rendering_enabled)
+            # PR-S1 v1.2: emit scenario-time fields only when provided so v1.1
+            # backward compat (test_legacy_call_without_new_fields_still_works
+            # in test_llm_transcript_v12.py) remains satisfiable.
+            if env_step_invoked is not None:
+                payload["env_step_invoked"] = bool(env_step_invoked)
+            if attempt_index is not None:
+                payload["attempt_index"] = int(attempt_index)
+            if scenario_step_index is not None:
+                payload["scenario_step_index"] = int(scenario_step_index)
             absolute_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             return relative_path
         except Exception as exc:  # noqa: BLE001 — R3: swallow all errors

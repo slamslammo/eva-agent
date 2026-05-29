@@ -10,7 +10,7 @@ Red lines:
 - v1.1 is a v1 SUPERSET — v1 clients can still read v1.1 payloads (new
   fields are additive optional)
 - hash computation failure must NOT break decisions (R3)
-- schema_version field becomes "llm_transcript_v1.1"
+- schema_version field becomes "llm_transcript_v1.2"
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from pathlib import Path
 class SchemaVersionV11Tests(unittest.TestCase):
     def test_schema_version_constant_bumped_to_v1_1(self) -> None:
         from eva.l3_deliberation.llm_transcript import SCHEMA_VERSION
-        self.assertEqual(SCHEMA_VERSION, "llm_transcript_v1.1")
+        self.assertEqual(SCHEMA_VERSION, "llm_transcript_v1.2")
 
     def test_persisted_payload_records_v1_1_schema_version(self) -> None:
         from eva.l3_deliberation.llm_transcript import FileBasedTranscriptSink
@@ -37,7 +37,7 @@ class SchemaVersionV11Tests(unittest.TestCase):
                 parse_status="ok", errors=[], prompt_sections_present={},
             )
             payload = json.loads((Path(temp_dir) / "llm_transcripts" / "dlPFC" / "turn-000000.json").read_text())
-            self.assertEqual(payload["schema_version"], "llm_transcript_v1.1")
+            self.assertEqual(payload["schema_version"], "llm_transcript_v1.2")
 
 
 class V11OptionalHashFieldsTests(unittest.TestCase):

@@ -136,7 +136,7 @@ class OfcTranscriptE2EWiringTests(unittest.TestCase):
             payload = json.loads(ofc_files[0].read_text())
             self.assertEqual(payload["llm_role"], "OFC_classical")
             self.assertEqual(payload["model"], "drive_weighted_formula_v1")
-            self.assertEqual(payload["schema_version"], "llm_transcript_v1.1")
+            self.assertEqual(payload["schema_version"], "llm_transcript_v1.2")
             self.assertIn("assessments", payload["parsed_response"])
 
     def test_env_off_produces_no_ofc_transcripts(self) -> None:

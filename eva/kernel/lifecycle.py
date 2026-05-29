@@ -180,6 +180,16 @@ class LifecycleRuntime:
         # Monotonic trace turn index (one per deliberating turn); events within a
         # turn share it so the viewer replays them aligned. Only advanced when tracing.
         self._trace_turn_index = 0
+        # PR-S1 §3.1: dual counters per scenario clock_source semantics.
+        # ``attempt_index`` increments on every decision attempt (success or
+        # defer). ``scenario_step_index`` increments only when env.step was
+        # actually invoked (mediated executable action). Under
+        # ``clock_source="wall_clock"`` they advance together (Linux compat);
+        # under ``clock_source="step"`` they may diverge when fallback defers.
+        self._attempt_index = 0
+        self._scenario_step_index = 0
+        # PR-S1 §3.4: consecutive_deferred counter; threshold = 10 raises NeedsHuman.
+        self._consecutive_deferred = 0
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -884,6 +894,17 @@ class LifecycleRuntime:
                         release_token=release_token,
                         selected_candidate_id=selected_candidate_id,
                     )
+            # PR-S1 §3.1: bump attempt + scenario_step counters per deferred/
+            # invoked outcome. attempt_index always +1 when we attempted a
+            # response (success or defer); scenario_step_index only when env.step
+            # was invoked (read from bridge payload's env_step_invoked field).
+            if response_summary is not None:
+                self._attempt_index += 1
+                if response_summary.get("env_step_invoked", True):
+                    self._scenario_step_index += 1
+                    self._consecutive_deferred = 0
+                else:
+                    self._consecutive_deferred += 1
             if self.trace_sink.enabled and response_summary is not None:
                 self._emit_bridge_resolve_action_trace(response_summary)
             details["runtime_gate_context"] = build_runtime_gate_context(

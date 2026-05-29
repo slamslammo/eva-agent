@@ -147,6 +147,9 @@ def select_response_action(
 
     # Fallback: no valid raw action in release_context (edge case only).
     # Per rev1 §6.3: fallback = defer, not baseline controller.
+    # PR-S1 §3.2: signal is_deferred so kernel skips env.step when
+    # clock_source="step" (Crafter); wall_clock scenarios still execute the
+    # noop because the kernel only honors is_deferred under step clock.
     return ResponseSelection(
         pressure_id=pressure.pressure_id,
         selected_action=NOOP_ACTION,
@@ -158,6 +161,8 @@ def select_response_action(
         discouraged_actions=(),
         filter_reasons=(),
         state_mode=ACTION_TO_STATE_MODE[NOOP_ACTION],
+        is_deferred=True,
+        deferred_reason="no_valid_raw_action",
     )
 
 
@@ -171,12 +176,19 @@ def execute_crafter_action(
 ) -> dict[str, Any]:
     del store, allow_repair_side_effects
     selected_action = selection.selected_action
+    # PR-S1 §3.3: bridge fallback honors is_deferred — scenario time does NOT
+    # advance and env.step is NOT called. Payload tells downstream telemetry
+    # (response_history, transcript v1.2) so scenario_step_index can stay put.
+    if selection.is_deferred:
+        return _deferred_execution_payload(selected_action, selection.deferred_reason)
     if runtime is None or not hasattr(runtime, "step_external_action"):
         return _fallback_execution_payload(selected_action)
     step_result = runtime.step_external_action(selected_action)
     if step_result is None:
         return _fallback_execution_payload(selected_action)
-    return _build_execution_payload(pressure, selected_action, step_result)
+    payload = _build_execution_payload(pressure, selected_action, step_result)
+    payload["env_step_invoked"] = True
+    return payload
 
 
 def _fallback_execution_payload(selected_action: str) -> dict[str, Any]:
@@ -192,6 +204,27 @@ def _fallback_execution_payload(selected_action: str) -> dict[str, Any]:
         "life_delta": {},
         "visible_threat_count": 0,
         "uncertainty_after_action": "cannot_determine_safely",
+        # PR-S1: runtime missing → no env.step was invoked.
+        "env_step_invoked": False,
+    }
+
+
+def _deferred_execution_payload(selected_action: str, deferred_reason: str | None) -> dict[str, Any]:
+    """PR-S1 §3.3: bridge deferred → no env.step, no scenario time advance."""
+    return {
+        "execution_status": "deferred",
+        "pressure_outcome": "deferred",
+        "selected_action": selected_action,
+        "deferred_reason": deferred_reason,
+        "followup_needed": True,  # same observation will be retried next patrol
+        "side_effects": [],
+        "integration_hint": "deferred",
+        "inventory_delta": {},
+        "achievement_delta": 0.0,
+        "life_delta": {},
+        "visible_threat_count": 0,
+        "uncertainty_after_action": "cannot_determine_safely",
+        "env_step_invoked": False,
     }
 
 

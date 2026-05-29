@@ -154,7 +154,7 @@ class TranscriptE2EWiringTests(unittest.TestCase):
 
             payload = json.loads(transcript_files[0].read_text())
             # PR-Β' schema bump v1 → v1.1 (v1 superset, plan §5.5b).
-            self.assertEqual(payload["schema_version"], "llm_transcript_v1.1")
+            self.assertEqual(payload["schema_version"], "llm_transcript_v1.2")
             self.assertEqual(payload["llm_role"], "dlPFC")
             self.assertEqual(payload["scenario"], "crafter")
             self.assertEqual(payload["parse_status"], "ok")

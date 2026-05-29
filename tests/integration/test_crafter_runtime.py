@@ -97,8 +97,17 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
                 control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
             )
             stub_session = StubCrafterSession()
+            # PR-S1: bridge defers when no raw_action emerges → no env.step.
+            # Inject a stub raw-action producer so the original test intent
+            # ("at least one env.step happened") still holds under the new
+            # deferred contract.
+            from scenarios.crafter.reasoning import CrafterLLMActionProducer
+            stub_producer = CrafterLLMActionProducer(
+                chat_fn=lambda m: json.dumps({"candidates": [{"action": "do", "reason": "stub"}]}),
+                observation_fn=lambda: stub_session.latest_agent_observation,
+            )
             with patch.object(CrafterRuntimeSession, "start", return_value=stub_session):
-                summary = run_crafter_runtime(config)
+                summary = run_crafter_runtime(config, candidate_producer=stub_producer)
             self.assertGreaterEqual(summary.turns, 1)
             self.assertGreaterEqual(len(stub_session.step_actions), 1)
             store = StateStore(config.paths)
@@ -147,8 +156,14 @@ class CrafterRuntimeIntegrationTests(unittest.TestCase):
                 control=LoopControl(max_turns=4, max_runtime_sec=1.0, idle_sleep_sec=0.01),
             )
             stub_session = StubCrafterSession()
+            # PR-S1: inject stub producer so env.step is invoked (vs new deferred default).
+            from scenarios.crafter.reasoning import CrafterLLMActionProducer
+            stub_producer = CrafterLLMActionProducer(
+                chat_fn=lambda m: json.dumps({"candidates": [{"action": "do", "reason": "stub"}]}),
+                observation_fn=lambda: stub_session.latest_agent_observation,
+            )
             with patch.object(CrafterRuntimeSession, "start", return_value=stub_session):
-                run_crafter_runtime(config)
+                run_crafter_runtime(config, candidate_producer=stub_producer)
             store = StateStore(config.paths)
             response_history = store.read_response_history()
             self.assertGreaterEqual(len(stub_session.step_actions), 1)
@@ -328,8 +343,15 @@ class CrafterTerminationSemanticsTests(unittest.TestCase):
                 control=LoopControl(max_turns=50, max_runtime_sec=3.0, idle_sleep_sec=0.01),
             )
             stub_session = _TerminatingStub()
+            # PR-S1: termination requires env.step to be invoked; inject stub
+            # producer so the bridge emits a raw action (not deferred).
+            from scenarios.crafter.reasoning import CrafterLLMActionProducer
+            stub_producer = CrafterLLMActionProducer(
+                chat_fn=lambda m: json.dumps({"candidates": [{"action": "do", "reason": "stub"}]}),
+                observation_fn=lambda: stub_session.latest_agent_observation,
+            )
             with patch.object(CrafterRuntimeSession, "start", return_value=stub_session):
-                summary = run_crafter_runtime(config)
+                summary = run_crafter_runtime(config, candidate_producer=stub_producer)
             # 个体终止收尾，而非 max_turns/max_runtime（substrate 被叫停）
             self.assertEqual(summary.exit_reason, "individual_terminated")
             self.assertGreaterEqual(len(stub_session.step_actions), 1)

@@ -57,7 +57,15 @@ class ResponseFilterDecision:
 
 @dataclass(frozen=True)
 class ResponseSelection:
-    """Final response choice after filtering and minimal comparison."""
+    """Final response choice after filtering and minimal comparison.
+
+    PR-S1 §3.2: ``is_deferred`` + ``deferred_reason`` let the bridge signal
+    "do not advance scenario time" instead of forcing a noop env.step. The
+    kernel reads ``is_deferred`` together with the active scenario's
+    ``clock_source`` to decide whether to call ``env.step`` (clock_source=
+    ``wall_clock`` always steps; clock_source=``step`` skips when deferred).
+    Defaults ``False`` / ``None`` preserve Linux byte-equivalence.
+    """
 
     pressure_id: str
     selected_action: str
@@ -69,6 +77,9 @@ class ResponseSelection:
     discouraged_actions: tuple[str, ...]
     filter_reasons: tuple[str, ...]
     state_mode: str
+    # PR-S1: bridge-side defer signaling (default-False preserves Linux).
+    is_deferred: bool = False
+    deferred_reason: str | None = None
 
 
 def get_action_constants() -> ActionConstants:

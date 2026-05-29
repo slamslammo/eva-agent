@@ -177,7 +177,7 @@ class OfcTranscriptE2EFileWriteTests(unittest.TestCase):
             expected = Path(temp_dir) / "llm_transcripts" / "OFC_classical" / "turn-000011.json"
             self.assertTrue(expected.exists(), f"OFC transcript missing at {expected}")
             payload = json.loads(expected.read_text())
-            self.assertEqual(payload["schema_version"], "llm_transcript_v1.1")
+            self.assertEqual(payload["schema_version"], "llm_transcript_v1.2")
             self.assertEqual(payload["llm_role"], "OFC_classical")
             self.assertEqual(payload["model"], "drive_weighted_formula_v1")
             self.assertIn("assessments", payload["parsed_response"])

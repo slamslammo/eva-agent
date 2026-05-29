@@ -69,6 +69,16 @@ def append_response_history(
         "uncertainty_after_action": execution_result["uncertainty_after_action"],
         "integration_hint": execution_result["integration_hint"],
         "followup_needed": execution_result["followup_needed"],
+        # PR-S1 §3.5 R12: scenario-time observability. ``env_step_invoked``
+        # comes from the bridge payload (False on deferred / fallback paths,
+        # True after a successful step_external_action). ``deferred_reason``
+        # is None unless bridge marked the selection deferred.
+        # Default True for back-compat: wall_clock scenarios (Linux) never set
+        # this and always step; only PR-S1-updated bridges (Crafter) emit False
+        # on the deferred path. Mirrors the lifecycle counter-update default.
+        "env_step_invoked": bool(execution_result.get("env_step_invoked", True)),
+        "deferred_reason": execution_result.get("deferred_reason"),
+        "is_deferred": bool(selection.is_deferred),
     }
     if drive_context is not None:
         payload["drive_context"] = drive_context
@@ -104,6 +114,14 @@ def build_response_summary(
         "pressure_outcome": execution_result["pressure_outcome"],
         "followup_needed": execution_result["followup_needed"],
         "response_mode": response_mode or get_action_constants().default_response_mode,
+        # PR-S1 §3.5: scenario-time signal needed by lifecycle to update its
+        # dual counters (attempt_index / scenario_step_index). Default False
+        # so legacy execution_result dicts (no env_step_invoked key) are
+        # treated as "no advance" — safer than guessing.
+        # Default True for back-compat: wall_clock scenarios (Linux) never set
+        # this and always step; only PR-S1-updated bridges (Crafter) emit False
+        # on the deferred path. Mirrors the lifecycle counter-update default.
+        "env_step_invoked": bool(execution_result.get("env_step_invoked", True)),
     }
     if drive_context is not None:
         payload["drive_context"] = drive_context
