@@ -216,6 +216,42 @@ def run_runtime(
                 "turn_index": getattr(runtime, "_trace_turn_index", 0),
             }
         )
+    return _run_wall_clock_loop(
+        runtime,
+        config,
+        state,
+        action_runtime=action_runtime,
+        trace_sink=trace_sink,
+        periodic_hook=periodic_hook,
+        hook_interval_sec=hook_interval_sec,
+        active_record=active_record,
+        store=store,
+        instance_guard=instance_guard,
+        individual_id=individual_id,
+    )
+
+
+def _run_wall_clock_loop(
+    runtime: LifecycleRuntime,
+    config: RuntimeConfig,
+    state: RuntimeState,
+    *,
+    action_runtime: Any,
+    trace_sink: Any,
+    periodic_hook: Callable[..., tuple[bool, str | None]] | None,
+    hook_interval_sec: float,
+    active_record: Any,
+    store: StateStore,
+    instance_guard: InstanceGuard,
+    individual_id: str,
+) -> RunSummary:
+    """PR-T1: wall_clock cadence loop, extracted verbatim from run_runtime.
+
+    Pure migration: body is the previous inline run_runtime loop (heartbeat tick /
+    turn / heartbeat-deadline yield / shutdown / lock release) moved unchanged, so
+    step cadence can branch at the top of run_runtime without touching this
+    wall_clock path (Linux zero-diff).
+    """
     next_heartbeat_at = utc_now()
     started_at = time.monotonic()
     last_hook_at = started_at
