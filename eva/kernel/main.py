@@ -439,6 +439,7 @@ def _run_step_loop(
     scenario_step = 0
     step_attempt = 0
     consecutive_infra_failure = 0
+    outcome_tally = {"infra_failure": 0, "deferred": 0, "withhold": 0}
     exit_reason = "normal"
     max_steps = config.control.max_turns
     try:
@@ -457,8 +458,17 @@ def _run_step_loop(
                     consecutive_infra_failure += 1
                 else:
                     consecutive_infra_failure = 0
+                # PR-T2 §6 #6: classify each step for the human-readable run
+                # summary — env.step / infra fault / bridge defer / cognitive
+                # withhold are distinct outcomes, never conflated.
                 if result.env_step_invoked:
                     scenario_step += 1
+                elif result.infra_failed:
+                    outcome_tally["infra_failure"] += 1
+                elif result.response_summary is not None:
+                    outcome_tally["deferred"] += 1
+                else:
+                    outcome_tally["withhold"] += 1
                 # Q3 / §6 #5: persist counts to the append-only artifact at each
                 # checkpoint so scenario_step / attempt are greppable mid-run
                 # (closes the rev2 audit gap), aligned with the deep-cadence step.
@@ -513,8 +523,16 @@ def _run_step_loop(
             life_state=final_state.life_state,
             details={
                 "scenario_step": scenario_step,
+                "step_attempts": step_attempt,
                 "attempt_index": getattr(runtime, "_attempt_index", 0),
                 "scenario_step_index": getattr(runtime, "_scenario_step_index", 0),
+                # §6 #6: labeled outcome tally so the run is human-readable at a
+                # glance — env.steps vs infra faults vs bridge defers vs cognitive
+                # withholds, never conflated.
+                "env_steps": scenario_step,
+                "infra_failures": outcome_tally["infra_failure"],
+                "deferred": outcome_tally["deferred"],
+                "withholds": outcome_tally["withhold"],
                 "exit_reason": exit_reason,
                 "individual_id": individual_id,
                 "clock_source": "step",
@@ -527,6 +545,11 @@ def _run_step_loop(
             individual=individual_id,
             state=final_state.life_state,
             scenario_step=scenario_step,
+            step_attempts=step_attempt,
+            env_steps=scenario_step,
+            infra_failures=outcome_tally["infra_failure"],
+            withholds=outcome_tally["withhold"],
+            deferred=outcome_tally["deferred"],
             instance_valid=final_state.instance_valid,
             exit_reason=exit_reason,
         )
