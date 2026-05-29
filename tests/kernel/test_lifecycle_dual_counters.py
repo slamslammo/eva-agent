@@ -178,11 +178,14 @@ class DualCountersAdvanceTests(unittest.TestCase):
             self.assertEqual(rt._consecutive_deferred, 0)
 
     def test_deferred_response_summary_bumps_consecutive_but_not_scenario_step(self) -> None:
-        """Unit-level: feed a deferred response_summary dict, verify counter updates.
+        """Unit-level: feed a deferred response_summary to the REAL counter method.
 
         This bypasses the end-to-end mediator/bridge path (which sometimes
-        emits real actions via heuristic candidates). The kernel-level counter
-        logic is what slice 4 controls — we verify it directly.
+        emits real actions via heuristic candidates) but exercises the actual
+        kernel logic via ``_update_scenario_counters`` — no inline copy that
+        could drift behind the production code (the gate-fix lesson). Crafter
+        is active (setUp) so ``_clock_source == "step"`` and the bridge's
+        ``env_step_invoked`` signal is honored.
         """
         from eva.kernel.lifecycle import LifecycleRuntime
         from eva.kernel import StateStore, build_runtime_paths
@@ -193,19 +196,14 @@ class DualCountersAdvanceTests(unittest.TestCase):
             store = StateStore(paths)
             guard = InstanceGuard(paths.eva_lock_file if hasattr(paths, 'eva_lock_file') else paths.runtime_dir / "eva.lock", store, LifecycleConfig())
             runtime = LifecycleRuntime(store, guard, LifecycleConfig())
+            self.assertEqual(runtime._clock_source, "step")
             self.assertEqual(runtime._scenario_step_index, 0)
             self.assertEqual(runtime._consecutive_deferred, 0)
 
-            # Simulate the counter-update block from lifecycle main loop:
             # deferred response_summary has env_step_invoked=False.
             deferred_summary = {"env_step_invoked": False, "selected_action": "noop"}
             for _ in range(3):
-                runtime._attempt_index += 1
-                if deferred_summary.get("env_step_invoked", True):
-                    runtime._scenario_step_index += 1
-                    runtime._consecutive_deferred = 0
-                else:
-                    runtime._consecutive_deferred += 1
+                runtime._update_scenario_counters(deferred_summary)
 
             self.assertEqual(runtime._attempt_index, 3)
             self.assertEqual(runtime._scenario_step_index, 0,
@@ -213,11 +211,7 @@ class DualCountersAdvanceTests(unittest.TestCase):
             self.assertEqual(runtime._consecutive_deferred, 3)
 
             # Then an executable turn arrives — both bump, consecutive resets.
-            invoked_summary = {"env_step_invoked": True, "selected_action": "do"}
-            runtime._attempt_index += 1
-            if invoked_summary.get("env_step_invoked", True):
-                runtime._scenario_step_index += 1
-                runtime._consecutive_deferred = 0
+            runtime._update_scenario_counters({"env_step_invoked": True, "selected_action": "do"})
             self.assertEqual(runtime._attempt_index, 4)
             self.assertEqual(runtime._scenario_step_index, 1)
             self.assertEqual(runtime._consecutive_deferred, 0)

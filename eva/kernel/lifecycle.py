@@ -190,6 +190,18 @@ class LifecycleRuntime:
         self._scenario_step_index = 0
         # PR-S1 §3.4: consecutive_deferred counter; threshold = 10 raises NeedsHuman.
         self._consecutive_deferred = 0
+        # PR-S1 gate fix (CHANGES_REQUESTED): the kernel — not the scenario
+        # bridge — reads clock_source so the field is LOAD-BEARING (blueprint
+        # §2.7: kernel chooses the cadence source; per-scenario cadence forks
+        # are forbidden). Guarded read mirrors main.py's bare-kernel fallback:
+        # with no active scenario we default to "wall_clock", the conservative
+        # invariant-enforcing mode (attempt==scenario_step, never silently
+        # defers) rather than trusting a bridge flag.
+        try:
+            from ..scenario_bundle import get_active_existence_semantics
+            self._clock_source = get_active_existence_semantics().clock_source
+        except RuntimeError:
+            self._clock_source = "wall_clock"
         self.patrol_scheduler = PatrolScheduler(self.external_life)
         self.pending_work: deque[WorkSlice] = deque([
             WorkSlice(name="self_check"),
@@ -380,6 +392,32 @@ class LifecycleRuntime:
                 "action_hint": (release.get("release_context") or {}).get("action_hint"),
             },
         )
+
+    def _update_scenario_counters(self, response_summary: dict[str, Any]) -> None:
+        """Advance the dual counters per the LOAD-BEARING ``clock_source``.
+
+        PR-S1 gate fix (CHANGES_REQUESTED): the kernel — not the scenario
+        bridge — owns cadence (blueprint §2.7). ``attempt_index`` always bumps
+        (every decision attempt is visible, R7). The scenario-step / deferred
+        accounting then branches on the field read at construction:
+
+        - ``clock_source="step"``: honor the bridge's ``env_step_invoked``
+          signal. A deferred attempt advances attempt_index only and bumps the
+          ``consecutive_deferred`` guard (R8); an invoked attempt advances
+          scenario_step and resets the guard.
+        - ``clock_source="wall_clock"``: ENFORCE the attempt==scenario_step
+          invariant regardless of any ``is_deferred``/``env_step_invoked`` a
+          bridge may have set. A wall_clock scenario can never silently skip
+          env.step through a bridge bug — the invariant comes from the field,
+          not from the bridge happening to never set the flag.
+        """
+
+        self._attempt_index += 1
+        if self._clock_source == "step" and not response_summary.get("env_step_invoked", True):
+            self._consecutive_deferred += 1
+        else:
+            self._scenario_step_index += 1
+            self._consecutive_deferred = 0
 
     def _emit_bridge_resolve_action_trace(self, response_summary: dict[str, Any] | None) -> None:
         """H-3a: emit ``bridge.resolve_action`` — the action_hint -> executed causal point.
@@ -894,17 +932,10 @@ class LifecycleRuntime:
                         release_token=release_token,
                         selected_candidate_id=selected_candidate_id,
                     )
-            # PR-S1 §3.1: bump attempt + scenario_step counters per deferred/
-            # invoked outcome. attempt_index always +1 when we attempted a
-            # response (success or defer); scenario_step_index only when env.step
-            # was invoked (read from bridge payload's env_step_invoked field).
+            # PR-S1 §3.1 (+gate fix): advance the dual counters per the
+            # LOAD-BEARING clock_source. See _update_scenario_counters.
             if response_summary is not None:
-                self._attempt_index += 1
-                if response_summary.get("env_step_invoked", True):
-                    self._scenario_step_index += 1
-                    self._consecutive_deferred = 0
-                else:
-                    self._consecutive_deferred += 1
+                self._update_scenario_counters(response_summary)
             if self.trace_sink.enabled and response_summary is not None:
                 self._emit_bridge_resolve_action_trace(response_summary)
             details["runtime_gate_context"] = build_runtime_gate_context(

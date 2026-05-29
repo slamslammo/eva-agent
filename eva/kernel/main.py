@@ -253,7 +253,13 @@ def run_runtime(
                 # Prevents infinite defer loops (e.g. LLM stuck failing every
                 # decision) while preserving the heartbeat-first invariant
                 # (heartbeats continue throughout the deferred streak per R5).
-                if getattr(runtime, "_consecutive_deferred", 0) >= MAX_CONSECUTIVE_DEFERRED:
+                # Gate fix (CHANGES_REQUESTED): the guard is load-bearing only
+                # under clock_source="step" — wall_clock never accumulates
+                # consecutive_deferred (the kernel enforces attempt==scenario_step),
+                # so reading the field here keeps the exit a step-mode concept
+                # rather than relying on the counter happening to stay 0.
+                if (getattr(runtime, "_clock_source", "wall_clock") == "step"
+                        and getattr(runtime, "_consecutive_deferred", 0) >= MAX_CONSECUTIVE_DEFERRED):
                     exit_reason = "needs_human_consecutive_deferred"
                     break
 
