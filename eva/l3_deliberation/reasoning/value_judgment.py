@@ -24,6 +24,9 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
     normalized_drive_levels = dict(drive_levels) if isinstance(drive_levels, dict) else {}
 
     assessments: list[CandidateAssessment] = []
+    # PR-O2: counts dlPFC-produced (LLM) candidates in the order the producer
+    # emitted them — that order IS the dlPFC preference rank (see loop body).
+    _dlpfc_rank_counter = 0
     for candidate in candidates:
         reasons: list[str] = [f"top_drive={top_drive}"]
         if "habit_candidate_narrowing" in candidate.justification:
@@ -41,8 +44,21 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         # PR-O1: robust-aggregation weighted terms (0.0 unless the allow branch
         # computes them) — recorded in ScoreDecomposition for observability.
         drive_term = 0.0
+        dlpfc_term = 0.0
         projection_term = 0.0
         experience_term = 0.0
+        # PR-O2: dlpfc_preference rank applies ONLY to dlPFC-produced candidates
+        # (those carrying a dlpfc_proposal_ref). Heuristic / Linux candidates have
+        # no LLM preference order → dlpfc_rank None → no dlpfc term → Linux A/B
+        # byte-unchanged. The producer emits LLM candidates in preference order, so
+        # the k-th LLM candidate is dlPFC rank k. A dedicated counter (not the loop
+        # index) keeps the rank correct even if a call ever interleaves non-LLM
+        # candidates.
+        if candidate.parameter_domain.get("dlpfc_proposal_ref"):
+            dlpfc_rank = _dlpfc_rank_counter
+            _dlpfc_rank_counter += 1
+        else:
+            dlpfc_rank = None
         conflict = build_candidate_conflict_context(
             candidate,
             top_drive=top_drive,
@@ -102,11 +118,13 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                     projection_score=projection_score,
                     learning_bias=learning_bias,
                     habit_priority_bonus=habit_priority_bonus,
+                    dlpfc_rank=dlpfc_rank,
                 )
                 drive_term = _terms["drive_term"]
+                dlpfc_term = _terms["dlpfc_term"]
                 projection_term = _terms["projection_term"]
                 experience_term = _terms["experience_term"]
-                score = drive_term + projection_term + experience_term
+                score = drive_term + dlpfc_term + projection_term + experience_term
                 # Round 1.G: the ≤0.12 LLM advisory bonus is retired (drift; round-1f
                 # showed it had no doctrinal basis and, under live LLM, harmfully biased
                 # selection toward passivity). OFC scoring stays drive-weighted only;
@@ -146,11 +164,13 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                     projection_score=projection_score,
                     learning_bias=learning_bias,
                     habit_priority_bonus=habit_priority_bonus,
+                    dlpfc_rank=dlpfc_rank,
                 )
                 drive_term = _terms["drive_term"]
+                dlpfc_term = _terms["dlpfc_term"]
                 projection_term = _terms["projection_term"]
                 experience_term = _terms["experience_term"]
-                score = drive_term + projection_term + experience_term
+                score = drive_term + dlpfc_term + projection_term + experience_term
         else:
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
@@ -170,6 +190,8 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             reasons=tuple(reasons),
             # PR-O1: robust-aggregation weighted terms (sum to final_score).
             drive_term=round(drive_term, 6),
+            # PR-O2: dlpfc_preference term (non-zero only for LLM candidates).
+            dlpfc_term=round(dlpfc_term, 6),
             projection_term=round(projection_term, 6),
             experience_term=round(experience_term, 6),
         )

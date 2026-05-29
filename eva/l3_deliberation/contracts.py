@@ -195,6 +195,10 @@ class ScoreDecomposition:
     # robust scorer combined them (terms sum to final_score). Default 0.0 keeps
     # back-compat for any caller / reader that predates the robust scheme.
     drive_term: float = 0.0
+    # PR-O2: dlpfc_preference rank term — non-zero ONLY for dlPFC-produced
+    # (LLM) candidates carrying a dlpfc_proposal_ref. Heuristic / Linux
+    # candidates keep 0.0 (no LLM order), so Linux scoring is byte-unchanged.
+    dlpfc_term: float = 0.0
     projection_term: float = 0.0
     experience_term: float = 0.0
 
@@ -210,6 +214,8 @@ class ScoreDecomposition:
             "reasons": list(self.reasons),
             # PR-O1 robust-aggregation terms (additive — pre-robust readers ignore).
             "drive_term": self.drive_term,
+            # PR-O2 dlpfc_preference term (additive — pre-O2 readers ignore).
+            "dlpfc_term": self.dlpfc_term,
             "projection_term": self.projection_term,
             "experience_term": self.experience_term,
         }
