@@ -105,3 +105,37 @@ T1/T2 是否合并 A 定。**T1 是 Linux 最高风险 PR，建议单独 gate**�
 - ✅ heartbeat/lease scope 不删（wall_clock 路径完整保留，§5.3）。
 - ✅ 核心不变式保留：scenario_step==env.step、失败不推进（rev2 已证，T1 不回退，§5.4）。
 - ✅ 本文档不含 kernel 代码改动——等 A G1 gate。
+
+---
+
+## 7. T1 准备：R-a/R-b/R-c 审计结果（A G1 通过后补，进 T1 编码前）
+
+A G1 review（`eva-coordination/plans/scenario-time-model-completion-g1-review.md`）裁定 Q1-Q5 + 加 3 项必补。审计结果：
+
+### R-a（🔴 env-done = 个体死亡链路）
+- 现 wall_clock loop 已接：`main.py:247` `if action_runtime.terminated: exit_reason="individual_terminated"`。
+- 个体生命周期（死亡→蒸馏→新个体）在 run 级：本 run 终态 archive + 下次 run `_resolve_individual_id` 按 `reset_semantics=new_individual` 铸新 id + `--inherited-priors-path` 载蒸馏 prior。
+- **T1 动作**：`_run_step_loop` 的 `agent_alive` 条件须在每次 `env.step` 后检 `action_runtime.terminated` → `individual_terminated` 退出（复制 wall_clock 语义）。**加测**：step loop 遇 env done=True → 正确 individual_terminated 退出（rev2 max_turns 结束没死过，必须新测）。
+
+### R-b（🟡 defer 路径去向）—— 决断：**保留为衬底错误日志 + 不 step（非 infra 重试、非 withhold）**
+- 触发：`compatibility.py::select_response_action:133-165`——`bridge_policy.action_hint` 不在 `_ALL_ACTIONS_SET` 时 `is_deferred=True, deferred_reason="no_valid_raw_action"`。
+- raw-action 架构（producer 只产 admitted 合法 raw action + anchor 预过滤）下 live 0 样本，但它是 mediator 放行后 bridge 映射不到合法 action 的**防御 fallback**——非结构上不可能（如未来非-raw-action profile 被放行、或 action_hint 空）。
+- **决断**：不删（删防御 guard 有风险）、不归 infra（非 LLM 掉线）、不算 withhold（非认知抑制）。step 模式视为**"released-but-unexecutable" 衬底异常**：结构化日志（记 step + deferred_reason）+ 该拍不 step。**不计 infra-failure streak**（它不是连不上，是映射 bug 信号，应显式日志让人查，而非静默重试）。T1 在 step loop 显式处理此分支。
+
+### R-c（🟡 共享机件墙钟假设）—— 结论：**无墙钟假设，step-safe，无需 step-delta 改造**
+- drive：`drive_state.py` `base_decay`(固定值/per-update) + `_trend_from_delta`(看 delta 非墙钟秒) + `_apply_base_decay`(每次 update 减固定量)。**per-update 语义**，step 模式每 step 一次 update 即正确。
+- memory：`retrieval.py`/`semantic.py`/`encoding.py` 按 situation_key/candidate_profile/life_state/drive 语义键检索，**无 recency-by-wall-clock / now() / total_seconds 衰减**。
+- learning/habit：grep 无墙钟时间用法。
+- **结论**：shared 认知机件不依赖墙钟 delta，step 节律下"结构保留"即正确，T1 无需改这些。（T1 编码时若发现新点再补。）
+
+### T1 slice 计划（TDD，每 slice commit，Linux full 回归是 R2 硬 gate）
+1. **抽出 `_run_wall_clock_loop`**（纯搬迁，diff 仅缩进+签名）+ full/Linux 回归绿（等价证据）。
+2. **`run_runtime` 顶层 clock_source 二分**（wall_clock→现有循环；step→新循环）。
+3. **`_run_step_loop` 骨架**：step→感知→drive→anchor→dlPFC(per-call 超时)→OFC→mediator→release→env.step→step+1；无 heartbeat/lease/yield；snapshot 仅 start（Q2）。
+4. **R-a env-done→individual_terminated** + 测。
+5. **每 N step checkpoint**（N=10 config，Q3）+ 计数持久化（scenario_step/attempt 落 artifact，修 rev2 审计缺口）。
+6. **R-b defer 分支**（结构化日志+不 step）。
+7. **max_steps 预算 + max_runtime watchdog**（Q5，显式标注非语义）。
+8. **patrol 折叠**（Q4：列 shallow/deep/full 各功能，证 step 节律下仍发生）。
+9. life-state step={STABLE,NEEDS_HUMAN}（Q1，保 enum 字段）。
+（LLM 掉线→infra 重试 + run-summary 归 PR-T2；R-a 死亡归 T1。）
