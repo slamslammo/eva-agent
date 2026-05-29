@@ -61,3 +61,12 @@ exit_reason=max_steps  instance_valid=true  state=STABLE
 
 - **Q1 thinking 阶段策略**：验证/分析阶段保留（A 本体消费分析靠 reasoning 内容）；将来高吞吐长跑切 OFF 或换非推理模型（~10x 提速，当前 62s/step 几乎全是 thinking 生成）。
 - **Q2 dlPFC prompt 语言**：实测 system 84% 英 / 16% 中（role contract 中文框架 + 英文本体）。**PM 判定混合是问题、应统一全英文**（影响 LLM 一致性 + 违 CLAUDE.md 公开主线英文）；A 跟进 role contract 全英化（关联 single-source-scenario-drive-metadata），未在本跑中改以保数据一致性。
+
+## ⚠️ 数据质量 caveat：前 2 步 observation 预热（Crafter wrapper 侧，非本方案）
+
+step 0/1 的 dlPFC LLM 调用拿到的 state_packet **life=null / local_view 空**（LLM 盲跑探索）；step 2 起填充正常（life 9/9/9/9、local_view 7 cells）。
+
+**根因 = Crafter wrapper 观测预热**（非 step 模式 / 非 T1-T2 回归）：raw_observation 显示 `life_panel.available=false`（值全 null）在 step 0/1，`available=true` 从 step 2 起。即 env reset + 第 1 步的观测里 HUD/life panel 尚未就绪；state_packet pipeline 如实透传了"不可用"（未瞎编）。同一 wrapper 在 wall_clock 路径同样如此。
+
+**对分析的影响**：前 2/100 步决策仅基于 drive_levels（life/视野空），应在行为分析中剔除或标注。
+**独立待办（A）**：Crafter wrapper（H-0）应让 `life_panel` 从 reset 观测即 available，消除前 2 步盲跑。属 wrapper 层，不在 scenario-time-model 范围。
