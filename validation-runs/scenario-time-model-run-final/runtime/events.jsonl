@@ -1,0 +1,14 @@
+{"event_type": "startup", "timestamp": "2026-05-29T12:18:31.002905Z", "details": {"runtime_dir": "/Users/mojiawen/Documents/claude_projects/eva-agent/validation-runs/scenario-time-model-run-final/runtime", "individual_id": "individual-crafter-66e2d2b2a8bc", "individual_newly_born": true}, "instance_id": "eva-20260529121831-4f8ddb", "generation": 1}
+{"event_type": "step_infra_failure", "timestamp": "2026-05-29T12:21:34.988956Z", "details": {"reason": "llm_transport_unreachable"}, "life_state": "STABLE", "turn_id": "turn-0007"}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T12:26:35.502574Z", "details": {"scenario_step": 8, "attempt_index": 8, "scenario_step_index": 8}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T12:35:12.627234Z", "details": {"scenario_step": 18, "attempt_index": 18, "scenario_step_index": 18}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T12:45:33.896041Z", "details": {"scenario_step": 28, "attempt_index": 28, "scenario_step_index": 28}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T12:54:51.934130Z", "details": {"scenario_step": 38, "attempt_index": 38, "scenario_step_index": 38}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T13:04:00.225960Z", "details": {"scenario_step": 48, "attempt_index": 48, "scenario_step_index": 48}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T13:13:45.073162Z", "details": {"scenario_step": 58, "attempt_index": 58, "scenario_step_index": 58}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T13:21:34.845761Z", "details": {"scenario_step": 68, "attempt_index": 68, "scenario_step_index": 68}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T13:33:43.754116Z", "details": {"scenario_step": 78, "attempt_index": 78, "scenario_step_index": 78}}
+{"event_type": "step_infra_failure", "timestamp": "2026-05-29T13:39:49.440640Z", "details": {"reason": "llm_transport_unreachable"}, "life_state": "STABLE", "turn_id": "turn-0088"}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T13:45:49.001739Z", "details": {"scenario_step": 87, "attempt_index": 87, "scenario_step_index": 87}}
+{"event_type": "step_checkpoint", "timestamp": "2026-05-29T13:57:45.503969Z", "details": {"scenario_step": 97, "attempt_index": 97, "scenario_step_index": 97}}
+{"event_type": "shutdown", "timestamp": "2026-05-29T14:02:17.378915Z", "details": {"scenario_step": 100, "step_attempts": 103, "attempt_index": 100, "scenario_step_index": 100, "env_steps": 100, "infra_failures": 2, "deferred": 0, "withholds": 1, "exit_reason": "max_steps", "individual_id": "individual-crafter-66e2d2b2a8bc", "clock_source": "step"}, "instance_id": "eva-20260529121831-4f8ddb", "generation": 1, "life_state": "STABLE"}
