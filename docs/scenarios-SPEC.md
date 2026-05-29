@@ -23,8 +23,9 @@ The current bundle shape is `RuntimeScenarioBundle`, which contains:
 - `anchors`
 - `outcome_observers`
 - `prior_skills`
+- `existence_semantics`
 
-A scenario may organize those parts across helper modules, but these six surfaces are the canonical integration contract in the current repository.
+A scenario may organize those parts across helper modules, but these seven surfaces are the canonical integration contract in the current repository. `existence_semantics` is a **required field** of `RuntimeScenarioBundle` (no default), so a bundle that omits it fails to construct — the "missing existence semantics should fail scenario activation" obligation (blueprint §2.5 / §12.7) is enforced by the dataclass in the current code.
 
 ## Required bundle components
 
@@ -91,6 +92,15 @@ The scenario must provide:
 - scenario-owned prior records or prior-skill policy that can participate in the framework skill registries with provenance metadata
 
 The framework owns the dataclasses, skill registries, and append-only learning tracks. The scenario owns the concrete policy for summarizing and reusing experience, plus the scenario-local prior content that populates those framework-owned registry surfaces.
+
+### 7. Existence semantics
+
+The scenario must declare an `ExistenceSemantics`, which hands the interpretation of "what counts as alive / dead" to the scenario (v0.6 rev2); the framework supplies the mechanisms that sustain continued existence plus the seven-layer classification vocabulary, reads this declaration, and enforces it consistently rather than hardcoding life and death. Most fields are human-readable / audit declarations (`continuity_criterion`, `recoverable_interruption`, `terminal_failure`, `individual_boundary`, `reset_semantics`, `inheritance_channel`, `identity_continuity`), but **`clock_source` is configuration the framework actively consumes**:
+
+- `"wall_clock"` (default): the life clock advances in wall-clock seconds (e.g. the Linux runtime).
+- `"step"`: scenario time advances per turn — `scenario_step_index` only increments when a release reaches `env.step(action)` through the bridge; failed / deferred decision attempts do not advance scenario time (e.g. Crafter).
+
+The kernel reads this field at runtime construction and branches its cadence accounting on it (see `eva/kernel/lifecycle.py::LifecycleRuntime._update_scenario_counters`). **Critical boundary**: `clock_source="step"` freezes only scenario time and never freezes heartbeat / lease / runtime liveness / audit / retry telemetry — doing so would reintroduce the "process alive but spinning, judged dead" deadlock bug.
 
 ## Activation model
 

@@ -23,8 +23,9 @@
 - `anchors`
 - `outcome_observers`
 - `prior_skills`
+- `existence_semantics`
 
-场景可以通过辅助模块组织这些部分，但这六个 surface 是当前仓库的规范集成契约。
+场景可以通过辅助模块组织这些部分，但这七个 surface 是当前仓库的规范集成契约。`existence_semantics` 是 `RuntimeScenarioBundle` 的**必填字段**（无默认值），缺失即在 bundle 构造时报错——故"missing 应使场景激活失败"在当前代码中由 dataclass 强制（蓝图 §2.5 / §12.7）。
 
 ## 必需 bundle 组件
 
@@ -91,6 +92,15 @@
 - 可以参与带 provenance 元数据的框架 skill registry 的场景所有 prior record 或 prior-skill 策略
 
 框架拥有 dataclass、skill registry 和 append-only learning track。场景拥有体验摘要和重用、及填充这些框架所有 registry surface 的场景本地 prior 内容的具体策略。
+
+### 7. 存在语义（Existence semantics）
+
+场景必须声明一个 `ExistenceSemantics`，把"什么算活 / 死"的解释权交给场景（v0.6 rev2）；框架提供维持持续存在的机制 + 七层分类语言，读取本声明并一致执行，不硬编码生死。多数字段是人类可读 / 审计用声明（`continuity_criterion`、`recoverable_interruption`、`terminal_failure`、`individual_boundary`、`reset_semantics`、`inheritance_channel`、`identity_continuity`），但 **`clock_source` 是框架主动消费的配置**：
+
+- `"wall_clock"`（默认）：生命时钟按挂钟秒推进（如 Linux runtime）。
+- `"step"`：scenario time 按回合推进——仅当 release 经 bridge 调到 `env.step(action)` 时 `scenario_step_index` 才 +1；失败 / deferred 的决策尝试不推进 scenario time（如 Crafter）。
+
+kernel 在 runtime 构造时读取该字段并据此分叉 cadence 计数（见 `eva/kernel/lifecycle.py::LifecycleRuntime._update_scenario_counters`）。**关键边界**：`clock_source="step"` 只冻结 scenario time，**绝不**冻结 heartbeat / lease / runtime liveness / audit / retry telemetry——否则会重新引入"进程活但空转、被误判死亡"的卡死 bug。
 
 ## 激活模型
 
