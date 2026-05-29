@@ -75,8 +75,16 @@ class CrafterLLMActionProducer:
         identity_provider: Callable[[], dict[str, Any]] | None = None,
         model_label: str = "unknown",
         scenario_ontology: ScenarioOntology | None = None,
+        transport_max_retries: int = 0,
     ) -> None:
         self.chat_fn = chat_fn
+        # PR-T2: bounded substrate retries for LLM transport errors. Default 0
+        # (no retry) preserves existing behavior; live runs pass a small budget.
+        self.transport_max_retries = transport_max_retries
+        # PR-T2: set True when the last produce() exhausted the transport retry
+        # budget (LLM unreachable) — read by the kernel step loop to count an
+        # INFRA failure (substrate fault) distinct from a cognitive withhold.
+        self.last_call_infra_failed = False
         self._world_facts_fn = world_facts_fn
         # Injected per-turn observation accessor (closed over live session).
         self._observation_fn = observation_fn
@@ -134,7 +142,14 @@ class CrafterLLMActionProducer:
         messages, sections_present = self._build_messages_with_metadata(
             state_packet, crafter_domain, recent_memory
         )
-        text, parsed, parse_status, errors = _call_chat_safely(self.chat_fn, messages)
+        # PR-T2: bounded substrate retry for transport errors (LLM掉线归衬底).
+        text, parsed, parse_status, errors, _attempts = _call_chat_with_bounded_retry(
+            self.chat_fn, messages, max_retries=self.transport_max_retries
+        )
+        # Surface an exhausted-transport (LLM unreachable) as an INFRA failure the
+        # kernel can count separately from a cognitive withhold. A parse_error /
+        # empty_content is NOT infra — only a transport_error after the retry budget.
+        self.last_call_infra_failed = parse_status == "transport_error"
 
         # PR-Β': compute v1.1 ontology hashes (swallow failures — R3, defense in
         # depth: the helper already returns Nones on internal error, but the
@@ -347,6 +362,37 @@ def _call_chat_safely(
     if not isinstance(payload, dict):
         return (text, None, "parse_error", ["response not a JSON object"])
     return (text, payload, "ok", [])
+
+
+def _call_chat_with_bounded_retry(
+    chat_fn: ChatFn,
+    messages: list[dict[str, str]],
+    *,
+    max_retries: int,
+) -> tuple[str, dict[str, Any] | None, str, list[str], int]:
+    """PR-T2: substrate-level bounded retry for the LLM transport.
+
+    Transport hiccups (IncompleteRead / timeout / socket close → ``transport_error``)
+    are INFRASTRUCTURE, not cognition. Retry them a bounded number of times here, at
+    the transport boundary, so a flaky connection does not surface into the cognitive
+    path as an empty-candidate "withhold" (rev3 §3 / 北极星: substrate stays boring,
+    separate from the dlPFC candidate logic). Only ``transport_error`` retries — a
+    ``parse_error`` is a content problem, not an infra hiccup, so it is returned as-is.
+
+    Returns ``(raw, parsed, parse_status, errors, attempts)``; ``parse_status`` stays
+    ``transport_error`` only after the whole retry budget is exhausted.
+    """
+
+    attempts = 0
+    result: tuple[str, dict[str, Any] | None, str, list[str]] = (
+        "", None, "transport_error", ["no_attempt"],
+    )
+    while attempts <= max_retries:
+        attempts += 1
+        result = _call_chat_safely(chat_fn, messages)
+        if result[2] != "transport_error":
+            break
+    return (result[0], result[1], result[2], result[3], attempts)
 
 
 def _extract_candidate_items(parsed: dict[str, Any]) -> list[dict[str, str]]:

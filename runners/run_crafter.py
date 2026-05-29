@@ -120,6 +120,9 @@ def _build_candidate_producer(
         transcript_sink=transcript_sink,
         model_label=model_label,
         scenario_ontology=CRAFTER_SCENARIO_ONTOLOGY,
+        # PR-T2: bounded substrate retry for live LLM transport hiccups
+        # (IncompleteRead etc.) before counting an infra failure.
+        transport_max_retries=2,
     )
 
 
