@@ -28,6 +28,8 @@ Kernel 拥有 bounded 运行时循环、cadence、instance legitimacy 和 persis
 - `eva/kernel/state.py` — 当前状态和 append-only artifact 写入
 - `eva/kernel/config.py` — 运行时配置契约
 
+kernel 还会消费激活场景的 `clock_source`（声明在其 `ExistenceSemantics` 中）以选择 cadence 记账方式。`LifecycleRuntime._update_scenario_counters` 在构造时读取 `clock_source`：`step` 下尊重 bridge 的 deferred 信号（scenario time 仅在 `env.step` 被调用时推进，持续 deferred 连击退出到 `needs_human_consecutive_deferred`）；`wall_clock`（默认）下强制 `attempt_index == scenario_step_index`。这个选择由 **kernel 拥有，不是场景 bridge**——cadence 逻辑的 per-scenario fork 仍被禁止（蓝图 §2.7）。选择 cadence 来源绝不冻结 heartbeat / lease / liveness；只有 `scenario_step_index` 受门控。
+
 ### 2. 活动场景接口
 
 框架在 `eva/scenario_bundle.py` 中暴露一个活动场景激活接口。

@@ -28,6 +28,8 @@ Canonical framework entrypoints:
 - `eva/kernel/state.py` — current-state and append-only artifact writes
 - `eva/kernel/config.py` — runtime configuration contracts
 
+The kernel also consumes the active scenario's `clock_source` (declared in its `ExistenceSemantics`) to choose how cadence accounting advances. `LifecycleRuntime._update_scenario_counters` reads `clock_source` at construction: under `step` it honors the bridge's deferred signal (scenario time advances only on an invoked `env.step`, and a persistent defer streak exits to `needs_human_consecutive_deferred`); under `wall_clock` (default) it enforces `attempt_index == scenario_step_index`. This selection is owned by the **kernel, not the scenario bridge** — per-scenario forks of cadence logic remain forbidden (blueprint §2.7). Choosing the cadence source never freezes heartbeat / lease / liveness; only `scenario_step_index` is gated.
+
 ### 2. Active scenario seam
 
 The framework exposes one active-scenario activation seam in `eva/scenario_bundle.py`.
