@@ -197,6 +197,49 @@ class StepLoopTests(unittest.TestCase):
             # Counts in the artifact match the in-memory RunSummary.
             self.assertEqual(shutdown["details"]["scenario_step_index"], summary.scenario_step_count)
 
+    def test_step_mode_infra_failure_streak_needs_human(self) -> None:
+        """T2: a persistent LLM transport failure is a SUBSTRATE fault.
+
+        It must escalate to ``needs_human_infra_failure`` after K consecutive
+        infra failures — NOT be silently treated as a cognitive withhold (which
+        never escalates), NOT be max_runtime_sec spin, NOT individual death.
+        """
+        from eva.kernel.main import MAX_CONSECUTIVE_INFRA_FAILURE
+
+        def always_down(messages):
+            raise OSError("IncompleteRead(0 bytes read) — LLM unreachable")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = build_runtime_config(
+                temp_dir,
+                lifecycle=LifecycleConfig(
+                    heartbeat_interval_sec=0.2, lease_duration_sec=1.0,
+                    recovering_window_sec=0.05, turn_guard_window_sec=0.01,
+                ),
+                external_life=ExternalLifeConfig(
+                    shallow_patrol_interval_sec=0.01, deep_patrol_interval_sec=0.02,
+                    full_report_interval_sec=0.03, recent_event_window_sec=60.0,
+                ),
+                # max_steps high so the infra guard (not max_steps) drives the exit.
+                control=LoopControl(max_turns=50, max_runtime_sec=10.0, idle_sleep_sec=0.01),
+            )
+            session = _StubSession()
+            producer = CrafterLLMActionProducer(
+                chat_fn=always_down,
+                observation_fn=lambda: session.latest_agent_observation,
+                transport_max_retries=1,
+            )
+            with patch.object(CrafterRuntimeSession, "start", return_value=session):
+                summary = run_crafter_runtime(config, candidate_producer=producer)
+
+            self.assertEqual(summary.exit_reason, "needs_human_infra_failure",
+                             "persistent LLM transport failure must escalate as a substrate fault")
+            self.assertNotEqual(summary.exit_reason, "max_runtime_sec",
+                                "infra failure must escalate, not spin to the watchdog")
+            self.assertEqual(summary.scenario_step_count, 0, "no env.step happens while LLM is down")
+            # Escalated promptly at the K threshold, not after a long spin.
+            self.assertLessEqual(summary.attempt_count, MAX_CONSECUTIVE_INFRA_FAILURE + 2)
+
 
 if __name__ == "__main__":
     unittest.main()

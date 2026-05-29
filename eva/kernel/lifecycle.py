@@ -144,6 +144,10 @@ class StepResult:
     terminated: bool
     response_summary: dict[str, Any] | None = None
     details: dict[str, Any] = field(default_factory=dict)
+    # PR-T2: the dlPFC LLM transport was unreachable this step (retry budget
+    # exhausted). A SUBSTRATE fault — counted separately from a cognitive
+    # withhold and never confused with embodied death.
+    infra_failed: bool = False
 
 
 class ExternalActionRuntime(Protocol):
@@ -1163,6 +1167,21 @@ class LifecycleRuntime:
         terminated = bool(
             self.action_runtime is not None and getattr(self.action_runtime, "terminated", False)
         )
+        # PR-T2: the dlPFC producer reports whether its LLM transport was
+        # unreachable this step (retry budget exhausted). That is a SUBSTRATE
+        # fault — surface it as a structured infra event so the step loop counts
+        # it separately from a cognitive withhold (which never escalates) and
+        # never as embodied death. Duck-typed: heuristic / Linux producers
+        # without the attribute report no infra failure.
+        infra_failed = bool(getattr(self.candidate_producer, "last_call_infra_failed", False))
+        if infra_failed:
+            self.store.append_event(EventRecord(
+                event_type="step_infra_failure",
+                timestamp=now,
+                turn_id=step_id,
+                life_state=state.life_state,
+                details={"reason": "llm_transport_unreachable"},
+            ))
         # R-b: a mediated release the bridge could not map to a valid raw action
         # (no_valid_raw_action) is a should-not-happen anomaly under the raw-action
         # architecture. Log it structured — NOT a cognitive withhold, NOT an infra
@@ -1192,4 +1211,5 @@ class LifecycleRuntime:
             terminated=terminated,
             response_summary=response_summary,
             details={"runtime_gate_context": runtime_gate_context},
+            infra_failed=infra_failed,
         )

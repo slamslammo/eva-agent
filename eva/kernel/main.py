@@ -63,6 +63,13 @@ MAX_CONSECUTIVE_DEFERRED = 10
 # cadence knob; a module default for now (config-exposable later if needed).
 STEP_CHECKPOINT_INTERVAL = 10
 
+# PR-T2 (A G1 Q3): consecutive SUBSTRATE (LLM-transport) failures before raising
+# NEEDS_HUMAN. Smaller than MAX_CONSECUTIVE_DEFERRED because each infra failure
+# already absorbed a bounded per-call retry — re-stacking 10 would spin too long.
+# A "substrate fault" escalation, explicitly NOT embodied death and NOT a
+# cognitive withhold.
+MAX_CONSECUTIVE_INFRA_FAILURE = 5
+
 
 @dataclass
 class RunSummary:
@@ -431,6 +438,7 @@ def _run_step_loop(
     started_at = time.monotonic()
     scenario_step = 0
     step_attempt = 0
+    consecutive_infra_failure = 0
     exit_reason = "normal"
     max_steps = config.control.max_turns
     try:
@@ -442,6 +450,13 @@ def _run_step_loop(
                 checkpoint_due = step_attempt % STEP_CHECKPOINT_INTERVAL == 0
                 cadence = "deep" if checkpoint_due else "shallow"
                 result = runtime.run_step(state, cadence=cadence)
+                # PR-T2: track the SUBSTRATE (LLM-transport) failure streak. An
+                # infra failure is not a cognitive withhold and not death; any
+                # non-infra step resets the streak.
+                if result.infra_failed:
+                    consecutive_infra_failure += 1
+                else:
+                    consecutive_infra_failure = 0
                 if result.env_step_invoked:
                     scenario_step += 1
                 # Q3 / §6 #5: persist counts to the append-only artifact at each
@@ -462,6 +477,12 @@ def _run_step_loop(
                 if result.terminated:
                     exit_reason = "individual_terminated"
                     trace_sink.set_continuity_state(CONTINUITY_TERMINATED)
+                    break
+                # PR-T2: a persistent SUBSTRATE fault (LLM unreachable) escalates to
+                # NEEDS_HUMAN as an infra failure — distinct from a deferred streak
+                # (cognitive) and from death; does not silently spin to the watchdog.
+                if consecutive_infra_failure >= MAX_CONSECUTIVE_INFRA_FAILURE:
+                    exit_reason = "needs_human_infra_failure"
                     break
                 # R8 (step mode): a persistent deferred streak -> NEEDS_HUMAN, so a
                 # stuck decision loop escalates instead of spinning to the watchdog.
