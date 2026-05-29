@@ -351,14 +351,126 @@
   // =========================================================
 
   const PIPELINE_NODES = [
-    { key: "l1.signal_publish",   label: "L1 Signals",   valueKey: ["outputs", "summary"] },
-    { key: "l2.broadcast",        label: "L2 Drive",     valueKey: ["outputs", "top_drive"] },
-    { key: "anchor.admit",        label: "Anchor",       valueKey: ["outputs", "count"], suffix: " candidates" },
-    { key: "l3.candidate_produce",label: "dlPFC Produce",valueKey: ["outputs", "count"], suffix: " candidates" },
-    { key: "l3.assess_score",     label: "OFC",          ofc: true },
-    { key: "mediator.release",    label: "Mediator",     valueKey: ["outputs", "outcome"] },
-    { key: "bridge.resolve_action",label: "Bridge",      valueKey: ["outputs", "selected_action"], isAction: true },
+    { key: "l1.signal_publish",    label: "L1 Signals" },
+    { key: "l2.broadcast",         label: "L2 Drive" },
+    { key: "anchor.admit",         label: "Anchor A'(s)" },
+    { key: "l3.candidate_produce", label: "dlPFC" },
+    { key: "l3.assess_score",      label: "OFC", ofc: true },
+    { key: "mediator.release",     label: "Mediator" },
+    { key: "bridge.resolve_action",label: "Action", isAction: true },
   ];
+
+  const DRIVE_COLORS = {
+    metabolic:   "#e74c3c",
+    safety:      "#f39c12",
+    acquisition: "#3498db",
+    capability:  "#9b59b6",
+    recovery:    "#2ecc71",
+    exploration: "#1abc9c",
+  };
+  const TREND_ICON = { worsening: "↑", improving: "↓", stable: "→" };
+
+  function buildNodeContent(nodeKey, d) {
+    const records = (d.pipeline || {})[nodeKey] || [];
+    const last = records[records.length - 1] || null;
+    let value = "—", sub = "", extra = "";
+
+    switch (nodeKey) {
+      case "l1.signal_publish": {
+        const summary = last?.outputs?.summary || {};
+        const lifeState = last?.inputs?.life_state || "";
+        const total = summary.signal_count ?? 0;
+        const parts = [];
+        if (summary.pressure_signal_count) parts.push(`${summary.pressure_signal_count}p`);
+        if (summary.status_signal_count)   parts.push(`${summary.status_signal_count}s`);
+        if (summary.threat_signal_count)   parts.push(`${summary.threat_signal_count}⚠`);
+        value = total ? `${total} sig${parts.length ? " (" + parts.join(" ") + ")" : ""}` : "0 signals";
+        sub   = lifeState ? `life: ${lifeState}` : "";
+        if (last?.inputs?.critical_blocked) sub += " 🔴 blocked";
+        break;
+      }
+      case "l2.broadcast": {
+        const levels = last?.outputs?.drive_levels || {};
+        const trends = last?.outputs?.drive_trends || {};
+        const top    = last?.outputs?.top_drive || "";
+        value = top ? `${top} ${(levels[top] ?? 0).toFixed(2)}` : "—";
+        sub   = top && trends[top] ? `trend: ${TREND_ICON[trends[top]] || trends[top]}` : "";
+        // mini drive bars as coloured spans
+        const bars = Object.entries(levels).map(([name, lvl]) => {
+          const color = DRIVE_COLORS[name] || "#888";
+          const pct   = Math.round(lvl * 100);
+          const trend = TREND_ICON[trends[name]] || "";
+          const bold  = name === top ? "font-weight:700;" : "";
+          return `<span title="${name}: ${lvl.toFixed(3)} ${trends[name]||''}" style="display:inline-flex;align-items:center;gap:2px;${bold}">
+            <span style="display:inline-block;width:${Math.max(4, pct/5)}px;height:4px;background:${color};border-radius:2px;"></span>
+            <span style="font-size:9px;color:${color}">${trend}</span></span>`;
+        }).join(" ");
+        extra = bars ? `<div class="node-drives" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">${bars}</div>` : "";
+        break;
+      }
+      case "anchor.admit": {
+        const candidates = last?.outputs?.admitted_candidates || [];
+        const actions = candidates.map(c => {
+          const a = (c.candidate_id || "").replace("candidate-crafter-", "").replace(/-/g, "_");
+          return a;
+        });
+        value = actions.length ? actions.join(", ") : "0 candidates";
+        sub   = `${candidates.length} admitted`;
+        break;
+      }
+      case "l3.candidate_produce": {
+        // prefer parsed_response from transcript
+        const tx = d.transcript;
+        const parsed = tx?.parsed_response?.candidates || [];
+        const fromTrace = (records || []).map(r => {
+          const cid = r?.outputs?.candidate_id || "";
+          return cid.replace("candidate-crafter-", "").replace(/-/g, "_");
+        }).filter(Boolean);
+        const actions = parsed.length
+          ? parsed.map(c => c.action)
+          : fromTrace;
+        value = actions.length ? actions.join(", ") : "—";
+        sub   = tx ? `model: ${tx.model || "?"}` : "";
+        break;
+      }
+      case "l3.assess_score": {
+        // Phase A: show action:score pairs, highlight winner
+        const assessments = last?.outputs?.assessments || [];
+        if (assessments.length) {
+          const maxScore = Math.max(...assessments.map(a => a.score ?? -Infinity));
+          const pairs = assessments.map(a => {
+            const isWinner = Math.abs((a.score ?? 0) - maxScore) < 1e-9;
+            const scoreStr = (a.score ?? 0).toFixed(3);
+            const act = (a.action || "?").replace("_", " ");
+            return isWinner
+              ? `<span style="color:var(--accent2);font-weight:700">${esc(act)}: ${scoreStr}</span>`
+              : `${esc(act)}: ${scoreStr}`;
+          });
+          value = "";  // use extra for HTML content
+          extra = `<div class="node-value" style="font-size:11px;line-height:1.5">${pairs.join("<br>")}</div>`;
+        } else {
+          value = "—";
+        }
+        sub = "(Phase A 占位)";
+        break;
+      }
+      case "mediator.release": {
+        const outcome = last?.outputs?.outcome || "—";
+        const authorized = last?.outputs?.release_authorized;
+        value = outcome.replace("_", " ");
+        sub   = authorized === false ? "🔴 withheld" : authorized === true ? "✓ released" : "";
+        break;
+      }
+      case "bridge.resolve_action": {
+        const action = last?.outputs?.selected_action || "—";
+        const reason = (last?.outputs?.selected_action_reason || "").slice(0, 32);
+        value = action;
+        sub   = reason || "";
+        break;
+      }
+    }
+    return { value, sub, extra };
+  }
 
   function renderL2() {
     const d = state.turnData;
@@ -373,32 +485,7 @@
     PIPELINE_NODES.forEach((node, i) => {
       if (i > 0) html += `<span class="pipeline-arrow">→</span>`;
 
-      const records = (d.pipeline || {})[node.key] || [];
-      const last = records[records.length - 1] || null;
-      let value = "";
-      let sub = "";
-
-      if (node.ofc) {
-        // Phase A 占位：只显示 score 数字
-        const assessments = (last?.outputs?.assessments) || [];
-        if (assessments.length) {
-          const scores = assessments.map(a => a.score?.toFixed(3) ?? "—").join(", ");
-          value = `score: ${scores}`;
-        } else {
-          value = "—";
-        }
-        sub = "(Phase A 占位)";
-      } else if (node.valueKey) {
-        let obj = last;
-        for (const k of node.valueKey) obj = (obj || {})[k];
-        if (typeof obj === "object" && obj !== null) {
-          // summary 对象：取 signal_count
-          value = obj.signal_count != null ? `${obj.signal_count} signals` : JSON.stringify(obj).slice(0, 40);
-        } else {
-          value = obj != null ? String(obj) : "—";
-        }
-        if (node.suffix) value += node.suffix;
-      }
+      const { value, sub, extra } = buildNodeContent(node.key, d);
 
       const nodeClass = [
         "pipeline-node",
@@ -409,19 +496,15 @@
 
       html += `<div class="${nodeClass}" data-node-key="${esc(node.key)}">
         <div class="node-label">${esc(node.label)}</div>
-        <div class="node-value">${esc(value)}</div>
+        ${extra || `<div class="node-value">${esc(value)}</div>`}
         ${sub ? `<div class="node-sub">${esc(sub)}</div>` : ""}
       </div>`;
     });
 
     swimlane.innerHTML = html;
 
-    // 绑定点击 → L3
     swimlane.querySelectorAll(".pipeline-node").forEach(el => {
-      el.addEventListener("click", () => {
-        const key = el.dataset.nodeKey;
-        selectNode(key);
-      });
+      el.addEventListener("click", () => selectNode(el.dataset.nodeKey));
     });
   }
 
@@ -474,17 +557,13 @@
         </div>`;
     }
 
-    // Section 3: transcript（只在 dlPFC / L3 节点显示）
+    // Section 3: transcript（只在 dlPFC / L3 / Bridge 节点显示）
     const isL3Node = nodeKey.startsWith("l3.") || nodeKey.startsWith("bridge.");
     let transcriptHtml = "";
     if (isL3Node) {
       const tx = d.transcript;
       if (tx) {
-        transcriptHtml = `
-          <div class="l3-section">
-            <div class="l3-section-title">dlPFC Transcript</div>
-            <pre>${esc(formatJson(tx)).slice(0, 2000)}</pre>
-          </div>`;
+        transcriptHtml = buildTranscriptSection(tx);
       } else {
         transcriptHtml = `
           <div class="l3-section">
@@ -495,6 +574,62 @@
     }
 
     content.innerHTML = rawSection + advHtml + transcriptHtml;
+  }
+
+  // =========================================================
+  // Transcript 结构化渲染
+  // =========================================================
+  function buildTranscriptSection(tx) {
+    const model = tx.model || "?";
+    const parseStatus = tx.parse_status || "?";
+    const statusColor = parseStatus === "ok" ? "var(--accent2)" : "var(--danger)";
+    const msgs = tx.messages || [];
+    const parsed = tx.parsed_response || {};
+    const candidates = parsed.candidates || [];
+
+    // 候选 action + reason 列表
+    let candidateHtml = "";
+    if (candidates.length) {
+      const items = candidates.map(c => {
+        const reason = (c.reason || "").slice(0, 200);
+        return `<div class="tx-candidate">
+          <span class="tx-action">${esc(c.action || "?")}</span>
+          <span class="tx-reason">${esc(reason)}${c.reason?.length > 200 ? "…" : ""}</span>
+        </div>`;
+      }).join("");
+      candidateHtml = `<div class="tx-candidates">${items}</div>`;
+    } else {
+      candidateHtml = `<div class="transcript-unavailable">no parsed candidates</div>`;
+    }
+
+    // User message content preview (last user msg = observation)
+    const userMsg = [...msgs].reverse().find(m => m.role === "user");
+    const userContent = typeof userMsg?.content === "string"
+      ? userMsg.content : JSON.stringify(userMsg?.content || "");
+    const userPreview = userContent.slice(0, 400) + (userContent.length > 400 ? "…" : "");
+
+    // System prompt size + sections present
+    const sysMsg = msgs.find(m => m.role === "system");
+    const sysLen = typeof sysMsg?.content === "string" ? sysMsg.content.length : 0;
+    const sections = tx.prompt_sections_present || [];
+    const sysInfo = sysLen
+      ? `${(sysLen / 1000).toFixed(1)}k chars${sections.length ? " | " + sections.join(", ") : ""}`
+      : "—";
+
+    return `
+      <div class="l3-section" style="min-width:340px">
+        <div class="l3-section-title">
+          dlPFC Transcript
+          <span style="font-size:10px;color:${statusColor};margin-left:8px">${esc(parseStatus)}</span>
+          <span style="font-size:10px;color:var(--text-dim);margin-left:8px">${esc(model)}</span>
+        </div>
+        <div class="tx-block-label">Candidates</div>
+        ${candidateHtml}
+        <div class="tx-block-label" style="margin-top:8px">Observation (user msg)</div>
+        <pre class="tx-pre">${esc(userPreview)}</pre>
+        <div class="tx-block-label" style="margin-top:8px">System prompt</div>
+        <div class="tx-meta">${esc(sysInfo)}</div>
+      </div>`;
   }
 
   // =========================================================

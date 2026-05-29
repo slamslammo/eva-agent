@@ -253,8 +253,8 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 12px;
-  min-width: 90px;
-  max-width: 140px;
+  min-width: 100px;
+  max-width: 160px;
   cursor: pointer;
   transition: border-color .15s, background .15s;
   flex-shrink: 0;
@@ -271,7 +271,8 @@ body {
 .pipeline-node .node-value {
   font-size: 12px;
   color: var(--text);
-  word-break: break-all;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 .pipeline-node .node-sub {
   font-size: 10px;
@@ -361,6 +362,59 @@ body {
   font-size: 12px;
   font-style: italic;
   padding: 16px;
+}
+
+/* =========================================================
+   TRANSCRIPT SECTION (L3)
+   ========================================================= */
+.tx-block-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+
+.tx-candidates { display: flex; flex-direction: column; gap: 5px; }
+
+.tx-candidate {
+  background: var(--bg3);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tx-action {
+  font-size: 12px;
+  color: var(--accent2);
+  font-weight: 700;
+}
+
+.tx-reason {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.tx-pre {
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg3);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  overflow: auto;
+  max-height: 100px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tx-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 /* =========================================================
