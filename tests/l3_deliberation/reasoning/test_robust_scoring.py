@@ -110,7 +110,41 @@ class RobustAggregateTests(unittest.TestCase):
         # drive's full-saturation contribution ≈ W_DRIVE, the largest single term.
         near_full = self._agg(drive=100.0)  # tanh saturates → ~W_DRIVE
         self.assertGreater(near_full, EXPERIENCE_GROUP_CAP)
-        self.assertLessEqual(near_full, W_DRIVE + 0.2)  # + small proj/exp headroom
+        self.assertLessEqual(near_full, W_DRIVE + 0.2)  # no dlpfc/proj/exp here
+
+
+class DlpfcPreferenceTests(unittest.TestCase):
+    """PR-O2: the dlpfc_preference rank factor breaks the 62%-flat-tie (the
+    core病): identical drive/learning candidates differing only in dlPFC rank
+    must get DIFFERENT scores so the LLM's order survives into selection."""
+
+    def _agg(self, drive=0.0, rank=None):
+        return _robust_aggregate(
+            drive_score=drive, projection_score=0.0,
+            learning_bias=0.0, habit_priority_bonus=0.0,
+            dlpfc_rank=rank,
+        )
+
+    def test_rank_breaks_flat_tie(self) -> None:
+        # The turn-0 live case: all factors 0.0 → old: flat tie → withhold.
+        # With rank, rank0 > rank1 > rank2 (LLM order preserved).
+        r0 = self._agg(drive=0.0, rank=0)
+        r1 = self._agg(drive=0.0, rank=1)
+        r2 = self._agg(drive=0.0, rank=2)
+        self.assertGreater(r0, r1)
+        self.assertGreater(r1, r2)
+        self.assertGreater(r0, 0.0)  # no longer a flat 0.0 tie
+
+    def test_no_rank_is_back_compat_zero(self) -> None:
+        # dlpfc_rank=None (heuristic / no LLM order) → no dlpfc term (PR-O1 behavior).
+        self.assertEqual(self._agg(drive=0.0, rank=None), 0.0)
+
+    def test_rank_cannot_overturn_strong_drive(self) -> None:
+        # A rank-0 zero-drive candidate must NOT beat a strong-drive rank-2 one
+        # (drive 0.5 dominates dlpfc 0.3 — A Q2 weight invariant).
+        weak_but_preferred = self._agg(drive=0.0, rank=0)
+        strong_drive_low_rank = self._agg(drive=0.5, rank=2)
+        self.assertGreater(strong_drive_low_rank, weak_but_preferred)
 
 
 if __name__ == "__main__":

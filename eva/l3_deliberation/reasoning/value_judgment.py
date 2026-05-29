@@ -558,6 +558,22 @@ W_PROJECTION = 0.1
 W_LEARNING = 0.15
 W_HABIT = 0.10
 EXPERIENCE_GROUP_CAP = 0.2  # A G1 Q3: cap the SUMMED experience contribution
+# PR-O2: dlpfc_preference factor. A G1 Q2: W_DLPFC 0.3 > experience cap 0.2 (so in
+# a drive-flat regime the dlPFC order beats experience noise) and < W_DRIVE 0.5 (so
+# strong drive still dominates). v1 uses the dlPFC RANK only (the candidate's order
+# from the producer), via a fixed [0,1] map (A G1 Q1: rank uses a fixed map, not
+# tanh). plausibility is recorded but NOT scored in v1.
+W_DLPFC = 0.3
+_DLPFC_RANK_MAP = {0: 1.0, 1: 0.6, 2: 0.3}
+_DLPFC_RANK_FLOOR = 0.15  # rank >= 3 (rare; producer caps candidates low)
+
+
+def _dlpfc_rank_value(dlpfc_rank: int | None) -> float:
+    """Fixed [0,1] preference value for a dlPFC rank (None = no LLM order → 0)."""
+
+    if dlpfc_rank is None:
+        return 0.0
+    return _DLPFC_RANK_MAP.get(dlpfc_rank, _DLPFC_RANK_FLOOR)
 
 
 def _robust_aggregate(
@@ -566,17 +582,20 @@ def _robust_aggregate(
     projection_score: float,
     learning_bias: float,
     habit_priority_bonus: float,
+    dlpfc_rank: int | None = None,
 ) -> float:
-    """PR-O1: robust score aggregation (plan §3.3).
+    """PR-O1/O2: robust score aggregation (plan §3.3).
 
-    score = w_drive·norm(drive) + w_proj·norm(proj) + cap(experience group)
+    score = w_drive·norm(drive) + w_dlpfc·rank(dlpfc) + w_proj·norm(proj)
+            + cap(experience group)
 
-    Each factor is tanh-normalized over its calibrated scale (sign-preserving,
-    saturating), then weighted. drive is the dominant weight (0.5); projection is
-    dormant (T3: always 0) but kept at a small weight (A Q4); the experience
-    group (learning + habit + semantic) is weighted then its SUM capped at
-    EXPERIENCE_GROUP_CAP so experience can never overturn the drive+dlpfc main
-    judgment (A Q2/Q3). dlpfc_preference (rank, w 0.3) is added in PR-O2.
+    Each continuous factor is tanh-normalized over its calibrated scale
+    (sign-preserving, saturating), then weighted. drive is the dominant weight
+    (0.5); dlpfc_preference (PR-O2, rank fixed map, w 0.3) breaks the flat ties
+    that lost the LLM's order; projection is dormant (T3: always 0) at a small
+    weight (A Q4); the experience group (learning + habit + semantic) is weighted
+    then its SUM capped at EXPERIENCE_GROUP_CAP so experience can never overturn
+    the drive+dlpfc main judgment (A Q2/Q3).
     """
 
     terms = _robust_terms(
@@ -584,8 +603,14 @@ def _robust_aggregate(
         projection_score=projection_score,
         learning_bias=learning_bias,
         habit_priority_bonus=habit_priority_bonus,
+        dlpfc_rank=dlpfc_rank,
     )
-    return terms["drive_term"] + terms["projection_term"] + terms["experience_term"]
+    return (
+        terms["drive_term"]
+        + terms["dlpfc_term"]
+        + terms["projection_term"]
+        + terms["experience_term"]
+    )
 
 
 def _robust_terms(
@@ -594,15 +619,17 @@ def _robust_terms(
     projection_score: float,
     learning_bias: float,
     habit_priority_bonus: float,
+    dlpfc_rank: int | None = None,
 ) -> dict[str, float]:
-    """PR-O1: the weighted per-group terms of the robust score (for observability).
+    """PR-O1/O2: the weighted per-group terms of the robust score (for observability).
 
     Returned terms sum to the robust score. Recorded in ScoreDecomposition so the
     OFC_classical transcript shows HOW the robust aggregation combined the factors
-    (drive vs projection vs the capped experience group), not just the raw inputs.
+    (drive vs dlpfc vs projection vs the capped experience group), not just inputs.
     """
 
     drive_term = W_DRIVE * robust_normalize(drive_score, scale=DRIVE_SCALE)
+    dlpfc_term = W_DLPFC * _dlpfc_rank_value(dlpfc_rank)
     projection_term = W_PROJECTION * robust_normalize(projection_score, scale=PROJECTION_SCALE)
     experience_raw = (
         W_LEARNING * robust_normalize(learning_bias, scale=LEARNING_SCALE)
@@ -611,6 +638,7 @@ def _robust_terms(
     experience_term = cap_group_contribution(experience_raw, cap=EXPERIENCE_GROUP_CAP)
     return {
         "drive_term": drive_term,
+        "dlpfc_term": dlpfc_term,
         "projection_term": projection_term,
         "experience_term": experience_term,
     }
