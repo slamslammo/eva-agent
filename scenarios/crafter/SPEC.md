@@ -283,6 +283,8 @@ The current runtime shape is:
 6. the resulting deltas are recorded through the existing append-only response-history and learning paths
 7. if the env step returns `done=True` (Crafter terminal — typically `HP=0`), `CrafterRuntimeSession.step_action()` sets `self.terminated = True`; **the session does not call `wrapper.reset()` to extend life inside the same run**. The kernel loop observes the flag and exits the run with `exit_reason="individual_terminated"`, archiving the trace as one individual's complete lifetime. The next `python -m runners.run_crafter ...` invocation is a new individual, with a fresh `individual_id` minted by `_resolve_individual_id`; that activation may optionally load distilled priors via `--inherited-priors-path` from prior terminated individuals.
 
+**Scenario time advances only on a stepped action (`clock_source="step"`).** In Crafter, time advances only when `env.step(action)` is invoked. Deferred decision attempts — turns where deliberation produced no valid executable raw action and the bridge returns a deferred selection — do not advance scenario time: the env is not stepped, `scenario_step_index` does not increment, and the kernel re-enters the same scenario step on the next turn while heartbeat / lease / liveness keep ticking normally. Declaring `clock_source="step"` is what makes the kernel account for turns this way; reading the field alone does not make this consequence obvious, so it is stated here for the next developer.
+
 ### Runtime and learning payload notes
 
 Crafter action execution now records scenario-specific bounded fields including:
