@@ -190,6 +190,13 @@ class ScoreDecomposition:
     advisory: float  # retired in Round 1.G; kept for schema completeness
     final_score: float
     reasons: tuple[str, ...] = ()
+    # PR-O1: robust-aggregation weighted terms (drive / projection / capped
+    # experience group). The raw factors above are the inputs; these are how the
+    # robust scorer combined them (terms sum to final_score). Default 0.0 keeps
+    # back-compat for any caller / reader that predates the robust scheme.
+    drive_term: float = 0.0
+    projection_term: float = 0.0
+    experience_term: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -201,6 +208,10 @@ class ScoreDecomposition:
             "advisory": self.advisory,
             "final_score": self.final_score,
             "reasons": list(self.reasons),
+            # PR-O1 robust-aggregation terms (additive — pre-robust readers ignore).
+            "drive_term": self.drive_term,
+            "projection_term": self.projection_term,
+            "experience_term": self.experience_term,
         }
 
 

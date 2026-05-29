@@ -38,6 +38,11 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
         drive_score = 0.0
         projection_score = 0.0
         habit_priority_bonus = 0.0
+        # PR-O1: robust-aggregation weighted terms (0.0 unless the allow branch
+        # computes them) — recorded in ScoreDecomposition for observability.
+        drive_term = 0.0
+        projection_term = 0.0
+        experience_term = 0.0
         conflict = build_candidate_conflict_context(
             candidate,
             top_drive=top_drive,
@@ -90,14 +95,18 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                     reasons.append("crystallized_habit_skill_hint")
                 # PR-O1: robust aggregation (tanh-normalized, weighted, experience
                 # group capped) replaces the unbounded direct sum. Raw factors are
-                # still recorded in ScoreDecomposition below; only the combination
-                # changes (plan §3.3).
-                score = _robust_aggregate(
+                # still recorded in ScoreDecomposition below; the weighted terms
+                # (how they combined) are recorded too (plan §3.3).
+                _terms = _robust_terms(
                     drive_score=drive_score,
                     projection_score=projection_score,
                     learning_bias=learning_bias,
                     habit_priority_bonus=habit_priority_bonus,
                 )
+                drive_term = _terms["drive_term"]
+                projection_term = _terms["projection_term"]
+                experience_term = _terms["experience_term"]
+                score = drive_term + projection_term + experience_term
                 # Round 1.G: the ≤0.12 LLM advisory bonus is retired (drift; round-1f
                 # showed it had no doctrinal basis and, under live LLM, harmfully biased
                 # selection toward passivity). OFC scoring stays drive-weighted only;
@@ -130,14 +139,18 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
                     reasons.append("crystallized_habit_skill_hint")
                 # PR-O1: robust aggregation (tanh-normalized, weighted, experience
                 # group capped) replaces the unbounded direct sum. Raw factors are
-                # still recorded in ScoreDecomposition below; only the combination
-                # changes (plan §3.3).
-                score = _robust_aggregate(
+                # still recorded in ScoreDecomposition below; the weighted terms
+                # (how they combined) are recorded too (plan §3.3).
+                _terms = _robust_terms(
                     drive_score=drive_score,
                     projection_score=projection_score,
                     learning_bias=learning_bias,
                     habit_priority_bonus=habit_priority_bonus,
                 )
+                drive_term = _terms["drive_term"]
+                projection_term = _terms["projection_term"]
+                experience_term = _terms["experience_term"]
+                score = drive_term + projection_term + experience_term
         else:
             disposition = conflict.disposition
             reasons.extend(reason for reason in conflict.reasons if reason not in reasons)
@@ -155,6 +168,10 @@ def assess_candidates(candidates: list[Candidate], deliberation_input: Deliberat
             advisory=0.0,  # retired in Round 1.G
             final_score=round(score, 6),
             reasons=tuple(reasons),
+            # PR-O1: robust-aggregation weighted terms (sum to final_score).
+            drive_term=round(drive_term, 6),
+            projection_term=round(projection_term, 6),
+            experience_term=round(experience_term, 6),
         )
         assessments.append(
             CandidateAssessment(
@@ -562,6 +579,29 @@ def _robust_aggregate(
     judgment (A Q2/Q3). dlpfc_preference (rank, w 0.3) is added in PR-O2.
     """
 
+    terms = _robust_terms(
+        drive_score=drive_score,
+        projection_score=projection_score,
+        learning_bias=learning_bias,
+        habit_priority_bonus=habit_priority_bonus,
+    )
+    return terms["drive_term"] + terms["projection_term"] + terms["experience_term"]
+
+
+def _robust_terms(
+    *,
+    drive_score: float,
+    projection_score: float,
+    learning_bias: float,
+    habit_priority_bonus: float,
+) -> dict[str, float]:
+    """PR-O1: the weighted per-group terms of the robust score (for observability).
+
+    Returned terms sum to the robust score. Recorded in ScoreDecomposition so the
+    OFC_classical transcript shows HOW the robust aggregation combined the factors
+    (drive vs projection vs the capped experience group), not just the raw inputs.
+    """
+
     drive_term = W_DRIVE * robust_normalize(drive_score, scale=DRIVE_SCALE)
     projection_term = W_PROJECTION * robust_normalize(projection_score, scale=PROJECTION_SCALE)
     experience_raw = (
@@ -569,4 +609,8 @@ def _robust_aggregate(
         + W_HABIT * robust_normalize(habit_priority_bonus, scale=HABIT_SCALE)
     )
     experience_term = cap_group_contribution(experience_raw, cap=EXPERIENCE_GROUP_CAP)
-    return drive_term + projection_term + experience_term
+    return {
+        "drive_term": drive_term,
+        "projection_term": projection_term,
+        "experience_term": experience_term,
+    }
