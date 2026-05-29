@@ -308,13 +308,26 @@ body {
   overflow-y: auto;
   padding: 12px;
   background: var(--bg);
-  max-height: 280px;
+  max-height: 380px;
   min-height: 120px;
 }
 
 #l3-content {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.l3-row-top {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.l3-row-bottom {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .l3-section {
@@ -336,6 +349,23 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+
+/* Collapsible section body */
+.l3-section-title.collapsible {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.l3-section-title.collapsible:hover { color: var(--text); }
+.collapse-icon { font-size: 9px; color: var(--text-dim); flex-shrink: 0; }
+
+.l3-section-body {
+  display: none;
+  margin-top: 8px;
+}
+.l3-section-body.open { display: block; }
 
 .l3-section pre {
   font-family: var(--font);
@@ -416,6 +446,59 @@ body {
   color: var(--text-dim);
   font-style: italic;
 }
+
+/* =========================================================
+   FULL COGNITIVE TRACE TABLE
+   ========================================================= */
+.trace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.trace-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.trace-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(46,51,77,.5);
+  vertical-align: top;
+}
+.trace-layer {
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 180px;
+}
+.trace-in, .trace-out {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.trace-expand {
+  cursor: pointer;
+  color: var(--text-dim);
+  text-align: center;
+  width: 20px;
+}
+.trace-expand:hover { color: var(--accent); }
+.trace-detail {
+  margin-top: 6px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  padding: 8px;
+  font-size: 11px;
+}
+.trace-detail pre { white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
+
+/* =========================================================
+   RAW OBSERVATION
+   ========================================================= */
+.raw-obs-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+.raw-obs-block { min-width: 200px; }
 
 /* =========================================================
    SCROLLBARS

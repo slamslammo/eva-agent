@@ -537,49 +537,206 @@
     const nodeDef = PIPELINE_NODES.find(n => n.key === nodeKey);
     labelEl.textContent = nodeDef ? nodeDef.label : nodeKey;
 
-    // Section 1: 节点 raw data
-    const rawSection = `
-      <div class="l3-section">
-        <div class="l3-section-title">节点数据 <span style="color:var(--text-dim)">${esc(nodeKey)}</span></div>
-        <pre>${esc(formatJson(records.map(r => ({ inputs: r.inputs, outputs: r.outputs }))))}</pre>
-      </div>`;
+    // Section 1: 节点 raw data（默认展开）
+    const rawSection = makeSection(
+      `节点数据 <span style="color:var(--text-dim);font-weight:400">${esc(nodeKey)}</span>`,
+      `<pre>${esc(formatJson(records.map(r => ({ inputs: r.inputs, outputs: r.outputs }))))}</pre>`,
+      { open: true }
+    );
 
-    // Section 2: advisory
+    // Section 2: advisory（默认折叠）
     const adv = d.advisory;
     let advHtml = "";
     if (adv) {
       const req = adv.request || {};
       const resp = adv.response || {};
-      advHtml = `
-        <div class="l3-section">
-          <div class="l3-section-title">Advisory</div>
-          <pre>${esc(formatJson({ source: adv.advisory_source, outcome: adv.outcome, request_keys: Object.keys(req), confidence: resp.confidence }))}</pre>
-        </div>`;
+      advHtml = makeSection(
+        "Advisory",
+        `<pre>${esc(formatJson({ source: adv.advisory_source, outcome: adv.outcome, request_keys: Object.keys(req), confidence: resp.confidence }))}</pre>`,
+        { open: false }
+      );
     }
 
-    // Section 3: transcript（只在 dlPFC / L3 / Bridge 节点显示）
+    // Section 3: transcript（L3/bridge 节点展开；其他折叠）
     const isL3Node = nodeKey.startsWith("l3.") || nodeKey.startsWith("bridge.");
     let transcriptHtml = "";
-    if (isL3Node) {
-      const tx = d.transcript;
-      if (tx) {
-        transcriptHtml = buildTranscriptSection(tx);
-      } else {
-        transcriptHtml = `
-          <div class="l3-section">
-            <div class="l3-section-title">dlPFC Transcript</div>
-            <div class="transcript-unavailable">transcript not recorded (run without EVA_LLM_TRANSCRIPT=raw)</div>
-          </div>`;
-      }
+    const tx = d.transcript;
+    if (tx) {
+      transcriptHtml = buildTranscriptSection(tx, isL3Node);
+    } else {
+      transcriptHtml = makeSection(
+        "dlPFC Transcript",
+        `<div class="transcript-unavailable">transcript not recorded (run without EVA_LLM_TRANSCRIPT=raw)</div>`,
+        { open: isL3Node }
+      );
     }
 
-    content.innerHTML = rawSection + advHtml + transcriptHtml;
+    // Section 4: Full cognitive trace（本 turn 全管道，默认折叠）
+    const traceHtml = buildFullTraceSection(d);
+
+    // Section 5: Raw observation（默认折叠）
+    const rawObsHtml = buildRawObsSection(d);
+
+    content.innerHTML = `
+      <div class="l3-row-top">${rawSection}${advHtml}${transcriptHtml}</div>
+      <div class="l3-row-bottom">${traceHtml}${rawObsHtml}</div>
+    `;
+
+    // 绑定折叠切换
+    content.querySelectorAll(".l3-section-title.collapsible").forEach(header => {
+      header.addEventListener("click", () => {
+        const body = header.nextElementSibling;
+        const isOpen = body.classList.toggle("open");
+        header.querySelector(".collapse-icon").textContent = isOpen ? "▼" : "▶";
+      });
+    });
+
+    // 绑定 trace ⊕ 展开
+    content.querySelectorAll(".trace-expand").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const key = btn.dataset.traceKey;
+        const idx = +btn.dataset.traceIdx;
+        const detail = content.querySelector("#trace-detail");
+        const records = (d.pipeline || {})[key] || [];
+        const rec = records[idx];
+        if (!rec) return;
+        if (detail.dataset.open === `${key}:${idx}`) {
+          detail.dataset.open = "";
+          detail.innerHTML = "";
+        } else {
+          detail.dataset.open = `${key}:${idx}`;
+          detail.innerHTML = `<strong style="color:var(--accent)">${esc(key)}</strong><pre>${esc(formatJson({ inputs: rec.inputs, outputs: rec.outputs }))}</pre>`;
+        }
+      });
+    });
+  }
+
+  // =========================================================
+  // 可折叠 section 构建工具
+  // =========================================================
+  function makeSection(titleHtml, bodyHtml, { open = false, minWidth = "" } = {}) {
+    const openClass = open ? "open" : "";
+    const icon = open ? "▼" : "▶";
+    const style = minWidth ? ` style="min-width:${minWidth}"` : "";
+    return `
+      <div class="l3-section"${style}>
+        <div class="l3-section-title collapsible">
+          <span class="collapse-icon">${icon}</span>
+          ${titleHtml}
+        </div>
+        <div class="l3-section-body ${openClass}">${bodyHtml}</div>
+      </div>`;
+  }
+
+  // =========================================================
+  // Full Cognitive Trace section（本 turn 全管道）
+  // =========================================================
+  function buildFullTraceSection(d) {
+    const pipeline = d.pipeline || {};
+
+    // 按管道顺序遍历
+    const ORDER = [
+      "l1.raw_observation", "l1.threshold_classify", "l1.rate_sense", "l1.signal_publish",
+      "l2.approach_delta", "l2.broadcast",
+      "anchor.admit",
+      "l3.candidate_produce", "l3.assess_score", "l3.decide_release",
+      "mediator.release", "bridge.resolve_action",
+    ];
+
+    const LAYER_COLORS = {
+      "l1": "#3498db", "l2": "#9b59b6", "anchor": "#e67e22",
+      "l3": "#e74c3c", "mediator": "#2ecc71", "bridge": "#1abc9c",
+    };
+
+    let rows = "";
+    for (const key of ORDER) {
+      const records = pipeline[key] || [];
+      if (!records.length) continue;
+      const layerPrefix = key.split(".")[0];
+      const color = LAYER_COLORS[layerPrefix] || "#888";
+      records.forEach((r, i) => {
+        const outKeys = Object.keys(r.outputs || {}).slice(0, 4).join(", ");
+        const inKeys  = Object.keys(r.inputs  || {}).slice(0, 3).join(", ");
+        const label   = i === 0 ? key : "";
+        rows += `<tr>
+          <td class="trace-layer" style="color:${color}">${esc(label)}</td>
+          <td class="trace-in">${esc(inKeys || "—")}</td>
+          <td class="trace-out">${esc(outKeys || "—")}</td>
+          <td class="trace-expand" data-trace-key="${esc(key)}" data-trace-idx="${i}" title="展开详情">⊕</td>
+        </tr>`;
+      });
+    }
+
+    const table = `
+      <table class="trace-table">
+        <thead><tr>
+          <th>transform</th><th>inputs</th><th>outputs</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div id="trace-detail" class="trace-detail"></div>`;
+
+    return makeSection("Full Cognitive Trace", table, { open: false });
+  }
+
+  // =========================================================
+  // Raw Observation section
+  // =========================================================
+  function buildRawObsSection(d) {
+    const gs = d.game_state;
+    if (!gs) {
+      return makeSection("Raw Observation", `<div class="transcript-unavailable">no game state</div>`, { open: false });
+    }
+
+    const lv = gs.local_view || {};
+    const lp = gs.life_panel || {};
+    const ip = gs.inventory_panel || {};
+    const vals = lp.values || {};
+    const items = ip.items || {};
+
+    // grid as text
+    const cells = lv.cells || [];
+    const rows  = lv.height || 7;
+    const cols  = lv.width  || 9;
+    const center = lv.center || {};
+    let gridText = "";
+    for (let r = 0; r < Math.min(rows, cells.length); r++) {
+      const row = cells[r] || [];
+      const rowStr = row.map((tile, c) => {
+        const t = (typeof tile === "string" ? tile : (tile || [])[0] || "?").padEnd(8);
+        return (r === center.row && c === center.col) ? `[${t.trim()}]`.padEnd(9) : t;
+      }).join(" ");
+      gridText += rowStr + "\n";
+    }
+
+    // nonzero inventory
+    const nonzero = Object.entries(items).filter(([, v]) => v > 0)
+      .map(([k, v]) => `${k}:${v}`).join(", ") || "none";
+
+    const body = `
+      <div class="raw-obs-grid">
+        <div class="raw-obs-block">
+          <div class="tx-block-label">grid (${cols}×${rows}) facing: ${esc(gs.facing || "?")}</div>
+          <pre class="tx-pre" style="font-size:10px;line-height:1.3">${esc(gridText)}</pre>
+        </div>
+        <div class="raw-obs-block">
+          <div class="tx-block-label">Life (max 9)</div>
+          <pre class="tx-pre">${esc(Object.entries(vals).map(([k,v]) => `${k}: ${v}`).join("\n") || "unavailable")}</pre>
+          <div class="tx-block-label" style="margin-top:6px">Inventory (nonzero)</div>
+          <div class="tx-meta">${esc(nonzero)}</div>
+          <div class="tx-block-label" style="margin-top:6px">Step / Episode</div>
+          <div class="tx-meta">step ${esc(String(gs.step ?? "?"))} | ${esc((gs.episode_id || "").slice(0, 16))}…</div>
+        </div>
+      </div>`;
+
+    return makeSection("Raw Observation", body, { open: false });
   }
 
   // =========================================================
   // Transcript 结构化渲染
   // =========================================================
-  function buildTranscriptSection(tx) {
+  function buildTranscriptSection(tx, openByDefault = true) {
     const model = tx.model || "?";
     const parseStatus = tx.parse_status || "?";
     const statusColor = parseStatus === "ok" ? "var(--accent2)" : "var(--danger)";
@@ -610,26 +767,27 @@
 
     // System prompt size + sections present
     const sysMsg = msgs.find(m => m.role === "system");
-    const sysLen = typeof sysMsg?.content === "string" ? sysMsg.content.length : 0;
+    const sysContent = typeof sysMsg?.content === "string" ? sysMsg.content : "";
+    const sysLen = sysContent.length;
     const sections = tx.prompt_sections_present || [];
     const sysInfo = sysLen
       ? `${(sysLen / 1000).toFixed(1)}k chars${sections.length ? " | " + sections.join(", ") : ""}`
       : "—";
 
-    return `
-      <div class="l3-section" style="min-width:340px">
-        <div class="l3-section-title">
-          dlPFC Transcript
-          <span style="font-size:10px;color:${statusColor};margin-left:8px">${esc(parseStatus)}</span>
-          <span style="font-size:10px;color:var(--text-dim);margin-left:8px">${esc(model)}</span>
-        </div>
-        <div class="tx-block-label">Candidates</div>
-        ${candidateHtml}
-        <div class="tx-block-label" style="margin-top:8px">Observation (user msg)</div>
-        <pre class="tx-pre">${esc(userPreview)}</pre>
-        <div class="tx-block-label" style="margin-top:8px">System prompt</div>
-        <div class="tx-meta">${esc(sysInfo)}</div>
-      </div>`;
+    const titleHtml = `dlPFC Transcript
+      <span style="font-size:10px;color:${statusColor};margin-left:8px">${esc(parseStatus)}</span>
+      <span style="font-size:10px;color:var(--text-dim);margin-left:8px">${esc(model)}</span>`;
+
+    const bodyHtml = `
+      <div class="tx-block-label">Candidates</div>
+      ${candidateHtml}
+      <div class="tx-block-label" style="margin-top:8px">Observation (user msg)</div>
+      <pre class="tx-pre">${esc(userPreview)}</pre>
+      <div class="tx-block-label" style="margin-top:8px">System prompt</div>
+      <div class="tx-meta">${esc(sysInfo)}</div>
+      ${sysContent ? makeSection("System prompt full text", `<pre class="tx-pre" style="max-height:200px">${esc(sysContent.slice(0, 4000))}${sysContent.length > 4000 ? "\n…(truncated)" : ""}</pre>`, { open: false }) : ""}`;
+
+    return makeSection(titleHtml, bodyHtml, { open: openByDefault, minWidth: "340px" });
   }
 
   // =========================================================
