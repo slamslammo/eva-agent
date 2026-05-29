@@ -168,3 +168,49 @@ bridge 无条件 set `is_deferred` + kernel 读 `env_step_invoked`。字段是**
 | `wall_clock` | **False（bridge 误设）** | **kernel 忽略，强制 scenario_step+1, consecutive=0** ← A 反例已堵 |
 
 field 驱动行为，blueprint §2.7 承诺名副其实。
+
+### PR-S1 收尾
+
+A gate 2026-05-29 **G2_APPROVED**（gate-fix 复核通过，四象限正确、反例已堵）。B 走 §11.3：FF main（`afda460..6160492`）+ push origin + 删分支(local+remote) + 置 ✅ DONE。
+
+---
+
+## Active Item（切换）
+
+`scenario-time-model-pr-s2` — 文档矩阵同步（PR-S1 落地后把 deferred 承诺改 production + 补 clock_source 消费描述）
+
+Coordination owner: `B-claude-2` ｜ Branch: `scenario-time-model-pr-s2` ｜ off main@6160492
+Plan: coordination `plans/scenario-time-model-and-step-driven-execution-plan.md` §4 文档矩阵
+
+### Change Intake
+
+1. 层：纯文档（docs/ + scenarios/crafter/SPEC.md），**不改代码**（红线）
+2. owner：B 域公开文档 + 中文镜像
+3. owner 类型：stable
+4. slice 性质：PR-S1 的链式后继（APPROVED 直接开工）
+5. 冻结 tests：N/A（纯文档）
+6. 同步文档：本 intake + 中英 -zh 一致（中文先编辑）
+
+### Slice 结果（6 处 eva-agent 文档，5 commits）
+
+| Slice | 文件(en+zh) | 改动 | commit |
+|---|---|---|---|
+| 1 | implementation-tracking | clock_source consumption deferred→production + 代码位置 + 语义 | 90f4a71 |
+| 2 | blueprint-to-tracking-map | :19 deferred→landed（+ :17 矛盾子句同步） | 90f4a71 |
+| 3 | scenarios-SPEC | 加 `existence_semantics` 第 7 mandatory surface + §7 Existence semantics 段（clock_source + heartbeat 不冻结红线） | 26a20e0 |
+| 4 | architecture-overview | §2.1 图后加 clock_source 影响 turn-retry vs scenario-step 段 | e01d404 |
+| 5 | eva-framework-implementation | §1 加 kernel 消费 clock_source 段（kernel-owned 非 bridge fork） | 7ad5079 |
+| 6 | crafter/SPEC（en only） | H-5 后加自然语言"time advances only on env.step"（评审 #4） | 9e99fb8 |
+
+### 第 7 项（PROJECT-CONTEXT.md）—— 交还 A
+
+note 列的 coordination 侧 `roles/A-architect/PROJECT-CONTEXT.md`'时间概念坑'段属 **A 域**（§11.2 coordination 永远 main、§1 不改别人产出），note 亦明言"此项 A 自己也可写"。B **未写**，gate note 中交还 A 处理。
+
+### PR-S2 验证
+
+- 红线：`git diff --name-only main...pr-s2 | grep .py` → 空（**纯文档，无代码**）
+- en/zh 一致：5 个双语 doc 均中英同步（crafter/SPEC.md 无 -zh）
+- git diff --check: clean
+- 内容准确性：各 doc 声明对照 `eva/scenario_bundle.py`（existence_semantics 必填无默认 → missing fail activation 属实）+ `lifecycle.py::_update_scenario_counters`（PR-S1 已落地）核对
+
+### Status: 6 处完成，置 G2_REQUESTED 等 A review
