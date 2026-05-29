@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .candidate_generation import current_anchor_profiles
@@ -479,3 +480,36 @@ def _bounded_learning_bias(raw_bias: float) -> float:
     """Clamp learning bias so it stays advisory and bounded."""
 
     return max(-0.35, min(0.35, raw_bias))
+
+
+# ── PR-O1: robust-scoring primitives (ofc-robust-scoring plan §3 / A G1 Q1,Q3) ──
+# Pure helpers; not wired into assess_candidates yet (a later slice does the
+# aggregation rewrite with Linux A/B equivalence). Kept standalone + unit-tested
+# so the math is verified before it touches the shared (Linux+Crafter) scorer.
+
+def robust_normalize(value: float, *, scale: float) -> float:
+    """Normalize a signed factor via tanh — sign-preserving + saturating.
+
+    ``tanh(value / scale)`` maps R → (-1, 1): it keeps the sign (a negative factor
+    stays a penalty — A G1 Q1: NOT clipped to [0, 1], which would drop the
+    anti-drive veto signal) and saturates extremes (raw 0.99 vs 0.90 do not blow
+    apart). ``scale`` is the per-factor calibration constant (the calibrated
+    absolute range, NOT candidate-set min-max). A zero scale = "no signal" → 0.0
+    (avoids divide-by-zero).
+    """
+
+    if scale == 0.0:
+        return 0.0
+    return math.tanh(value / scale)
+
+
+def cap_group_contribution(value: float, *, cap: float) -> float:
+    """Cap the SUMMED contribution of the experience factor group (A G1 Q3).
+
+    Clips the experience group's combined weighted contribution to [-cap, +cap]
+    so the experience factors (learning_bias / habit / semantic) cannot collude
+    (plan §1.3) to overturn the drive + dlpfc main judgment. Caps the sum — not
+    each factor individually.
+    """
+
+    return max(-cap, min(cap, value))
