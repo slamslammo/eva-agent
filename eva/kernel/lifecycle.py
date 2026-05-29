@@ -129,6 +129,23 @@ class TurnResult:
     details: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class StepResult:
+    """PR-T1: outcome of one ``clock_source="step"`` cognitive step.
+
+    ``env_step_invoked`` is True only when a mediated release reached
+    ``env.step`` (scenario time advances). ``terminated`` reflects the scenario
+    reporting embodied death (env ``done``) on this step. No wall-clock
+    heartbeat / lease / yield is involved — step is the pulse.
+    """
+
+    step_id: str
+    env_step_invoked: bool
+    terminated: bool
+    response_summary: dict[str, Any] | None = None
+    details: dict[str, Any] = field(default_factory=dict)
+
+
 class ExternalActionRuntime(Protocol):
     """Scenario-owned bounded action stepping surface used by lifecycle."""
 
@@ -1020,4 +1037,137 @@ class LifecycleRuntime:
             work_slice=work_slice.name,
             work_kind=work_slice.kind,
             details=details,
+        )
+
+    def run_step(self, state: RuntimeState, *, now: datetime | None = None) -> StepResult:
+        """PR-T1: run one scenario step under ``clock_source="step"``.
+
+        Step IS the pulse: sense (shallow patrol cadence) -> deliberate -> if the
+        mediator releases an executable action, step env. No wall-clock heartbeat
+        tick / lease renewal / heartbeat-deadline yield. Reuses the same cognitive
+        functions run_turn drives (execute_patrol / build_deliberation_input /
+        run_deliberation / maybe_respond_after_patrol / _update_scenario_counters /
+        learning), so drive / anchor / dlPFC / OFC / mediator / memory / learning
+        stay structurally in place (rev3 §5.1 — not a stateless policy).
+        """
+
+        now = now or utc_now()
+        step_id = self.next_turn_id()
+        if self.trace_sink.enabled:
+            set_current_trace(self.trace_sink, self._trace_turn_index)
+        extra_shared_facts = (
+            (self.extra_shared_facts_provider() or None)
+            if self.extra_shared_facts_provider is not None
+            else None
+        )
+        runtime_gate_context = build_runtime_gate_context(
+            state,
+            instance_valid=True,
+            critical_blocked=False,
+            conservative_mode=False,
+            seconds_to_heartbeat=self.lifecycle.heartbeat_interval_sec,
+        )
+        # L1 sense + L2 drive: shallow cadence runs every step (Q4 cadence fold —
+        # sensing is per-step; heavier maintenance rides step-checkpoints).
+        patrol_result = execute_patrol(
+            "shallow",
+            self.store,
+            state,
+            self.external_life,
+            now,
+            due_at=now,
+            sensor_registry=self.sensor_registry,
+            extra_shared_facts=extra_shared_facts,
+        )
+        prior_response_history = self.store.read_response_history()
+        # L3 deliberation (anchor -> dlPFC -> OFC -> mediator), reused verbatim.
+        deliberation_input = build_deliberation_input_from_store(
+            self.store,
+            patrol_result.signal_batch,
+            patrol_result.drive_broadcast.to_dict(),
+            runtime_gate_context,
+            patrol_result.pressure_table,
+            working_memory_backend=self.working_memory_backend,
+            llm_adapter=self.working_memory_adapter,
+            working_memory_advisory_source=self.working_memory_advisory_source,
+            response_history=prior_response_history,
+        )
+        deliberation_audit, memory_stub = run_deliberation(
+            now,
+            deliberation_input,
+            producer=self.candidate_producer,
+            ofc_transcript_sink=self.ofc_transcript_sink,
+            ofc_identity_provider=self.ofc_identity_provider,
+        )
+        if self.trace_sink.enabled:
+            self._emit_p1a_seam_trace(
+                deliberation_input, deliberation_audit, extra_shared_facts, patrol_result.snapshot
+            )
+        self.store.append_deliberation_audit(deliberation_audit.to_dict())
+        if memory_stub is not None:
+            append_cognitive_memory_stub(self.store, memory_stub)
+        release_decision = deliberation_audit.release_decision
+        release_token = deliberation_audit.release_token
+        selected_candidate_id = release_decision.get("selected_candidate_id")
+        release_context = release_decision.get("release_context")
+        # Mediated release -> bridge -> env.step. withhold / non-release -> no step
+        # (scenario time does not advance; the next step re-senses the same world).
+        response_summary = None
+        if (
+            release_decision.get("outcome") == "compatibility_release"
+            and isinstance(release_context, dict)
+            and release_context.get("bridge_target") == "pressure_led_compatibility"
+        ):
+            response_summary = maybe_respond_after_patrol(
+                self.store,
+                state,
+                now,
+                runtime=self,
+                allow_repair_side_effects=True,
+                drive_context=patrol_result.drive_broadcast,
+                release_context=_release_context_with_observation(release_context, extra_shared_facts),
+                release_token=release_token,
+                selected_candidate_id=selected_candidate_id,
+            )
+        if response_summary is not None:
+            self._update_scenario_counters(response_summary)
+            if self.trace_sink.enabled:
+                self._emit_bridge_resolve_action_trace(response_summary)
+            # Learning stays in place (rev3 §5.1): outcome + habit recorded per step.
+            response_history = self.store.read_response_history()
+            latest_response_history = response_history[-1] if response_history else None
+            learning_outcome = build_learning_outcome_record(
+                now.isoformat(),
+                deliberation_audit,
+                response_summary,
+                latest_response_history,
+            )
+            append_learning_outcome(self.store, learning_outcome.to_dict())
+            habit_bias_entries = [
+                summary.to_dict()
+                for summary in summarize_habit_bias(
+                    read_learning_outcomes(self.store),
+                    situation_key=learning_outcome.content["situation_key"],
+                )
+            ]
+            if habit_bias_entries:
+                append_habit_bias(self.store, habit_bias_entries[0])
+        if self.trace_sink.enabled:
+            self._trace_turn_index += 1
+            reset_current_trace()
+        env_step_invoked = bool(
+            response_summary is not None and response_summary.get("env_step_invoked", False)
+        )
+        terminated = bool(
+            self.action_runtime is not None and getattr(self.action_runtime, "terminated", False)
+        )
+        state.last_turn_id = step_id
+        state.updated_at = now
+        self.store.write_runtime_state(state)
+        return StepResult(
+            step_id=step_id,
+            env_step_invoked=env_step_invoked,
+            terminated=terminated,
+            response_summary=response_summary,
+            details={"runtime_gate_context": runtime_gate_context},
         )

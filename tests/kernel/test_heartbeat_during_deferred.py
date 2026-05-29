@@ -114,9 +114,15 @@ class HeartbeatDuringDeferredTests(unittest.TestCase):
             # Liveness preserved through the exit.
             self.assertTrue(summary.instance_valid,
                             "instance_valid must remain True — substrate was not killed")
-            # Heartbeats ran at least once (the run actually executed).
-            self.assertGreaterEqual(summary.ticks, 1,
-                                    "heartbeat ticks must continue during deferred streak")
+            # PR-T1: Crafter is clock_source="step", so there is NO wall-clock
+            # heartbeat tick (step is the pulse → summary.ticks == 0). The R5
+            # spirit (a deferred streak does not deadlock) is proven by the loop
+            # actively ESCALATING to the R8 needs_human exit rather than spinning
+            # until the anti-runaway watchdog (max_runtime_sec).
+            self.assertEqual(summary.ticks, 0,
+                             "step mode has no wall-clock heartbeat ticks")
+            self.assertNotEqual(summary.exit_reason, "max_runtime_sec",
+                                "deferred streak must escalate via R8, not spin to the watchdog")
 
 
 if __name__ == "__main__":

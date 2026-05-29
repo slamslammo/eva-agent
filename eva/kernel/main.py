@@ -216,6 +216,26 @@ def run_runtime(
                 "turn_index": getattr(runtime, "_trace_turn_index", 0),
             }
         )
+    # PR-T1 (G1 §2): top-level cadence split on the scenario's declared
+    # clock_source. step -> the clean step-driven loop (no wall-clock heartbeat /
+    # lease / yield); wall_clock (default, e.g. Linux) -> the existing loop,
+    # byte-identical. Guarded read mirrors the bare-kernel fallback used elsewhere.
+    try:
+        clock_source = get_active_existence_semantics().clock_source
+    except RuntimeError:
+        clock_source = "wall_clock"
+    if clock_source == "step":
+        return _run_step_loop(
+            runtime,
+            config,
+            state,
+            action_runtime=action_runtime,
+            trace_sink=trace_sink,
+            active_record=active_record,
+            store=store,
+            instance_guard=instance_guard,
+            individual_id=individual_id,
+        )
     return _run_wall_clock_loop(
         runtime,
         config,
@@ -373,6 +393,103 @@ def _run_wall_clock_loop(
             exit_reason=exit_reason,
             individual_id=individual_id,
             # PR-S1 §3.5 telemetry: surface dual counters at run boundary.
+            attempt_count=getattr(runtime, "_attempt_index", 0),
+            scenario_step_count=getattr(runtime, "_scenario_step_index", 0),
+        )
+    finally:
+        instance_guard.release()
+
+
+def _run_step_loop(
+    runtime: LifecycleRuntime,
+    config: RuntimeConfig,
+    state: RuntimeState,
+    *,
+    action_runtime: Any,
+    trace_sink: Any,
+    active_record: Any,
+    store: StateStore,
+    instance_guard: InstanceGuard,
+    individual_id: str,
+) -> RunSummary:
+    """PR-T1: step-driven main loop for ``clock_source="step"`` (Crafter).
+
+    Step is the pulse — no wall-clock heartbeat tick / lease renewal /
+    heartbeat-deadline yield (G1 §1). Budget is ``max_steps`` (reusing
+    ``config.control.max_turns`` as the env.step budget); ``max_runtime_sec`` is
+    kept only as an anti-runaway watchdog (Q5), not a cadence driver. The
+    cognitive structure is fully in place via ``runtime.run_step`` — this loop
+    only owns step accounting, embodied-death (R-a) and the infra/defer guard.
+    """
+
+    started_at = time.monotonic()
+    scenario_step = 0
+    exit_reason = "normal"
+    max_steps = config.control.max_turns
+    try:
+        try:
+            while True:
+                result = runtime.run_step(state)
+                if result.env_step_invoked:
+                    scenario_step += 1
+                # R-a: scenario reports embodied death (env done) -> the individual's
+                # life ends; archive as one lifetime (next run is a new individual).
+                if result.terminated:
+                    exit_reason = "individual_terminated"
+                    trace_sink.set_continuity_state(CONTINUITY_TERMINATED)
+                    break
+                # R8 (step mode): a persistent deferred streak -> NEEDS_HUMAN, so a
+                # stuck decision loop escalates instead of spinning to the watchdog.
+                if getattr(runtime, "_consecutive_deferred", 0) >= MAX_CONSECUTIVE_DEFERRED:
+                    exit_reason = "needs_human_consecutive_deferred"
+                    break
+                if max_steps is not None and scenario_step >= max_steps:
+                    exit_reason = "max_steps"
+                    break
+                # Q5: wall-clock watchdog is anti-runaway only (not a cadence).
+                if config.control.max_runtime_sec is not None and (
+                    time.monotonic() - started_at
+                ) >= config.control.max_runtime_sec:
+                    exit_reason = "max_runtime_sec"
+                    break
+        except KeyboardInterrupt:
+            exit_reason = "keyboard_interrupt"
+
+        try:
+            final_state = store.read_runtime_state()
+        except Exception:
+            final_state = state
+        store.append_event(EventRecord(
+            event_type="shutdown",
+            timestamp=utc_now(),
+            instance_id=active_record.instance_id,
+            generation=active_record.generation,
+            life_state=final_state.life_state,
+            details={
+                "scenario_step": scenario_step,
+                "exit_reason": exit_reason,
+                "individual_id": individual_id,
+                "clock_source": "step",
+            },
+        ))
+        emit_log_line(
+            "shutdown",
+            instance=active_record.instance_id,
+            generation=active_record.generation,
+            individual=individual_id,
+            state=final_state.life_state,
+            scenario_step=scenario_step,
+            instance_valid=final_state.instance_valid,
+            exit_reason=exit_reason,
+        )
+        return RunSummary(
+            ticks=0,
+            turns=scenario_step,
+            final_life_state=final_state.life_state,
+            instance_valid=final_state.instance_valid,
+            runtime_dir=str(config.paths.runtime_dir),
+            exit_reason=exit_reason,
+            individual_id=individual_id,
             attempt_count=getattr(runtime, "_attempt_index", 0),
             scenario_step_count=getattr(runtime, "_scenario_step_index", 0),
         )

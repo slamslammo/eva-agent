@@ -104,39 +104,26 @@ class DualCountersInitTests(unittest.TestCase):
         activate_crafter_scenario()
 
     def test_counters_start_at_zero(self) -> None:
-        # End-to-end check via a 0-turn run: counters must remain 0.
+        """Counters are zero at runtime construction (mode-independent invariant).
+
+        PR-T1: under clock_source="step" the step loop deliberates on the very
+        first step (there are no maintenance-only turns to observe), so the
+        previous end-to-end "2 maintenance turns keep counters 0" premise no
+        longer holds. The genuine 'start at zero' invariant is checked directly
+        at construction, before any step / turn runs — identical in both modes.
+        """
+        from eva.kernel.lifecycle import LifecycleRuntime
+        from eva.kernel import StateStore, build_runtime_paths
+        from eva.kernel.instance import InstanceGuard
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = build_runtime_config(
-                temp_dir,
-                lifecycle=LifecycleConfig(
-                    heartbeat_interval_sec=0.2, lease_duration_sec=1.0,
-                    recovering_window_sec=0.05, turn_guard_window_sec=0.01,
-                ),
-                external_life=ExternalLifeConfig(
-                    shallow_patrol_interval_sec=10.0, deep_patrol_interval_sec=10.0,
-                    full_report_interval_sec=10.0, recent_event_window_sec=60.0,
-                ),
-                control=LoopControl(max_turns=2, max_runtime_sec=0.5, idle_sleep_sec=0.01),
-            )
-            session = _StubSession()
-            from eva.kernel.lifecycle import LifecycleRuntime
-            original_init = LifecycleRuntime.__init__
-            captured = []
-
-            def capturing_init(self, *args, **kwargs):
-                original_init(self, *args, **kwargs)
-                captured.append(self)
-
-            with patch.object(LifecycleRuntime, "__init__", capturing_init):
-                with patch.object(CrafterRuntimeSession, "start", return_value=session):
-                    run_crafter_runtime(config)
-            self.assertGreaterEqual(len(captured), 1)
-            rt = captured[0]
-            # 2 turns total, both maintenance (self_check + persist_marker) → no
-            # response attempts → counters stay 0.
-            self.assertEqual(rt._attempt_index, 0)
-            self.assertEqual(rt._scenario_step_index, 0)
-            self.assertEqual(rt._consecutive_deferred, 0)
+            paths = build_runtime_paths(temp_dir)
+            store = StateStore(paths)
+            guard = InstanceGuard(paths.runtime_dir / "eva.lock", store, LifecycleConfig())
+            runtime = LifecycleRuntime(store, guard, LifecycleConfig())
+            self.assertEqual(runtime._attempt_index, 0)
+            self.assertEqual(runtime._scenario_step_index, 0)
+            self.assertEqual(runtime._consecutive_deferred, 0)
 
 
 class DualCountersAdvanceTests(unittest.TestCase):
