@@ -46,7 +46,10 @@ class MainLoopTests(unittest.TestCase):
             config = build_runtime_config(temp_dir, working_memory_backend="auto")
             self.assertEqual(config.working_memory_backend, "auto")
             self.assertIsNone(config.working_memory_adapter)
-            self.assertEqual(config.working_memory_adapter_mode, "inert")
+            # framework-scenario-timing (observation 2): default adapter_mode is now
+            # "heuristic" (local-only advisor) instead of "inert" (which falls through
+            # to the client-backed advisory shell under llm_assisted).
+            self.assertEqual(config.working_memory_adapter_mode, "heuristic")
             # Round 1.7-c: default model client mode is "inert" (was "anthropic").
             # No external API call happens unless the user explicitly opts into
             # live mode via --working-memory-model-client-mode live + EVA_LLM_* env.
@@ -627,6 +630,11 @@ class MainLoopTests(unittest.TestCase):
                 ),
                 control=LoopControl(max_turns=3, max_runtime_sec=1.0, idle_sleep_sec=0.01),
                 working_memory_backend="llm_assisted",
+                # framework-scenario-timing (observation 2): explicitly opt into the
+                # client-backed advisory shell — the default adapter_mode is now
+                # "heuristic" (local-only), so this test pins "inert" to exercise the
+                # ClientBackedWorkingMemoryAdapter path it is named for.
+                working_memory_adapter_mode="inert",
                 working_memory_model_client_mode="heuristic",
             )
             run_runtime(config)
@@ -761,6 +769,12 @@ class MainLoopTests(unittest.TestCase):
                     "0.01",
                     "--working-memory-backend",
                     "llm_assisted",
+                    # framework-scenario-timing (observation 2): default adapter_mode
+                    # is now "heuristic" (local-only advisor). This test verifies the
+                    # CLI plumbs provider/model into the client-backed advisory shell,
+                    # so it explicitly opts into that shell (intent-preserving).
+                    "--working-memory-adapter-mode",
+                    "inert",
                     "--working-memory-model-client-mode",
                     "heuristic",
                     "--working-memory-model-client-provider",

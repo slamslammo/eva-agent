@@ -791,7 +791,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--append-only-rotation-max-bytes", type=int)
     parser.add_argument("--append-only-archive-dir-name", default="archive")
     parser.add_argument("--working-memory-backend", choices=["local_rule_based", "auto", "llm_assisted"], default="local_rule_based")
-    parser.add_argument("--working-memory-adapter-mode", choices=[ADAPTER_MODE_INERT, ADAPTER_MODE_HEURISTIC], default=ADAPTER_MODE_INERT)
+    # framework-scenario-timing (observation 2): default to the local heuristic
+    # advisor. "inert" opts into the ClientBackedWorkingMemoryAdapter shell, which
+    # under client_mode=live issues a separate per-turn advisory model call on top
+    # of the dlPFC producer.
+    parser.add_argument("--working-memory-adapter-mode", choices=[ADAPTER_MODE_INERT, ADAPTER_MODE_HEURISTIC], default=ADAPTER_MODE_HEURISTIC)
     parser.add_argument(
         "--working-memory-model-client-mode",
         choices=[

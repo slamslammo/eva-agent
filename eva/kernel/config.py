@@ -91,7 +91,13 @@ class RuntimeConfig:
     control: LoopControl = LoopControl()
     working_memory_backend: str = "local_rule_based"
     working_memory_adapter: Any | None = None
-    working_memory_adapter_mode: str = "inert"
+    # framework-scenario-timing (observation 2): default to the local heuristic
+    # advisor. Under backend="llm_assisted" the "inert" mode falls through to a
+    # ClientBackedWorkingMemoryAdapter, which issues a *separate* per-turn advisory
+    # model call (live under client_mode=live) on top of the dlPFC producer.
+    # "heuristic" keeps the advisory adapter local-only by default; opt into the
+    # client-backed shell explicitly with adapter_mode="inert".
+    working_memory_adapter_mode: str = "heuristic"
     working_memory_model_client_mode: str = "anthropic"
     working_memory_model_client_config: Any | None = None
     inherited_priors_path: str | None = None
@@ -136,7 +142,7 @@ def build_runtime_config(
     control: LoopControl | None = None,
     working_memory_backend: str = "local_rule_based",
     working_memory_adapter: Any | None = None,
-    working_memory_adapter_mode: str = "inert",
+    working_memory_adapter_mode: str = "heuristic",
     working_memory_model_client_mode: str = "inert",
     working_memory_model_client_config: Any | None = None,
     inherited_priors_path: str | None = None,
