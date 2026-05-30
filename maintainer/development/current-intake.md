@@ -58,3 +58,5 @@ Plan source:
 - 验证：full **762 passed** / Linux A/B **17 passed** / git diff --check clean
 - 标定**不变**（极端 caveat 标注待 water-critical run 精化，review §2 别过调）
 - **待 warmup**：全链 canonical demo（crafter-life-panel-warmup 落地 + DeepSeek，A 硬前置，不用 blind baseline）→ PR-O3 出口完成后请 A G2
+- **DeepSeek env 已 smoke 验证可用**（2026-05-30，HTTP 200 / deepseek-v4-pro / thinking on / reasoning_tokens 非零）。
+  - ⚠️ 注入方式坑：canonical run 用 `DEEPSEEK_API_KEY=<key> python -m <runner>`（inline 直给 python 进程，os.environ 读得到）或 `export DEEPSEEK_API_KEY=<key>; python ...`。**勿**用 `VAR=x curl -H "Bearer ${VAR}"` 同行——inline 赋值在当前 shell 的 `${VAR}` 展开作用域外，会展开成空 key → 401。（key 只注进程，不写文件/board/git。）
