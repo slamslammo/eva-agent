@@ -78,6 +78,30 @@ effect-schema 用 action-family row 模板按 action 名展开 → action 轴天
 - full 套件绿。每 slice 一 commit，先测试后实现。
 - 遇 action 专属设计岔路 → escalate G1（本任务已确认无岔路）。
 
-## Status
+## Status：slice 1-4 全部完成 ✓（待 push + A G2 review）
 
-- slice 1（ScenarioActionSpec framework 类型 + 派生）：完成 ✓（oracle 已抓，PRE-refactor）。
+| slice | 内容 | commit | 验证 |
+|---|---|---|---|
+| 1 | framework `ScenarioActionSpec` + `ActionSpecEntry` + 派生 | `9e05e31` | 8 测试；oracle PRE-refactor 抓好 |
+| 2 | Crafter `CRAFTER_ACTION_SPEC` 单一源，`ALL_ACTIONS`+ontology 派生 | `5ff1c16` | 等价性 6（vs oracle）；无循环 import |
+| 3 | 同源结构守卫 + effect-schema action 轴对齐（§8 专项） | `e12d627` | 一致性 13 |
+| 4 | 全量回归 + Linux 零 diff + docs + G2 | 本次 | full **830 passed** |
+
+intake commits：设计+slice1 + 本次收尾（force-add，maintainer/ 本分支 gitignored）。
+
+### 最终验证
+- 全量 **830 passed**；`git diff --check` clean。
+- **Linux 零改动**：`git diff 402d49d HEAD -- scenarios/linux_runtime/` 空。
+- **等价性**：派生 `ALL_ACTIONS` + action ontology `format_text()` 与 PRE-refactor `402d49d`
+  oracle 快照字节一致（三方：ALL_ACTIONS == ontology names == effect-schema actions，全 17）。
+- **drift-by-construction**：`test_action_both_derive_from_the_same_spec` +
+  `test_effect_schema_action_axis_pinned_to_spec` 钉死同源 + 轴对齐。
+- bridge executor（compatibility.py 的 `*_ACTION` 常量 + select_response_action 逻辑）保留不动，
+  只 `ALL_ACTIONS` 元组从 spec 派生。
+
+### A review 要点
+1. **无设计岔路**（§8 G1-escalate 条件不触发）：action↔ontology 严格 1:1，effect-schema action 轴
+   按 family 模板随 ALL_ACTIONS 钉死 → 不需拆独立 spec，直接 G2。
+2. oracle 来自 PRE-refactor 旧代码（防循环红线），A 可独立重算复核。
+3. Crafter-only，Linux 零 diff（Linux action 若将来需要比照 Linux drive 挂起任务另立）。
+4. DeepSeek key 只 inline 注入，绝不写 repo/git/board。
