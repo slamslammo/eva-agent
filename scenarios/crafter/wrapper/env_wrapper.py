@@ -145,8 +145,8 @@ class CrafterEnvWrapper:
             try:
                 birth_info["semantic"] = sem_view()
                 birth_info["player_pos"] = player.pos
-            except Exception:
-                pass
+            except (AttributeError, TypeError, ValueError):
+                pass  # crafter internals changed; local_view falls back to _unknown_view
         return result, birth_info
 
     def _step_env(self, action_id: int) -> tuple[Any, float, bool, dict[str, Any]]:
