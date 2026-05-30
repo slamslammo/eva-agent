@@ -21,6 +21,10 @@
 #      needs_human_infra_failure.
 #   6. runtime under validation-runs/ (persistent), NOT /tmp (which gets cleared
 #      before archiving — prior data-loss lesson).
+#   7. EVA_TRACE=1 emits cognitive_trace.jsonl + raw_observations/ (all 12 viewer
+#      pipeline nodes) — REQUIRED for the viz double-verification; without it the
+#      run is OFC-analysis-only and the viewer cannot read it. Verified: trace_sink
+#      ↔ ct_builder already aligned (build_turn_views works), no extra contract needed.
 #
 # Expected: 30 turns; deepseek-v4-pro reasoning ≈ 35s / dlPFC call → ~20–35 min.
 set -e
@@ -35,6 +39,7 @@ mkdir -p "$RUNTIME_DIR"
 echo "[canonical] runtime dir: $RUNTIME_DIR"
 echo "[canonical] max_turns=$MAX_TURNS seed=$SEED model=${EVA_LLM_MODEL:-deepseek-v4-pro}"
 
+EVA_TRACE=1 \
 EVA_LLM_TRANSCRIPT=raw \
 EVA_LLM_API_BASE_URL="${EVA_LLM_API_BASE_URL:-https://api.deepseek.com}" \
 EVA_LLM_API_KEY="${EVA_LLM_API_KEY:?Need EVA_LLM_API_KEY (inject at call time; never commit it)}" \
