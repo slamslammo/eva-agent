@@ -26,7 +26,14 @@ class CrafterDriveOntologyConsistencyTests(unittest.TestCase):
         activate_crafter_scenario()
 
     def test_drive_ontology_covers_all_preset_drives(self) -> None:
-        """CRAFTER_DRIVE_ONTOLOGY.names() must equal CRAFTER_DRIVE_PRESET.drive_types."""
+        """CRAFTER_DRIVE_ONTOLOGY.names() must equal CRAFTER_DRIVE_PRESET.drive_types.
+
+        single-source-scenario-drive-metadata: this now holds *by construction*
+        — both the ontology and the preset drive_types derive from the same
+        CRAFTER_DRIVE_SPEC, so they can no longer drift. Kept as a regression
+        guard against anyone re-introducing a parallel hardcoded source (see
+        test_both_derive_from_the_same_spec for the structural guarantee).
+        """
         from scenarios.crafter.drive_preset import CRAFTER_DRIVE_PRESET
         from scenarios.crafter.ontology import CRAFTER_DRIVE_ONTOLOGY
 
@@ -35,6 +42,33 @@ class CrafterDriveOntologyConsistencyTests(unittest.TestCase):
         self.assertEqual(
             ontology_drives, preset_drives,
             f"drive ontology / preset mismatch: ontology={ontology_drives} preset={preset_drives}",
+        )
+
+    def test_both_derive_from_the_same_spec(self) -> None:
+        """Anti-drift root guarantee: ontology and preset come from one spec.
+
+        The name-set equality above is now *structural*, not coincidental: the
+        ontology equals ``CRAFTER_DRIVE_SPEC.build_drive_ontology()`` and the
+        preset identity fields equal the spec's derivations. If a future change
+        re-hardcodes either source independently, these identity checks break.
+        """
+        from scenarios.crafter.drive_preset import CRAFTER_DRIVE_PRESET, CRAFTER_DRIVE_SPEC
+        from scenarios.crafter.ontology import CRAFTER_DRIVE_ONTOLOGY
+
+        self.assertEqual(
+            CRAFTER_DRIVE_ONTOLOGY.names(),
+            CRAFTER_DRIVE_SPEC.build_drive_ontology().names(),
+        )
+        self.assertEqual(
+            tuple(CRAFTER_DRIVE_PRESET.drive_types), CRAFTER_DRIVE_SPEC.drive_types()
+        )
+        self.assertEqual(
+            CRAFTER_DRIVE_PRESET.drive_type_by_dimension,
+            CRAFTER_DRIVE_SPEC.drive_type_by_dimension(),
+        )
+        self.assertEqual(
+            CRAFTER_DRIVE_PRESET.curiosity_drive_type,
+            CRAFTER_DRIVE_SPEC.curiosity_drive_type(),
         )
 
     def test_drive_ontology_required_fields_non_empty(self) -> None:

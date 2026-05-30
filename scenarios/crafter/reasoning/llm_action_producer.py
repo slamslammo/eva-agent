@@ -218,11 +218,25 @@ class CrafterLLMActionProducer:
                 ontology_hash=ontology_hash,
                 world_facts_hash=world_facts_hash,
                 action_effect_schema_hash=action_effect_schema_hash,
-                # drive_spec_version / drive_rendering placeholders use sink defaults.
+                # single-source-scenario-drive-metadata: emit the active scenario's
+                # drive-spec version (None when no spec / no ontology bound).
+                drive_spec_version=self._drive_spec_version(),
+                # drive_rendering placeholder still uses sink default.
             )
         except Exception as exc:  # noqa: BLE001 — R3: swallow
             _logger.warning("transcript_sink_record_failed err=%s", exc)
             return None
+
+    def _drive_spec_version(self) -> str | None:
+        """Return the bound scenario ontology's drive_spec_version, or None.
+
+        single-source-scenario-drive-metadata: read-only passthrough of the
+        ScenarioOntology field; None when no ontology is bound (Linux / legacy).
+        """
+
+        if self._scenario_ontology is None:
+            return None
+        return getattr(self._scenario_ontology, "drive_spec_version", None)
 
     def _compute_ontology_hashes_safely(
         self,

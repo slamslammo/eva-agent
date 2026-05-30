@@ -12,6 +12,8 @@ from eva.l3_deliberation.ontology import ScenarioOntology
 
 from scenarios.crafter.world_facts import get_crafter_world_facts_context
 
+from scenarios.crafter.drive_spec import CRAFTER_DRIVE_SPEC
+
 from .crafter_action_effect_schema import CRAFTER_ACTION_EFFECT_SCHEMA
 from .crafter_action_ontology import CRAFTER_ACTION_ONTOLOGY
 from .crafter_dlpfc_role_contract import CRAFTER_DLPFC_ROLE_CONTRACT
@@ -36,4 +38,7 @@ CRAFTER_SCENARIO_ONTOLOGY = ScenarioOntology(
     action_ontology=CRAFTER_ACTION_ONTOLOGY,
     action_effect_schema=CRAFTER_ACTION_EFFECT_SCHEMA,
     world_facts_fn=get_crafter_world_facts_context,
+    # single-source: CRAFTER_DRIVE_ONTOLOGY is derived from CRAFTER_DRIVE_SPEC;
+    # carry its version so the dlPFC transcript records which spec snapshot ran.
+    drive_spec_version=CRAFTER_DRIVE_SPEC.version,
 )

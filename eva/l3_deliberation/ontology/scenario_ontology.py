@@ -30,6 +30,12 @@ class ScenarioOntology:
     action_ontology: ActionOntology
     action_effect_schema: ActionEffectSchema
     world_facts_fn: Optional[Callable[[], str]] = None
+    # single-source-scenario-drive-metadata: the version of the ScenarioDriveSpec
+    # this ontology's drive_ontology was derived from. Emitted into the dlPFC
+    # transcript's reserved ``drive_spec_version`` field so a replay can pin the
+    # exact drive-spec snapshot. Metadata only — NOT rendered into the prompt.
+    # Optional (None) so scenarios without a single-source spec are unaffected.
+    drive_spec_version: Optional[str] = None
 
 
 def _scenario_title(name: str) -> str:
