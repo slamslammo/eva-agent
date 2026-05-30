@@ -111,3 +111,44 @@ PR-O1 是 Linux 最高风险（共用评分重写），建议单独 gate + 等�
 - **Q3 经验组上限值**：≤0.2 够不够压住 learning_bias 的 -0.25 单点？组上限是封"和"还是封"每个"？
 - **Q4 projection_fallback 处置**：本 run 全 0（休眠）。给低权重保留，还是本 plan 顺手标 deprecated？（关联 mediator-projection 调查结论）
 - **Q5 dlpfc rank 保序验证**：producer→assess_candidates 的 candidate 顺序是否已保证不重排？若中途按 id 排过（earlier 字母序 bug 根因），PR-O2 需先修保序再接 rank。
+
+---
+
+## 8. PR-O3 复核结论（出口，2026-05-30）
+
+> A G1 已裁定（g1-review.md §2/§4），Q1=tanh、Q2 起点 OK 别过调、Q5🔴硬前置、caveat 顺延 PR-O3。PR-O1/O2 已收口，本节为 PR-O3 offline 出口复核。
+
+### 8.1 PR-O2 G2_APPROVED（前置已收口）
+A 独立复核（g1-review.md §5）：**采纳 B 设计取舍——不改 selection.py**。机制：score 含 dlpfc_term 为首位排序键，LLM 候选 rank gap ≥0.12 >> 1e-6 round → 字母序 tiebreak 对 LLM 候选永不触达（dead）；零碰共享 selection.py，Linux 选择逻辑字节不变。Q5 保序：专用 `_dlpfc_rank_counter`（非 loop index，混排也对）；spot-check 确认 producer→assess **无 candidate_id 重排**，字母序 bug 真根因 = selection.py 末位 tiebreak。Linux17 + full749 A 复跑全绿。
+
+### 8.2 极端 regime 验证（slice 1 — `test_robust_scoring_extreme_regime.py`，8 测试）
+确认当前标定在超 [-0.25,0.55] 区间的行为全符合 §3.0 层级设计（探针先验证非平凡再固化）：
+- **类别层 drive 兜底** ✓：water-critical 朝水 drive0.9→term 0.489 > 非水 0.2→0.231。
+- **超区间单调有界** ✓：drive 0.55→0.9→1.2 单调，term ≤ W_DRIVE 0.5（tanh 饱和兜，超区间安全不翻转）。
+- **OFC 纠正反常 rank** ✓：dlPFC 误把反 drive(-0.3) 排 rank0，正 drive(0.5) rank2 仍胜。
+- **同类内 dlpfc 方向透传** ✓。
+- **经验组合谋 / 单因子作妖封顶** ✓：强 drive 0.424 > 经验尖峰 0.200(=cap)。
+
+### 8.3 ⚠️ 极端态判别力 caveat（review §3，已量化固化）
+极端同类内 drive 微差被 dlpfc rank 压过：drive 0.9 vs 0.7 经 tanh(/0.4) 后 term gap **0.0183** << dlpfc rank0−rank1 gap **0.12** → drive0.7+rank0(0.771) 胜过 drive0.9+rank1(0.669)。
+- **这是设计意图**（§3.0：方向层归 dlPFC 空间推理，OFC 不重做），**非 bug**。
+- **不 re-calibrate**（review §2 别过调）：标定区间由 T3 §1 实测 grounded（drive_weighted 实测 max 0.5517），未覆盖 water-critical 高端。
+- **精化触发**：一次真正触及 water-critical 的 canonical run 落地后，若证明极端态内部 drive 必须更强判别，再标 DRIVE_SCALE。当前 tanh 饱和兜底安全。
+- 固化于 `test_saturation_caveat_dlpfc_dominates_drive_microgap` —— 任何 re-cal 都是自觉决定。
+
+### 8.4 Linux A/B 评分前后对照（slice 2 — `test_robust_scoring_ab_comparison.py`，5 测试）
+robust 聚合 vs 复现的 PR-O1 前 unbounded 直接相加 oracle：
+- 正常态（区间内、无合谋）**排序结论不变** ✓（含负 drive 符号案例）= Linux A/B 等价。
+- 合谋态发散但**可解释** ✓：旧让经验尖峰翻盘，robust cap 挡住（§1.3 改进非回归）。
+- **尺度可比** ✓：膨胀 drive 2.0 vs 0.9 旧 gap 1.1 鸿沟，robust 饱和 gap <0.05，消除假区分（problem 2）。
+- Linux 17 + full 762 绿（class/test 名避 'linux'，不污染 A/B 基线计数）。
+
+### 8.5 标定终值（PR-O3 确认，保持不变）
+§2.2/2.3 初值经极端 regime + A/B 验证确认合理，**不变**：
+- scale：DRIVE 0.4 / PROJECTION 0.15 / LEARNING 0.25 / HABIT 0.1
+- weight：W_DRIVE 0.5 / W_DLPFC 0.3 / W_PROJECTION 0.1 / W_LEARNING 0.15 / W_HABIT 0.10
+- EXPERIENCE_GROUP_CAP 0.2；dlpfc rank map {0:1.0,1:0.6,2:0.3} floor 0.15
+- 关键不变量守：**W_DLPFC(0.3) > 经验 cap(0.2)** 且 **< W_DRIVE(0.5)**。
+
+### 8.6 待 warmup 的 canonical demo（A 硬前置，未做）
+全链 post-warmup canonical demo（一次跑双验 OFC 行为 + viewer）排在 **crafter-life-panel-warmup 落地后 + DeepSeek env**。**PR-O3 offline 部分（标定复核 + 极端 regime + A/B 对照 + 文档，slice 1-4）已完成**；canonical run 不用 blind baseline（开局 2 步盲污染参照）。
