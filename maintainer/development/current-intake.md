@@ -99,6 +99,29 @@ Branch: `framework-scenario-timing-and-advisor-coupling`
 **备选（未选）**：重排 runner 让激活先于 config 构造 → 改动 runner 主流程、有 activation 副作用
 （注册 drive preset / persistence / dimension specs）顺序风险，弃用。
 
+## ⚠️ 待修复（slice 4 提交含失败测试）
+
+`9b045eb`（slice 4 adapter 默认翻转）**提交时混入 1 个失败测试**——并行 batch 让 commit 早于
+全量验证完成。真实结果是 `1 failed, 785 passed`：
+- 失败：`tests/integration/test_main_runtime.py::MainLoopTests::test_cli_accepts_working_memory_backend_flag`
+  （line ~782）。第二个 subprocess 用 `llm_assisted` + `client-mode heuristic` 但**没传**
+  `--working-memory-adapter-mode`，翻转后默认 heuristic → 构造本地 `HeuristicWorkingMemoryAdapter`
+  （trace `['top_drive_curiosity']`），不再走 client-backed shell（trace `model_client_provider_*`）→
+  断言失败。这是和已修的 `test_runtime_uses_heuristic_model_client_shell_for_llm_backend` 同一根因的
+  第三处（subprocess CLI 测试，没被我的 build_runtime_config grep 命中）。
+- **已在工作树修复（未提交、未验证）**：给该 subprocess argv 加 `--working-memory-adapter-mode inert`
+  显式 opt-in client-backed shell（intent-preserving）。
+- `9b045eb` 未 push，提交信息误称 "765 passed"。修复后应 **amend `9b045eb`** 纳入该 test fix +
+  改正提交信息为真实计数。
+- 当前未追踪：`tests/integration/test_scenario_timing_linux_regression.py`（slice 5,已写未提交）。
+
+恢复步骤（output pipe 恢复后）：
+1. `python -m pytest tests/integration/test_main_runtime.py -q`（写 /tmp 再读）→ 确认 cli 测试绿。
+2. `git add tests/integration/test_main_runtime.py && git commit --amend --no-edit`（或改正信息）。
+3. 全量 `python -m pytest -q` + `git diff --check` → 786 passed 区间、clean。
+4. slice 5：跑 test_scenario_timing_linux_regression.py 绿 → commit。
+5. 更新本 doc Status → force-add commit → push → eva-pm G2_REQUESTED + A note。
+
 ## 环境状态（2026-05-30）
 
 fst + eva-agent 两 worktree 当前 tool-output 降级：**Read 工具返回空、多行 Bash 输出被吞**
