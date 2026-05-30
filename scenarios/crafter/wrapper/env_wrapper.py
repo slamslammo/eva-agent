@@ -131,7 +131,23 @@ class CrafterEnvWrapper:
         if isinstance(result, tuple) and len(result) == 2:
             observation, info = result
             return observation, dict(info or {})
-        return result, {}
+        # Old gym API: reset() returns a bare observation with no info dict.
+        # Crafter's player and world are already initialised at this point, so
+        # we can reconstruct the same info fields that step() would produce,
+        # giving the agent a non-blind first observation.
+        player = getattr(self._env, "_player", None)
+        birth_inv = dict(getattr(player, "inventory", None) or {})
+        sem_view = getattr(self._env, "_sem_view", None)
+        birth_info: dict[str, Any] = {}
+        if birth_inv:
+            birth_info["inventory"] = birth_inv
+        if player is not None and sem_view is not None:
+            try:
+                birth_info["semantic"] = sem_view()
+                birth_info["player_pos"] = player.pos
+            except Exception:
+                pass
+        return result, birth_info
 
     def _step_env(self, action_id: int) -> tuple[Any, float, bool, dict[str, Any]]:
         result = self._env.step(action_id)
