@@ -60,4 +60,48 @@ Branch: `framework-scenario-timing-and-advisor-coupling`
 
 ## Status
 
-- slice 1（RuntimeScenarioBundle.suggested_timing 字段）：进行中。
+- **slice 1（RuntimeScenarioBundle.suggested_timing 字段）：完成 ✓**
+  - commit `427a46a`（`eva/scenario_bundle.py` 加字段 + `tests/scenarios/test_scenario_suggested_timing.py`）
+  - commit `5e42dc8`（intake doc，force-add，maintainer/ 在本分支 gitignored）
+  - 验证：`test_scenario_suggested_timing.py` + `test_existence_semantics.py` 共 **9 passed**；
+    CRAFTER / LINUX 两个 bundle 的 `suggested_timing` 均默认 `None`（纯加法、向后兼容）；
+    `git diff --check` clean；工作树 0 脏。
+- **slice 2（CLI 未传→回退 scenario.suggested_timing）：设计已定，实现待环境恢复。**
+
+## Slice 2 设计发现（待 A review）
+
+通过 targeted grep 确认（环境 Read 工具降级期间用单行 grep 取证）：
+
+1. **`build_runtime_config_from_args(args)` 不持有 active bundle**：`eva/kernel/main.py` 全文
+   `scenario` 出现 **0 次**；该函数签名只收 `args`（已确认 body：line ~847-852 直接取
+   `args.shallow_patrol_interval` 等 4 个 timing 字段，再 `build_runtime_config(... external_life=...)`）。
+2. **timing argparse 默认是硬编码值**（main.py line 783-786）：`--shallow-patrol-interval` 300.0 /
+   `--deep-patrol-interval` 1800.0 / `--full-report-interval` 86400.0 / `--recent-event-window` 1800.0。
+   → 无法区分"用户显式传 300"与"未传"。**必须改成 `None` 哨兵默认**才能做回退。
+3. **runner 里 config 构造先于 scenario 激活**：`runners/run_crafter.py` —
+   `build_runtime_config_from_args` 在 **line 126**，`activate_crafter_scenario` 在 **line 145**
+   （config 先、激活后）。`CRAFTER_SCENARIO_BUNDLE` 在 run_crafter 引用 **0 次**（只调
+   activate 函数，不直接 import 常量）。
+   → **回退不能依赖 `get_active_runtime_scenario()`**（构造 config 时尚未激活）。
+
+**选定设计（Option A，显式传参）**：
+- `build_runtime_config_from_args(args, *, suggested_timing: ExternalLifeConfig | None = None)`
+  —— 加可选 kw，默认 None，2 个测试调用方（`test_main_runtime.py` / `test_patrol_turn_flow.py`）
+  不传仍向后兼容。
+- main.py line 783-786 四个 timing argparse 默认 `300.0/1800.0/...` → `None`。
+- 函数内回退：`base = suggested_timing or ExternalLifeConfig()`；对 4 个 timing 字段，
+  CLI 值非 None 用 CLI、否则用 `base.<field>`；用 `dataclasses.replace(base, **overrides)`
+  保留 `ExternalLifeConfig` 的非 timing 字段（disk/continuity/anomaly 阈值）。
+  → CLI 显式 > scenario 声明 > `ExternalLifeConfig()` 框架默认。
+- 3 个 runner 在调用 `build_runtime_config_from_args` 时传该 scenario 的 `suggested_timing`
+  （run_crafter 需 import `CRAFTER_SCENARIO_BUNDLE` 或改用 activate 返回值；具体接线待 Read 恢复后逐个确认 run_eva / run_linux_runtime 的顺序）。
+
+**备选（未选）**：重排 runner 让激活先于 config 构造 → 改动 runner 主流程、有 activation 副作用
+（注册 drive preset / persistence / dimension specs）顺序风险，弃用。
+
+## 环境状态（2026-05-30）
+
+fst + eva-agent 两 worktree 当前 tool-output 降级：**Read 工具返回空、多行 Bash 输出被吞**
+（单行短 echo 与单行 grep 取证仍可用）。文件本身完好（git 树干净、slice 1 已落库）——
+坏的是工具输出管道，非文件，`git checkout` 不适用。slice 2 需编辑 main.py + 3 runner，
+而 Edit 依赖本会话先成功 Read → **slice 2 实现硬阻塞，待 Read 恢复后继续**。
