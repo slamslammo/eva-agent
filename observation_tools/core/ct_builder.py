@@ -62,6 +62,9 @@ class TurnView:
     # LLM transcript（来自 llm_transcripts/dlPFC/，可选）
     transcript: dict[str, Any] | None = None
 
+    # OFC 评分明细（来自 deliberation_audit.jsonl，Phase B）
+    ofc_assessments: list[dict[str, Any]] | None = None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "turn_index": self.turn_index,
@@ -70,6 +73,7 @@ class TurnView:
             "pipeline": self.pipeline,
             "advisory": self.advisory,
             "transcript": self.transcript,
+            "ofc_assessments": self.ofc_assessments,
         }
 
     # ------------------------------------------------------------------
@@ -139,6 +143,9 @@ def build_turn_views(runtime_dir: Path | str) -> list[TurnView]:
     # 2. 读 advisory，按行号对齐 turn_index
     advisories = read_jsonl(root / "llm_advisory_audit.jsonl")
 
+    # 2b. 读 deliberation_audit（OFC 评分明细），按行号对齐 turn_index
+    deliberations = read_jsonl(root / "deliberation_audit.jsonl")
+
     # 3. 确定 turn 数量（以 cognitive_trace 覆盖的最大 turn_index）
     if not turn_map:
         return []
@@ -163,6 +170,12 @@ def build_turn_views(runtime_dir: Path | str) -> list[TurnView]:
         # 读 transcript（可选）
         transcript = _read_transcript(root, idx)
 
+        ofc_assessments = None
+        if idx < len(deliberations):
+            asmt = deliberations[idx].get("assessments")
+            if asmt:
+                ofc_assessments = asmt
+
         view = TurnView(
             turn_index=idx,
             is_warmup=is_warmup,
@@ -170,6 +183,7 @@ def build_turn_views(runtime_dir: Path | str) -> list[TurnView]:
             pipeline=turn_map.get(idx, {}),
             advisory=advisories[idx] if idx < len(advisories) else None,
             transcript=transcript,
+            ofc_assessments=ofc_assessments,
         )
         views.append(view)
 

@@ -434,24 +434,13 @@
         break;
       }
       case "l3.assess_score": {
-        // Phase A: show action:score pairs, highlight winner
-        const assessments = last?.outputs?.assessments || [];
+        const assessments = d.ofc_assessments || last?.outputs?.assessments || [];
         if (assessments.length) {
-          const maxScore = Math.max(...assessments.map(a => a.score ?? -Infinity));
-          const pairs = assessments.map(a => {
-            const isWinner = Math.abs((a.score ?? 0) - maxScore) < 1e-9;
-            const scoreStr = (a.score ?? 0).toFixed(3);
-            const act = (a.action || "?").replace("_", " ");
-            return isWinner
-              ? `<span style="color:var(--accent2);font-weight:700">${esc(act)}: ${scoreStr}</span>`
-              : `${esc(act)}: ${scoreStr}`;
-          });
-          value = "";  // use extra for HTML content
-          extra = `<div class="node-value" style="font-size:11px;line-height:1.5">${pairs.join("<br>")}</div>`;
+          value = "";
+          extra = buildOFCMiniScoreBars(assessments);
         } else {
           value = "—";
         }
-        sub = "(Phase A 占位)";
         break;
       }
       case "mediator.release": {
@@ -472,6 +461,87 @@
     return { value, sub, extra };
   }
 
+  // =========================================================
+  // OFC Phase B — 评分可视化辅助函数
+  // =========================================================
+
+  // W 值与颜色（与 value_judgment.py 保持一致）
+  const OFC_TERMS = [
+    { key: "drive_term",       label: "Drive",   color: "var(--warn)",    max: 0.5 },
+    { key: "dlpfc_term",       label: "dlPFC",   color: "var(--accent)",  max: 0.3 },
+    { key: "experience_term",  label: "Exp",     color: "var(--accent2)", max: 0.2 },
+  ];
+
+  // L2 节点内迷你评分条（每个候选一行，叠加 drive/dlpfc/exp 色块）
+  function buildOFCMiniScoreBars(assessments) {
+    const maxScore = Math.max(...assessments.map(a => a.score ?? 0));
+    const rows = assessments.map(a => {
+      const sd = a.score_decomposition || {};
+      const score = a.score ?? 0;
+      const isWinner = Math.abs(score - maxScore) < 1e-9;
+      const act = (a.action || "?").replace(/_/g, " ");
+      // 叠加色块 (total width = score / 1.0 * 100px)
+      const segments = OFC_TERMS.map(t => {
+        const v = sd[t.key] ?? 0;
+        const w = Math.max(0, v / 1.0 * 100);
+        return `<span class="ofc-seg" style="width:${w.toFixed(1)}px;background:${t.color}" title="${t.label}: ${v.toFixed(3)}"></span>`;
+      }).join("");
+      const nameStyle = isWinner ? "color:var(--accent2);font-weight:700" : "color:var(--text-dim)";
+      return `<div class="ofc-bar-row">
+        <span class="ofc-bar-label" style="${nameStyle}">${esc(act)}</span>
+        <span class="ofc-bar-track">${segments}</span>
+        <span class="ofc-bar-score" style="${isWinner ? "color:var(--accent2)" : ""}">${score.toFixed(3)}</span>
+      </div>`;
+    });
+    return `<div class="ofc-mini-bars">${rows.join("")}</div>`;
+  }
+
+  // L3 OFC 面板 — 全候选评分分解（默认展开）
+  function buildOFCScoringSection(assessments) {
+    if (!assessments || !assessments.length) return "";
+    const maxScore = Math.max(...assessments.map(a => a.score ?? 0));
+
+    const rows = assessments.map(a => {
+      const sd = a.score_decomposition || {};
+      const score = a.score ?? 0;
+      const isWinner = Math.abs(score - maxScore) < 1e-9;
+      const act = (a.action || "?").replace(/_/g, " ");
+      const disp = a.disposition || "";
+
+      const termCells = OFC_TERMS.map(t => {
+        const v = sd[t.key] ?? 0;
+        const barW = Math.max(0, v / t.max * 60);
+        return `<td class="ofc-td-term">
+          <div class="ofc-term-bar" style="width:${barW.toFixed(1)}px;background:${t.color}"></div>
+          <span>${v.toFixed(3)}</span>
+        </td>`;
+      }).join("");
+
+      const winnerMark = isWinner ? " ★" : "";
+      const rowStyle = isWinner ? "background:rgba(72,199,142,.06);" : "";
+      return `<tr style="${rowStyle}">
+        <td class="ofc-td-action" style="${isWinner ? "color:var(--accent2);font-weight:700" : ""}">${esc(act)}${winnerMark}</td>
+        ${termCells}
+        <td class="ofc-td-total" style="${isWinner ? "color:var(--accent2);font-weight:700" : ""}">${score.toFixed(4)}</td>
+        <td class="ofc-td-disp" style="color:var(--text-dim)">${esc(disp)}</td>
+      </tr>`;
+    }).join("");
+
+    const body = `<table class="ofc-score-table">
+      <thead><tr>
+        <th>Action</th>
+        <th style="color:var(--warn)">Drive</th>
+        <th style="color:var(--accent)">dlPFC</th>
+        <th style="color:var(--accent2)">Exp</th>
+        <th>Total</th>
+        <th>Disp</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+    return makeSection("OFC 评分分解", body, { open: true });
+  }
+
   function renderL2() {
     const d = state.turnData;
     const swimlane = document.getElementById("l2-swimlane");
@@ -487,9 +557,11 @@
 
       const { value, sub, extra } = buildNodeContent(node.key, d);
 
+      const ofcHasData = node.ofc && (d.ofc_assessments || []).length > 0;
       const nodeClass = [
         "pipeline-node",
-        node.ofc ? "ofc-placeholder" : "",
+        node.ofc && !ofcHasData ? "ofc-placeholder" : "",
+        node.ofc && ofcHasData ? "ofc-scored" : "",
         node.isAction ? "action-node" : "",
         state.selectedNode === node.key ? "selected" : "",
       ].filter(Boolean).join(" ");
@@ -571,14 +643,20 @@
       );
     }
 
-    // Section 4: Full cognitive trace（本 turn 全管道，默认折叠）
+    // Section 4: OFC 评分分解（OFC 节点选中时默认展开）
+    const isOFCNode = nodeKey === "l3.assess_score";
+    const ofcHtml = isOFCNode
+      ? buildOFCScoringSection(d.ofc_assessments)
+      : "";
+
+    // Section 5: Full cognitive trace（本 turn 全管道，默认折叠）
     const traceHtml = buildFullTraceSection(d);
 
-    // Section 5: Raw observation（默认折叠）
+    // Section 6: Raw observation（默认折叠）
     const rawObsHtml = buildRawObsSection(d);
 
     content.innerHTML = `
-      <div class="l3-row-top">${rawSection}${advHtml}${transcriptHtml}</div>
+      <div class="l3-row-top">${rawSection}${ofcHtml}${advHtml}${transcriptHtml}</div>
       <div class="l3-row-bottom">${traceHtml}${rawObsHtml}</div>
     `;
 

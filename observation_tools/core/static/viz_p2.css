@@ -289,6 +289,27 @@ body {
   content: ' [Phase A]';
   color: var(--warn);
 }
+.pipeline-node.ofc-scored {
+  border-color: var(--accent);
+}
+
+/* OFC Phase B — 迷你评分条（L2 节点内） */
+.ofc-mini-bars { display: flex; flex-direction: column; gap: 3px; padding: 2px 0; }
+.ofc-bar-row { display: flex; align-items: center; gap: 4px; }
+.ofc-bar-label { font-size: 10px; width: 56px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.ofc-bar-track { display: flex; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; flex: 1; min-width: 60px; }
+.ofc-seg { display: inline-block; height: 100%; }
+.ofc-bar-score { font-size: 10px; color: var(--text-dim); width: 34px; text-align: right; flex-shrink: 0; }
+
+/* OFC Phase B — 全候选评分表（L3 面板） */
+.ofc-score-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.ofc-score-table th { text-align: left; color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; padding: 3px 8px; border-bottom: 1px solid var(--border); }
+.ofc-score-table td { padding: 4px 8px; border-bottom: 1px solid rgba(46,51,77,.4); vertical-align: middle; }
+.ofc-td-action { white-space: nowrap; min-width: 90px; }
+.ofc-td-term { min-width: 80px; }
+.ofc-td-total { white-space: nowrap; }
+.ofc-td-disp { font-size: 10px; }
+.ofc-term-bar { height: 6px; border-radius: 3px; margin-bottom: 2px; }
 
 .pipeline-arrow {
   color: var(--text-dim);
