@@ -9,7 +9,7 @@ from eva.kernel.main import RunSummary, build_runtime_config_from_args, parse_ar
 from eva.l1_sensing.sensor_registry import SensorRegistry
 from eva.l3_deliberation import WorkingMemoryAdapter
 from runners.longrun_validation import longrun_hook_from_args
-from scenarios.linux_runtime import activate_linux_runtime_scenario
+from scenarios.linux_runtime import LINUX_RUNTIME_SCENARIO_BUNDLE, activate_linux_runtime_scenario
 
 __all__ = ["main", "run_linux_runtime"]
 
@@ -38,7 +38,11 @@ def main() -> None:
     """Build Linux runtime config from CLI arguments and print a short summary."""
 
     args = parse_args()
-    config = build_runtime_config_from_args(args)
+    # framework-scenario-timing: fall back to this scenario's declared
+    # external-life timing when CLI timing flags are not passed.
+    config = build_runtime_config_from_args(
+        args, suggested_timing=LINUX_RUNTIME_SCENARIO_BUNDLE.suggested_timing
+    )
     periodic_hook = longrun_hook_from_args(args)
     summary = run_linux_runtime(
         config,

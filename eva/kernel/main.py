@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Callable, Any
 from uuid import uuid4
@@ -780,10 +780,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-runtime-sec", type=float)
     parser.add_argument("--idle-sleep-sec", type=float, default=0.05)
     parser.add_argument("--turn-guard-window", type=float, default=0.5)
-    parser.add_argument("--shallow-patrol-interval", type=float, default=300.0)
-    parser.add_argument("--deep-patrol-interval", type=float, default=1800.0)
-    parser.add_argument("--full-report-interval", type=float, default=86400.0)
-    parser.add_argument("--recent-event-window", type=float, default=1800.0)
+    # framework-scenario-timing: default None (sentinel). When a flag is not
+    # passed, build_runtime_config_from_args falls back to the active scenario's
+    # suggested_timing, then to the framework ExternalLifeConfig() default
+    # (300 / 1800 / 86400 / 1800). An explicitly passed flag always wins.
+    parser.add_argument("--shallow-patrol-interval", type=float, default=None)
+    parser.add_argument("--deep-patrol-interval", type=float, default=None)
+    parser.add_argument("--full-report-interval", type=float, default=None)
+    parser.add_argument("--recent-event-window", type=float, default=None)
     parser.add_argument("--append-only-rotation-max-bytes", type=int)
     parser.add_argument("--append-only-archive-dir-name", default="archive")
     parser.add_argument("--working-memory-backend", choices=["local_rule_based", "auto", "llm_assisted"], default="local_rule_based")
@@ -835,8 +839,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
-    """Build one RuntimeConfig from parsed CLI arguments."""
+def build_runtime_config_from_args(
+    args: argparse.Namespace,
+    *,
+    suggested_timing: ExternalLifeConfig | None = None,
+) -> RuntimeConfig:
+    """Build one RuntimeConfig from parsed CLI arguments.
+
+    ``suggested_timing`` (framework-scenario-timing): the active scenario's
+    declared external-life timing. When a timing CLI flag is not explicitly
+    passed (its argparse default is the ``None`` sentinel), that field falls
+    back to ``suggested_timing``, then to the framework ``ExternalLifeConfig()``
+    default. Explicit CLI flags always take priority. Runners pass their
+    scenario bundle's ``suggested_timing`` here; the bare kernel ``main()``
+    passes nothing, preserving the historical CLI-only behavior.
+    """
 
     lifecycle = LifecycleConfig(
         heartbeat_interval_sec=args.heartbeat_interval,
@@ -844,12 +861,22 @@ def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
         recovering_window_sec=args.recovering_window,
         turn_guard_window_sec=args.turn_guard_window,
     )
-    external_life = ExternalLifeConfig(
-        shallow_patrol_interval_sec=args.shallow_patrol_interval,
-        deep_patrol_interval_sec=args.deep_patrol_interval,
-        full_report_interval_sec=args.full_report_interval,
-        recent_event_window_sec=args.recent_event_window,
-    )
+    # framework-scenario-timing: resolve external-life timing with priority
+    #   explicit CLI flag  >  scenario suggested_timing  >  framework default.
+    # A None timing flag means "not passed" and falls back to the base config.
+    # dataclasses.replace keeps the base's non-timing thresholds (disk /
+    # continuity / anomaly) intact when only timing fields are overridden.
+    timing_base = suggested_timing or ExternalLifeConfig()
+    timing_overrides: dict[str, float] = {}
+    if args.shallow_patrol_interval is not None:
+        timing_overrides["shallow_patrol_interval_sec"] = args.shallow_patrol_interval
+    if args.deep_patrol_interval is not None:
+        timing_overrides["deep_patrol_interval_sec"] = args.deep_patrol_interval
+    if args.full_report_interval is not None:
+        timing_overrides["full_report_interval_sec"] = args.full_report_interval
+    if args.recent_event_window is not None:
+        timing_overrides["recent_event_window_sec"] = args.recent_event_window
+    external_life = replace(timing_base, **timing_overrides)
     control = LoopControl(
         max_ticks=args.max_ticks,
         max_turns=args.max_turns,
