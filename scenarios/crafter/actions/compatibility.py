@@ -45,25 +45,15 @@ REPAIR_ACTION = SLEEP_ACTION
 ESCALATE_ACTION = DO_ACTION
 DEFAULT_RESPONSE_MODE = "crafter_bounded_compatibility"
 
-ALL_ACTIONS = (
-    NOOP_ACTION,
-    MOVE_LEFT_ACTION,
-    MOVE_RIGHT_ACTION,
-    MOVE_UP_ACTION,
-    MOVE_DOWN_ACTION,
-    DO_ACTION,
-    SLEEP_ACTION,
-    PLACE_STONE_ACTION,
-    PLACE_TABLE_ACTION,
-    PLACE_FURNACE_ACTION,
-    PLACE_PLANT_ACTION,
-    MAKE_WOOD_PICKAXE_ACTION,
-    MAKE_STONE_PICKAXE_ACTION,
-    MAKE_IRON_PICKAXE_ACTION,
-    MAKE_WOOD_SWORD_ACTION,
-    MAKE_STONE_SWORD_ACTION,
-    MAKE_IRON_SWORD_ACTION,
-)
+# single-source-crafter-action-metadata: ALL_ACTIONS is now DERIVED from
+# CRAFTER_ACTION_SPEC (the single authority shared with CRAFTER_ACTION_ONTOLOGY),
+# so the raw-action name tuple and the action ontology can no longer drift. The
+# *_ACTION name constants above stay authored here — the bridge executor
+# (select_response_action etc.) uses them, and they are the same literals the
+# spec declares (byte-equivalence pinned by test_action_spec_equivalence.py).
+from scenarios.crafter.action_spec import CRAFTER_ACTION_SPEC
+
+ALL_ACTIONS = CRAFTER_ACTION_SPEC.action_names()
 
 _ALL_ACTIONS_SET = frozenset(ALL_ACTIONS)
 
