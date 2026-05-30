@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .kernel.config import ExternalLifeConfig
     from .l1_sensing.dimension_specs import DimensionSpec
 
 SensorSpecBuilder = Callable[[], tuple[Any, ...]]
@@ -132,6 +133,11 @@ class RuntimeScenarioBundle:
     prior_skills: PriorSkillBundle
     # v0.6 rev2: 每个场景必须声明存在语义（生死规则）。框架读取并一致执行。
     existence_semantics: ExistenceSemantics
+    # framework-scenario-timing: 场景可声明建议的外部生命节律（external-life timing）。
+    # 框架在 CLI 未显式指定 timing 时回退到此声明（回退接线见 build_runtime_config_from_args）；
+    # CLI 显式传入仍优先。默认 ``None`` 表示不声明，沿用框架 / CLI 默认节律（向后兼容）。
+    # 复用 ``eva.kernel.config.ExternalLifeConfig`` 作为 timing 数据结构，不新建类型。
+    suggested_timing: "ExternalLifeConfig | None" = None
 
 
 _ACTIVE_RUNTIME_SCENARIO: RuntimeScenarioBundle | None = None
