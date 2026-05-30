@@ -106,6 +106,37 @@ curiosity_drive_type=spec.curiosity_drive_type())`。一致性测试退化为同
 - 每个 slice 一个 commit，先测试后实现（TDD）。
 - DeepSeek key 只 inline 注入，绝不写 repo/git/board。
 
-## Status
+## Status：slice 1-4 全部完成 ✓（待 push + A G2 review）
 
-- slice 1（ScenarioDriveSpec framework 类型 + 派生）：进行中。
+| slice | 内容 | commit | 验证 |
+|---|---|---|---|
+| 1 | framework `ScenarioDriveSpec` + `DriveSpecEntry` + 4 派生方法 | `c3e5a18` | 13 测试 |
+| 2 | Crafter `CRAFTER_DRIVE_SPEC` 单一源,preset+ontology 都从它派生 | `41cb912` | 等价性 8（vs oracle 快照）+ anti-drift 一致性 |
+| 3 | `drive_spec_version` 填入 transcript + 结构性同源守卫 | `738b364` | slice3 4 测试 + placeholder 仍绿 |
+| 4 | 全量回归 + Linux 不动核对 + docs review | 本次 | full **814 passed** |
+
+intake doc commits：`e8b1c46`（设计+范围）+ 本次（收尾）。force-add（maintainer/ 本分支 gitignored）。
+
+### 最终验证
+- 全量 **814 passed**；`git diff --check` clean。
+- **Linux 零改动**：`git diff a48f59d HEAD -- scenarios/linux_runtime/` 空；Linux 专项回归 22 passed。
+- **等价性**：派生 ontology `format_text()` 与 refactor 前 oracle 快照字节一致；preset 三要素一致；
+  DriveUpdatePolicy 行为参数零变化（approach/0.3/0.9/0.55/...）。
+- **anti-drift 升级**：`test_drive_ontology_covers_all_preset_drives` 从"巧合相等"变为"构造保证"，
+  新增 `test_both_derive_from_the_same_spec` 钉死同源。
+
+### docs sync（已 review，无需改）
+`docs/scenarios-SPEC.md` / `architecture-overview.md` / `blueprint-to-tracking-map.md` 只附带提到
+`drive_preset`（仍是 bundle 组件、仍注册 exploration drive）—— 均无两源结构描述、不与 refactor 冲突。
+`ScenarioDriveSpec` 是内部实现细节，公开文档非漂移权威源 → 不强改。
+
+### 改动面（14 文件，scoped）
+framework 3（spec 类型 + export + ScenarioOntology 加字段）、Crafter 4（spec + 派生 preset/ontology
++ registration + producer 接线）、tests 5、intake doc 1。无意外文件。
+
+### A review 要点
+1. **范围收窄**：任务行写 Crafter+Linux，实证 Linux 无 ontology/无漂移 → 本轮只 Crafter；
+   spec 框架通用，Linux 未来可接。**请 A 确认接受收窄。**
+2. DriveUpdatePolicy 留 preset（行为 vs identity 分离）。
+3. drive_spec_version 接线：ScenarioOntology 新增可选字段 → producer 透传，None 时不影响 Linux/legacy。
+4. 等价性以 oracle 快照钉死，非眼测。
