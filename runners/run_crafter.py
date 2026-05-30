@@ -102,7 +102,15 @@ def _build_candidate_producer(
         return None
     client_config = config.working_memory_model_client_config
     timeout_sec = client_config.request_timeout_sec if client_config is not None else 5.0
-    chat_fn = build_live_chat_fn(timeout_sec=timeout_sec)
+    # Reasoning models (e.g. deepseek-v4-pro) spend completion tokens on hidden
+    # reasoning_content before the visible answer. On the ~13K-char dlPFC ontology
+    # prompt the default 256-token budget is consumed entirely by reasoning, leaving
+    # empty content → RuntimeError(openai_compatible_response_empty_content), which
+    # the bounded-retry path counts as a transport/infra failure (run dies via
+    # needs_human_infra_failure). Give the dlPFC producer a generous budget so the
+    # reasoning trace plus the JSON candidate list both fit (PR-O3 canonical run:
+    # verified 256→empty, 4096→valid candidates).
+    chat_fn = build_live_chat_fn(timeout_sec=timeout_sec, max_tokens=4096)
     if chat_fn is None:
         return None
     # PR-Α: wire transcript_sink from EVA_LLM_TRANSCRIPT env (off by default).
