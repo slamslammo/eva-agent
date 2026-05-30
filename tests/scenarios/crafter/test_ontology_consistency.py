@@ -114,6 +114,25 @@ class CrafterActionOntologyConsistencyTests(unittest.TestCase):
             self.assertTrue(entry.action, "action entry has empty action name")
             self.assertTrue(entry.effect, f"action {entry.action} has empty effect")
 
+    def test_action_both_derive_from_the_same_spec(self) -> None:
+        """Anti-drift root guarantee: ALL_ACTIONS and the ontology come from one spec.
+
+        single-source-crafter-action-metadata: the name-set equality
+        (test_action_ontology_covers_all_raw_actions) is now *structural*, not
+        coincidental — ALL_ACTIONS == CRAFTER_ACTION_SPEC.action_names() and the
+        ontology == CRAFTER_ACTION_SPEC.build_action_ontology(). Re-hardcoding
+        either source independently breaks these identity checks.
+        """
+        from scenarios.crafter.action_spec import CRAFTER_ACTION_SPEC
+        from scenarios.crafter.actions import ALL_ACTIONS
+        from scenarios.crafter.ontology import CRAFTER_ACTION_ONTOLOGY
+
+        self.assertEqual(tuple(ALL_ACTIONS), CRAFTER_ACTION_SPEC.action_names())
+        self.assertEqual(
+            CRAFTER_ACTION_ONTOLOGY.actions(),
+            CRAFTER_ACTION_SPEC.build_action_ontology().actions(),
+        )
+
 
 class CrafterActionEffectSchemaConsistencyTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -143,6 +162,21 @@ class CrafterActionEffectSchemaConsistencyTests(unittest.TestCase):
         from scenarios.crafter.actions import ALL_ACTIONS
         from scenarios.crafter.ontology import CRAFTER_ACTION_EFFECT_SCHEMA
         self.assertEqual(CRAFTER_ACTION_EFFECT_SCHEMA.actions(), frozenset(ALL_ACTIONS))
+
+    def test_effect_schema_action_axis_pinned_to_spec(self) -> None:
+        """§8 action-專項: the effect-schema action axis must track the single
+        action spec, so adding/removing an action in CRAFTER_ACTION_SPEC without
+        updating the effect-schema's action-family expansion is caught here
+        (the axis is pinned to spec.action_names(), not just to ALL_ACTIONS —
+        though they are now the same object, this asserts the spec is the root).
+        """
+        from scenarios.crafter.action_spec import CRAFTER_ACTION_SPEC
+        from scenarios.crafter.ontology import CRAFTER_ACTION_EFFECT_SCHEMA
+
+        self.assertEqual(
+            CRAFTER_ACTION_EFFECT_SCHEMA.actions(),
+            frozenset(CRAFTER_ACTION_SPEC.action_names()),
+        )
 
     def test_effect_schema_drives_match_preset_drives(self) -> None:
         from scenarios.crafter.drive_preset import CRAFTER_DRIVE_PRESET
