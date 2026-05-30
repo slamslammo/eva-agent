@@ -2,61 +2,62 @@
 
 ## Active Item
 
-`ofc-robust-scoring` **PR-O3**（出口 PR）— 用 scenario-time-model-run 干净数据复核标定（区间/权重/经验组上限）+ 极端 regime 验证 + Linux A/B 对照；全链 canonical demo 等 warmup 落地后跑。
+`framework-scenario-timing-and-advisor-coupling`（APPROVED → B-claude-2）
+
+让场景能**声明**自己的外部生命节律（external-life timing），框架在 CLI 未显式指定时回退到该声明；
+同时收口 advisor adapter 的默认耦合（observation 2）。当前 `ExternalLifeConfig` 的 calendar tempo
+只能由 CLI / 框架默认硬编码，`RuntimeScenarioBundle` 没有 timing 声明位，导致场景（如 Crafter 的
+sec 级节律）无法把"我该多快巡查"写进 bundle，只能在每个 runner / 测试里重复构造 `ExternalLifeConfig`。
 
 Coordination owner: `B-claude-2`
-Branch: `ofc-robust-scoring`（worktree `/Users/mojiawen/Documents/claude_projects/eva-agent-ofc`，tip 87929ed）
-Plan source:
-- `eva-coordination/plans/ofc-robust-scoring-plan.md` §7(PR-O3) / §9(验证) / §10+§12.3(已敲定)
-- `eva-coordination/plans/ofc-robust-scoring-g1-review.md` §3(caveat) / §5(PR-O2 G2_APPROVED → PR-O3)
+Branch: `framework-scenario-timing-and-advisor-coupling`
+（worktree `/Users/mojiawen/Documents/claude_projects/eva-agent-fst`，base 6e26380）
 
-## Change intake（6 点）
+## Change Intake（6 点）
 
-1. **层**：`l3_deliberation`（reasoning/value_judgment.py 评分聚合 + 测试）。如需再标定→只动 scale/weight 常数。
-2. **canonical owner**：`value_judgment.py`（robust 聚合）+ tests/l3_deliberation/reasoning/。
-3. **owner 类别**：stable（PR-O1/O2 已建 robust 主干，PR-O3 验证+精化，不扩职责）。
-4. **slice 归属**：ofc-robust-scoring task 的出口 PR（PR-O3），承 PR-O1（聚合）+ PR-O2（dlpfc rank）。
-5. **freeze tests**：现有 Linux 17 + full 749 = 基线；PR-O3 新增极端 regime 测试**不得弱化** Linux A/B 排序断言。
-6. **同步文档**：`maintainer/development/ofc-robust-scoring-g1-design.md`（标定复核结果 + 极端 regime caveat）；本文件。
+1. **层**：以 **framework** 为主 —— `eva/scenario_bundle.py`（scenario seam）+ `eva/kernel/config.py` /
+   `eva/kernel/main.py`（config 接线）；附带 `scenarios/crafter`（场景声明）与 `eva/l3_deliberation`
+   adapter 默认（observation 2）。
+2. **canonical owner**：
+   - `RuntimeScenarioBundle.suggested_timing` → `eva/scenario_bundle.py`
+   - timing 数据结构 → `eva/kernel/config.py::ExternalLifeConfig`（复用，不新建）
+   - CLI→config 回退接线 → `eva/kernel/main.py::build_runtime_config_from_args`
+   - Crafter timing 声明 → `scenarios/crafter/__init__.py`
+   - adapter 默认 → `eva/kernel/main.py` / config 默认（observation 2）
+3. **stable / transitional / reserved**：scenario seam 与 main.py 接线均为 **stable owner**。
+   本轮只做**加法扩展**（新增可选字段、回退分支），不扩大 transitional 职责；adapter 默认调整属
+   行为收口（inert→heuristic），范围受限、有回归保护。
+4. **slice or feature**：feature slice，拆 5 个子 slice（见下）。
+5. **需冻结的 tests**：
+   - `tests/scenarios/test_existence_semantics.py`（RuntimeScenarioBundle 必填契约红线 —— 新字段
+     必须带默认且排在必填字段之后，不破"缺字段即 TypeError"）
+   - Linux 回归：`tests/integration/test_main_runtime.py`、`tests/kernel/test_step_loop.py` 等
+     （Linux 默认 timing 不变、CLI 覆盖优先级不变）
+   - Crafter：`tests/integration/test_crafter_runtime.py`、`tests/scenarios/crafter/*`
+6. **需同步的 docs**：A review（framework 改动）；如落地涉及 timing 语义，回写
+   `docs/eva-framework-implementation.md` 的 external-life 节；当前 round progress 文档。
 
-## Slice plan (TDD)
+## Slice 大纲（A 的修法）
 
-| # | Slice | Touches | Notes |
-|---:|---|---|---|
-| 1 | 极端 regime 验证测试：①类别层 drive 兜底（water-critical 朝水类别胜出）②同类内 dlpfc 方向透传 ③OFC 兜底反常 rank ④尺度可比（raw-action vs heuristic）| `tests/.../test_robust_scoring_extreme_regime.py`（新）| 纯 offline 构造极端输入；plan §9 行171/174 |
-| 2 | 单因子作妖 + 经验组合谋测试：habit 尖峰 / habit+learning 同向尖峰，验组上限挡住、drive 主导 | 同上或新测试文件 | plan §9 行172/173 + §1.3 |
-| 3 | T3 干净数据标定复核：复核 drive[-0.25,0.55]/权重/组上限初值是否合理；极端态判别力评估 | 探针脚本 + g1-design.md | review §3 caveat：温和标定未覆盖极端高端 |
-| 4 | 标定结论 + caveat 文档化（若需小幅再标，**别过调** review §2）| g1-design.md | 出口文档 |
-| (canonical) | 全链 post-warmup demo（一次跑双验 OFC 行为 + viewer）| 脚本 | **A 前置：warmup(crafter-life-panel-warmup) 落地 + DeepSeek env；现在不跑** |
+- **slice 1**：`RuntimeScenarioBundle` 加 `suggested_timing: ExternalLifeConfig | None = None`
+  （纯加法，默认 None，向后兼容）。本 slice 不改任何行为。
+- **slice 2**：`build_runtime_config_from_args` 在 **CLI 未传** timing 时回退到 active scenario 的
+  `suggested_timing`；**CLI 显式传仍优先**。设计点：timing 相关 argparse 默认改 `None` 哨兵以区分
+  "显式传"与"未传"，并让该函数能读到 active bundle。**← 真实设计决策，需 A 确认方向。**
+- **slice 3**：`scenarios/crafter/__init__.py` 声明 sec 级 `suggested_timing`，去掉测试里重复构造
+  `ExternalLifeConfig` 的样板（dedup）。
+- **slice 4**（observation 2）：adapter_mode 默认 `inert→heuristic`，避免 default 触发额外 advisor
+  LLM 调用；保留 `llm_assisted` 给 dlPFC producer。
+- **slice 5**：测试补全 + **Linux 回归**（红线：Linux timing 默认不变 / dlPFC producer 不破 /
+  CLI 覆盖优先级保留）。
 
-## 红线 / 已敲定约束（plan §10 / §12.3，别重踩）
+## 红线
 
-- **不加新因子**：CandidateEffectProjection / risk_cost / uncertainty_penalty 全已否决（§12.2）。
-- **OFC 不重做 dlPFC 空间推理、不 LLM 化**（§12.4 核心判断）。drive 在类别层兜底，方向是 dlPFC 空间推理（OFC 只透传序）。
-- **Q2 权重别过调**（review §2）：w_drive≈0.5 / w_dlpfc≈0.3 / 经验组≤0.2 是合理起点，关键不变量 w_dlpfc(0.3) > 经验 cap(0.2)。
-- 归一化用**标定区间**不用候选集内 min-max（§10.2）；dlpfc v1 只 rank（§10.1）；projection_fallback v1 不清（§10.5）；权重 v1 全局（§10.4）。
-- **Linux A/B 字节等价**：非 LLM 候选无 dlpfc_proposal_ref → 评分不变（PR-O2 已立，PR-O3 不得破）。
+- framework 改动，**A 必须 review** 后才算完成。
+- 每个 slice 一个 commit，先测试后实现（TDD）。
+- 不改 `value_judgment / selection / contracts` 的打分逻辑（保持纪律）。
+- DeepSeek key 只 inline 注入，绝不写 repo/git/board。
 
-## Acceptance（plan §9）
+## Status
 
-| 指标 | 期望 |
-|---|---|
-| Linux 全回归 | 绿（共用评分，最关键）|
-| Linux 评分前后对照 | 排序结论不变，或变化可解释 |
-| Crafter 正常态 | dlPFC rank 被尊重（不再字母序兜底）— PR-O2 已立 |
-| Crafter 极端态 | water-critical 朝水类别胜出 + 同类内 dlPFC 方向透传 + OFC 兜底反常 rank |
-| 单因子作妖 | habit 尖峰不淹没合理选择 |
-| 经验组合谋 | 组上限挡住、drive 主导 |
-| 尺度不可比 | 标定区间归一后 raw-action vs heuristic 可比 |
-| 全链 demo | post-warmup canonical（等前置）|
-
-## Status: PR-O3 offline 部分完成（slice 1-4）
-
-- slice 1 极端 regime 验证：`test_robust_scoring_extreme_regime.py` 8 测试 ✓（commit 1f76d11）
-- slice 2 A/B 对照 + 尺度可比：`test_robust_scoring_ab_comparison.py` 5 测试 ✓（commit 98b2aff）
-- slice 3-4 标定复核 + caveat 文档：`g1-design.md` §8 ✓
-- 验证：full **762 passed** / Linux A/B **17 passed** / git diff --check clean
-- 标定**不变**（极端 caveat 标注待 water-critical run 精化，review §2 别过调）
-- **待 warmup**：全链 canonical demo（crafter-life-panel-warmup 落地 + DeepSeek，A 硬前置，不用 blind baseline）→ PR-O3 出口完成后请 A G2
-- **DeepSeek env 已 smoke 验证可用**（2026-05-30，HTTP 200 / deepseek-v4-pro / thinking on / reasoning_tokens 非零）。
-  - ⚠️ 注入方式坑：canonical run 用 `DEEPSEEK_API_KEY=<key> python -m <runner>`（inline 直给 python 进程，os.environ 读得到）或 `export DEEPSEEK_API_KEY=<key>; python ...`。**勿**用 `VAR=x curl -H "Bearer ${VAR}"` 同行——inline 赋值在当前 shell 的 `${VAR}` 展开作用域外，会展开成空 key → 401。（key 只注进程，不写文件/board/git。）
+- slice 1（RuntimeScenarioBundle.suggested_timing 字段）：进行中。
