@@ -17,6 +17,7 @@ from .action_ontology import ActionOntology, ActionOntologyEntry
 from .dlpfc_role_contract import DlpfcRoleContract
 from .drive_ontology import DriveOntology, DriveOntologyEntry
 from .salience_spec import SalienceSpec
+from .scenario_drive_spec import DriveSpecEntry, ScenarioDriveSpec
 from .scenario_ontology import ScenarioOntology, build_dlpfc_system_prompt
 
 __all__ = [
@@ -26,8 +27,10 @@ __all__ = [
     "DlpfcRoleContract",
     "DriveOntology",
     "DriveOntologyEntry",
+    "DriveSpecEntry",
     "EFFECT_LABEL_VOCABULARY",
     "SalienceSpec",
+    "ScenarioDriveSpec",
     "ScenarioOntology",
     "build_dlpfc_system_prompt",
 ]
