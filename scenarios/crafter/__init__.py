@@ -14,6 +14,7 @@ from eva.scenario_bundle import (
     SensorPolicyBundle,
     activate_runtime_scenario,
 )
+from eva.kernel.config import ExternalLifeConfig
 from eva.l2_drive.drive_registry import register_default_drive_preset
 from eva.persistence_targets import register_default_persistence_hierarchy
 
@@ -125,6 +126,22 @@ CRAFTER_SCENARIO_BUNDLE = RuntimeScenarioBundle(
         inheritance_channel="dead individual's trace -> distillation -> new individual's inherited priors",
         identity_continuity="one-life world: no in-life / cross-episode continuation (recoverable_interruption is empty); once terminal, the next activation is a fresh, distinct individual",
         clock_source="step",
+    ),
+    # framework-scenario-timing: Crafter declares a fast, sec-level external-life
+    # tempo (vs Linux's 300 / 1800 / 86400 / 1800 calendar default). The framework
+    # falls back to this when CLI timing flags are absent; explicit CLI still wins.
+    #
+    # NOTE (clock_source="step"): Crafter is step-clocked. The step loop drives its
+    # cadence via STEP_CHECKPOINT_INTERVAL and does NOT consume the shallow / deep /
+    # full_report patrol intervals (those feed the wall-clock patrol scheduler only),
+    # so under step clock those three fields are *declarative* — they document the
+    # intended fast tempo without changing step-loop behavior. ``recent_event_window_sec``
+    # IS consumed in step mode (sensing event filter), so it carries real behavior.
+    suggested_timing=ExternalLifeConfig(
+        shallow_patrol_interval_sec=1.0,
+        deep_patrol_interval_sec=5.0,
+        full_report_interval_sec=30.0,
+        recent_event_window_sec=60.0,
     ),
 )
 

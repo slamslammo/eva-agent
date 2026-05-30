@@ -24,7 +24,7 @@ from eva.l3_deliberation.memory.working_memory_model_client import (
 )
 from eva.l3_deliberation.reasoning.candidate_producer import CandidateProducer
 from runners.longrun_validation import longrun_hook_from_args
-from scenarios.crafter import activate_crafter_scenario
+from scenarios.crafter import CRAFTER_SCENARIO_BUNDLE, activate_crafter_scenario
 from scenarios.crafter.actions.feasibility import feasible_raw_actions
 from scenarios.crafter.reasoning import CrafterLLMActionProducer
 from scenarios.crafter.state_packet import build_crafter_state_packet
@@ -169,7 +169,11 @@ def main() -> None:
     """Build Crafter runtime config from CLI arguments and print a short summary."""
 
     args = parse_args()
-    config = build_runtime_config_from_args(args)
+    # framework-scenario-timing: fall back to Crafter's declared external-life
+    # timing when CLI timing flags are not passed.
+    config = build_runtime_config_from_args(
+        args, suggested_timing=CRAFTER_SCENARIO_BUNDLE.suggested_timing
+    )
     periodic_hook = longrun_hook_from_args(args)
     summary = run_crafter_runtime(
         config,
