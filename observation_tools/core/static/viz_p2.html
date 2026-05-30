@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EVA viz-p2 | 三层 Viewer</title>
+  <link rel="stylesheet" href="/static/viz_p2.css" />
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header id="top-bar">
+    <div class="brand">EVA viz-p2</div>
+    <div class="run-info">
+      <span class="label">Run</span>
+      <span id="run-name" class="value">—</span>
+    </div>
+    <div class="run-info">
+      <span class="label">Turn</span>
+      <span id="current-turn" class="value">—</span>
+      <span class="label">/ </span>
+      <span id="total-turns" class="value">—</span>
+    </div>
+    <div class="run-info">
+      <span class="label">Action</span>
+      <span id="current-action" class="value">—</span>
+    </div>
+    <div class="run-info">
+      <span class="label">Top drive</span>
+      <span id="current-top-drive" class="value">—</span>
+    </div>
+    <div id="nav-controls">
+      <button id="btn-prev" disabled>◀</button>
+      <button id="btn-next" disabled>▶</button>
+    </div>
+  </header>
+
+  <!-- TIMELINE STRIP -->
+  <section id="timeline-strip">
+    <canvas id="timeline-drive-chart" id="timeline-drive-chart"></canvas>
+    <div id="timeline-steps" aria-label="Turn 时间轴"></div>
+  </section>
+
+  <!-- MAIN THREE-PANEL LAYOUT -->
+  <div id="main-panels">
+
+    <!-- L1: Game View (left) -->
+    <aside id="l1-panel">
+      <div class="panel-title">L1 游戏视图</div>
+      <div id="warmup-banner">⚠ warmup — life data unavailable (step 0/1)</div>
+      <div id="game-grid" aria-label="Crafter 9×7 local view">
+        <div class="placeholder">载入中…</div>
+      </div>
+      <div>
+        <div class="panel-title" style="margin-top:8px">Life</div>
+        <div id="life-bars">
+          <div class="placeholder">—</div>
+        </div>
+      </div>
+      <div>
+        <div class="panel-title" style="margin-top:8px">Inventory</div>
+        <div id="inventory-grid">
+          <div class="placeholder">—</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- L2: Decision Swimlane (right top) -->
+    <section id="l2-panel">
+      <div class="panel-title">L2 决策 Swimlane</div>
+      <div id="l2-swimlane" aria-label="决策管道">
+        <div class="placeholder">选择左侧时间轴上的 turn</div>
+      </div>
+    </section>
+
+    <!-- L3: Deep Drill (right bottom) -->
+    <section id="l3-panel">
+      <div class="panel-title">L3 深钻 <span id="l3-node-label" style="color:var(--accent);margin-left:8px;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;"></span></div>
+      <div id="l3-content">
+        <div class="placeholder">点击 L2 任意节点展开详情</div>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="/static/viz_p2.js"></script>
+</body>
+</html>

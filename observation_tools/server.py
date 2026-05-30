@@ -6,12 +6,16 @@ API 端点：
 
 | Path | 作用 |
 |---|---|
-| ``GET /`` | 返回 ``static/index.html`` |
+| ``GET /`` | 返回 ``static/index.html``（V0 viewer） |
+| ``GET /viz`` | 返回 ``static/viz_p2.html``（三层 viewer） |
 | ``GET /static/<file>`` | 返回静态资源（CSS / JS / JSON） |
 | ``GET /api/run_info`` | 运行时元信息 + 各 JSONL 文件行数 |
 | ``GET /api/turns`` | 全部 ChainView 列表（V0 全量返回） |
 | ``GET /api/turn/<idx>`` | 单个 turn 的 ChainView |
 | ``GET /api/timeline`` | 顶部迷你时间轴 + drive 折线 |
+| ``GET /api/v2/run_info`` | viz-p2 运行元信息 |
+| ``GET /api/v2/timeline`` | viz-p2 timeline scrubber 数据 |
+| ``GET /api/v2/turn/<idx>`` | viz-p2 单个 turn 完整 TurnView |
 
 服务启动时 ``runtime_dir`` 注入到 ``server.runtime_dir``，所有 handler 共享。
 """
@@ -28,6 +32,11 @@ from .core.chain_builder import (
     build_chains,
     build_timeline_summary,
     runtime_counts,
+)
+from .core.ct_builder import (
+    build_run_info_v2,
+    build_timeline_v2,
+    build_turn_views,
 )
 
 
@@ -56,6 +65,8 @@ class ObservationToolsHandler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 self._serve_static("index.html")
+            elif path == "/viz":
+                self._serve_static("viz_p2.html")
             elif path.startswith("/static/"):
                 self._serve_static(path[len("/static/"):])
             elif path == "/api/run_info":
@@ -66,6 +77,12 @@ class ObservationToolsHandler(BaseHTTPRequestHandler):
                 self._serve_single_turn(path[len("/api/turn/"):])
             elif path == "/api/timeline":
                 self._serve_timeline()
+            elif path == "/api/v2/run_info":
+                self._serve_v2_run_info()
+            elif path == "/api/v2/timeline":
+                self._serve_v2_timeline()
+            elif path.startswith("/api/v2/turn/"):
+                self._serve_v2_single_turn(path[len("/api/v2/turn/"):])
             else:
                 self._send_text(404, "Not Found")
         except Exception as exc:  # 网络服务的最后一道防线 —— 任何错误返回 500，不让进程崩
@@ -131,6 +148,26 @@ class ObservationToolsHandler(BaseHTTPRequestHandler):
     def _serve_timeline(self) -> None:
         summary = build_timeline_summary(self.server.runtime_dir)  # type: ignore[attr-defined]
         self._send_json(200, summary)
+
+    def _serve_v2_run_info(self) -> None:
+        info = build_run_info_v2(self.server.runtime_dir)  # type: ignore[attr-defined]
+        self._send_json(200, info)
+
+    def _serve_v2_timeline(self) -> None:
+        data = build_timeline_v2(self.server.runtime_dir)  # type: ignore[attr-defined]
+        self._send_json(200, data)
+
+    def _serve_v2_single_turn(self, idx_str: str) -> None:
+        try:
+            idx = int(idx_str)
+        except ValueError:
+            self._send_text(400, "invalid turn index")
+            return
+        views = build_turn_views(self.server.runtime_dir)  # type: ignore[attr-defined]
+        if 0 <= idx < len(views):
+            self._send_json(200, views[idx].to_dict())
+        else:
+            self._send_text(404, "turn not found")
 
     # ------------------------------------------------------------------
     # 通用响应辅助

@@ -49,5 +49,35 @@ class CrafterWrapperSmokeTests(unittest.TestCase):
             wrapper.close()
 
 
+    def test_reset_observation_not_blind(self) -> None:
+        """Reset frame must have life, inventory, and local_view available (regression guard)."""
+        try:
+            wrapper = CrafterEnvWrapper(seed=0)
+        except CrafterLoadError as exc:
+            self.skipTest(str(exc))
+            return
+
+        try:
+            obs = wrapper.reset(seed=0)
+            vis = obs["visible"]
+
+            lp = vis["life_panel"]
+            self.assertTrue(lp["available"], "life_panel must be available on reset frame")
+            self.assertEqual(lp["values"]["health"], 9)
+            self.assertEqual(lp["values"]["food"], 9)
+            self.assertIsNotNone(lp["values"]["water"])
+            self.assertIsNotNone(lp["values"]["energy"])
+
+            ip = vis["inventory_panel"]
+            self.assertTrue(ip["available"], "inventory_panel must be available on reset frame")
+
+            lv = vis["local_view"]
+            self.assertEqual(lv["source"], "semantic_local_crop",
+                             "local_view must show real grid on reset frame, not _unknown_view")
+            self.assertGreater(len(lv["cells"]), 0)
+        finally:
+            wrapper.close()
+
+
 if __name__ == "__main__":
     unittest.main()
