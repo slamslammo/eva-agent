@@ -4,34 +4,24 @@ from __future__ import annotations
 
 from eva.l2_drive.drive_registry import DrivePreset, DriveUpdatePolicy
 
-# Round 1.B-2: ``exploration`` joins the Crafter drive family as the
-# scenario's growth-driver pull (v0.6.1 §4). It is an *internal* drive — it is
-# NOT mapped to any sensor dimension. Instead it is updated through the
-# framework's curiosity-style ``_curiosity_delta`` recovery / suppression path:
-# rises in healthy / no-threat states, falls under threat or degraded
-# overall status. Candidate scoring picks up this drive via
-# ``COMPATIBILITY_RELEASE_IMPACT`` per profile (see scenarios/crafter/anchors/policy.py).
-DRIVE_TYPES = (
-    "metabolic",
-    "safety",
-    "recovery",
-    "acquisition",
-    "capability",
-    "exploration",
-)
+from .drive_spec import CRAFTER_DRIVE_SPEC
 
-DRIVE_TYPE_BY_DIMENSION = {
-    "avatar_metabolic": "metabolic",
-    "avatar_safety": "safety",
-    "avatar_recovery": "recovery",
-    "inventory_acquisition": "acquisition",
-    "inventory_capability": "capability",
-    "local_view_threat": "safety",
-    "local_view_resource": "acquisition",
-    "local_view_utility": "capability",
-    # ``exploration`` is intentionally absent from this mapping — it is not
-    # driven by any sensor signal. The curiosity-style update path handles it.
-}
+# single-source-scenario-drive-metadata: drive identity (types / dimension map /
+# curiosity drive) is now DERIVED from CRAFTER_DRIVE_SPEC, the single authority
+# source it shares with CRAFTER_DRIVE_ONTOLOGY. This removes the prior drift risk
+# between this preset and the drive ontology text. DriveUpdatePolicy below is
+# behavior tuning and stays authored here (not part of the spec).
+#
+# Round 1.B-2 (carried over): ``exploration`` is an *internal* drive — declared
+# in the spec with empty ``dimensions`` so it is absent from
+# DRIVE_TYPE_BY_DIMENSION, and ``is_curiosity=True`` so it becomes
+# curiosity_drive_type. It is updated through the framework's curiosity-style
+# ``_curiosity_delta`` recovery / suppression path; candidate scoring picks it up
+# via ``COMPATIBILITY_RELEASE_IMPACT`` per profile (see
+# scenarios/crafter/anchors/policy.py).
+DRIVE_TYPES = CRAFTER_DRIVE_SPEC.drive_types()
+
+DRIVE_TYPE_BY_DIMENSION = CRAFTER_DRIVE_SPEC.drive_type_by_dimension()
 
 DEFAULT_DRIVE_UPDATE_POLICY = DriveUpdatePolicy(
     # Fix-C: Crafter opts into approach-mode drive updates — each risk drive moves
@@ -61,14 +51,14 @@ CRAFTER_DRIVE_PRESET = DrivePreset(
     drive_types=DRIVE_TYPES,
     drive_type_by_dimension=DRIVE_TYPE_BY_DIMENSION,
     default_policy=DEFAULT_DRIVE_UPDATE_POLICY,
-    # Round 1.B-2: opt into the framework curiosity-style update path for the
-    # exploration drive (previously Crafter set this to None, dead-coding the
-    # path).
-    curiosity_drive_type="exploration",
+    # Derived from the spec: opt into the framework curiosity-style update path
+    # for the exploration drive (the single is_curiosity=True entry).
+    curiosity_drive_type=CRAFTER_DRIVE_SPEC.curiosity_drive_type(),
 )
 
 __all__ = [
     "CRAFTER_DRIVE_PRESET",
+    "CRAFTER_DRIVE_SPEC",
     "DEFAULT_DRIVE_UPDATE_POLICY",
     "DRIVE_TYPES",
     "DRIVE_TYPE_BY_DIMENSION",
