@@ -54,7 +54,7 @@ class DriveOntology:
                 for cause in entry.typical_causes:
                     lines.append(f"    - {cause}")
             if entry.relief_directions:
-                lines.append("  relief_directions (semantic, 不是硬 policy):")
+                lines.append("  relief_directions (semantic, not a hard policy):")
                 for direction in entry.relief_directions:
                     lines.append(f"    - {direction}")
             lines.append("")

@@ -29,7 +29,7 @@ _MOVE_ROW = {
 }
 
 _DO_ROW = {
-    "metabolic": "context_dependent (NOTE: do does NOT 补 water/food, must walk into tile)",
+    "metabolic": "context_dependent (NOTE: do does NOT refill water/food, must walk into tile)",
     "safety": "context_dependent (improves if attacking threat with sword)",
     "recovery": "neutral",
     "acquisition": "context_dependent (improves if facing collectible with right tool)",
@@ -65,7 +65,7 @@ _PLACE_ROW = {
 }
 
 _NOOP_ROW = {
-    "metabolic": "time_passes (no action effect; drive 按 L2 update policy 自然演化)",
+    "metabolic": "time_passes (no action effect; drive evolves naturally per the L2 update policy)",
     "safety": "time_passes (no action effect)",
     "recovery": "time_passes (no action effect)",
     "acquisition": "time_passes (no action effect)",
