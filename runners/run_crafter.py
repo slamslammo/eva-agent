@@ -30,6 +30,21 @@ from scenarios.crafter.reasoning import CrafterLLMActionProducer
 from scenarios.crafter.state_packet import build_crafter_state_packet
 from scenarios.crafter.world_facts import get_crafter_world_facts_context
 from scenarios.crafter.wrapper import CrafterEnvWrapper, StepResult
+from scenarios.crafter.wrapper.world_trace import JsonlWorldTraceSink
+from eva.observability.trace_sink import trace_enabled
+
+
+def _build_world_trace_sink(runtime_dir: "str | None"):
+    """Build the observer-only world-trace sink, or None.
+
+    crafter-world-map-observer-trace: gated exactly like raw_observations — only
+    when EVA_TRACE is on AND a runtime_dir is available. Off / no-dir → None, so
+    the wrapper path is byte-for-byte unchanged.
+    """
+
+    if runtime_dir is None or not trace_enabled():
+        return None
+    return JsonlWorldTraceSink(runtime_dir=runtime_dir)
 
 __all__ = ["CrafterActionStep", "CrafterRuntimeSession", "main", "run_crafter_runtime"]
 
@@ -54,8 +69,13 @@ class CrafterRuntimeSession:
     terminated: bool = False
 
     @classmethod
-    def start(cls, *, seed: int | None = None) -> "CrafterRuntimeSession":
-        wrapper = CrafterEnvWrapper(seed=seed)
+    def start(
+        cls, *, seed: int | None = None, runtime_dir: "str | None" = None
+    ) -> "CrafterRuntimeSession":
+        # crafter-world-map-observer-trace: build the observer-only world-trace
+        # sink when EVA_TRACE is on + a runtime_dir is given (else None = off).
+        world_trace_sink = _build_world_trace_sink(runtime_dir)
+        wrapper = CrafterEnvWrapper(seed=seed, world_trace_sink=world_trace_sink)
         return cls(wrapper=wrapper, latest_agent_observation=wrapper.reset(seed=seed))
 
     def build_shared_facts(self) -> dict[str, Any]:
@@ -147,7 +167,9 @@ def run_crafter_runtime(
     """Activate the Crafter scenario and execute the generic framework loop."""
 
     activate_crafter_scenario(inherited_priors_path=config.inherited_priors_path)
-    session = CrafterRuntimeSession.start(seed=seed)
+    session = CrafterRuntimeSession.start(
+        seed=seed, runtime_dir=str(config.paths.runtime_dir)
+    )
     resolved_producer = candidate_producer or _build_candidate_producer(config, session)
     try:
         return run_runtime(
