@@ -41,9 +41,15 @@ class DriveSpecEntry:
     """
 
     name: str
-    meaning: str
-    low_means: str
-    high_means: str
+    # single-source-linux-drive-metadata (A G1 §10, option a+guard): the LLM
+    # semantic fields default to '' so an engine-only scenario (rule-driven, no
+    # dlPFC / no drive ontology — e.g. Linux) can adopt ScenarioDriveSpec for its
+    # identity fields alone. A dlPFC scenario (Crafter) fills them as before. The
+    # build_drive_ontology() guard below refuses to emit an empty-semantics
+    # ontology, so an engine-only spec can never be mistaken for an ontology source.
+    meaning: str = ""
+    low_means: str = ""
+    high_means: str = ""
     typical_causes: tuple[str, ...] = ()
     relief_directions: tuple[str, ...] = ()
     dimensions: tuple[str, ...] = ()
@@ -99,8 +105,23 @@ class ScenarioDriveSpec:
         return curiosity[0] if curiosity else None
 
     def build_drive_ontology(self) -> DriveOntology:
-        """Derive the ``DriveOntology`` (LLM-facing text) from the same entries."""
+        """Derive the ``DriveOntology`` (LLM-facing text) from the same entries.
 
+        Guard (single-source-linux-drive-metadata, A G1 §10): an entry with an
+        empty ``meaning`` carries no LLM semantics — it belongs to an engine-only
+        spec (e.g. Linux, rule-driven, no dlPFC). Building an ontology from such a
+        spec would silently produce empty-semantics entries, so we refuse it here.
+        A scenario that wants a drive ontology must fill the semantic fields.
+        """
+
+        missing = [entry.name for entry in self.entries if not entry.meaning]
+        if missing:
+            raise ValueError(
+                f"build_drive_ontology() requires non-empty meaning for every drive; "
+                f"engine-only entries missing meaning: {missing}. An engine-only "
+                f"spec (e.g. a rule-driven scenario with no dlPFC) must not build a "
+                f"drive ontology."
+            )
         return DriveOntology(
             entries=tuple(
                 DriveOntologyEntry(

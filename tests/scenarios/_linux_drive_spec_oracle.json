@@ -1,0 +1,15 @@
+{
+  "drive_types": [
+    "survival",
+    "integrity",
+    "continuity",
+    "curiosity"
+  ],
+  "drive_type_by_dimension": {
+    "resource_state": "survival",
+    "runtime_integrity": "integrity",
+    "anomaly_accumulation": "integrity",
+    "host_continuity": "continuity"
+  },
+  "curiosity_drive_type": "curiosity"
+}
