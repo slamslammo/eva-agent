@@ -36,7 +36,12 @@ class StepResult:
 class CrafterEnvWrapper:
     """Minimal H-0 wrapper around a locally installed Crafter environment."""
 
-    def __init__(self, *, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        seed: int | None = None,
+        world_trace_sink: Any | None = None,
+    ) -> None:
         self._seed = seed
         self._env = self._create_env(seed=seed)
         self._adapter = ActionAdapter()
@@ -45,6 +50,11 @@ class CrafterEnvWrapper:
         self._facing = "down"  # Crafter spawns facing down; updated on each move
         self._last_raw_observation: Any | None = None
         self._last_info: dict[str, Any] = {}
+        # crafter-world-map-observer-trace: optional OBSERVER-ONLY sink. Default
+        # None = off → the agent path below is byte-for-byte unchanged. When set,
+        # reset/step tee the RAW info's full semantic map + player_pos to it
+        # (never the agent observation), keeping the fairness invariant intact.
+        self._world_trace_sink = world_trace_sink
 
         action_report = self._adapter.validate_env_action_space(getattr(self._env, "action_space", None))
         if not bool(action_report.get("matches_expected")):
@@ -65,6 +75,12 @@ class CrafterEnvWrapper:
         raw_observation, info = self._reset_env(seed=self._seed)
         self._last_raw_observation = raw_observation
         self._last_info = dict(info)
+        if self._world_trace_sink is not None:
+            # Observer-only: read raw info at the cropping source, before the agent
+            # observation is built. line-0 base map + seed.
+            self._world_trace_sink.write_base(
+                semantic=info.get("semantic"), seed=self._seed
+            )
         return build_symbolic_observation(
             episode_id=self._episode_id,
             step=self._step,
@@ -81,6 +97,15 @@ class CrafterEnvWrapper:
             self._facing = _MOVE_TO_FACING[action_name]
         self._last_raw_observation = raw_observation
         self._last_info = dict(info)
+        if self._world_trace_sink is not None:
+            # Observer-only: per-step world diff from the RAW info, never the
+            # agent observation.
+            self._world_trace_sink.write_step(
+                step=self._step,
+                player_pos=info.get("player_pos"),
+                facing=self._facing,
+                semantic=info.get("semantic"),
+            )
         agent_observation = build_symbolic_observation(
             episode_id=self._episode_id,
             step=self._step,
