@@ -1,5 +1,5 @@
 {
-  "action_ontology_format_text": "noop:\n  effect: 跳过本回合，无世界状态变化\n  typical use: 极少使用——通常不优于探索移动\n\nmove_left:\n  effect: 朝左移动 1 格\n  - 若目标 tile 可通行（grass 等）：成功移动\n  - 若目标 tile 是 water：进入 tile 同时补水（water +N）\n  - 若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）\n  - 若目标 tile 是 zombie / skeleton：可能受到攻击\n  - 若目标 tile 不可通行（stone / tree / lava）：移动失败\n  - 移动会改变 facing 方向\n\nmove_right:\n  effect: 朝右移动 1 格\n  - 若目标 tile 可通行（grass 等）：成功移动\n  - 若目标 tile 是 water：进入 tile 同时补水（water +N）\n  - 若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）\n  - 若目标 tile 是 zombie / skeleton：可能受到攻击\n  - 若目标 tile 不可通行（stone / tree / lava）：移动失败\n  - 移动会改变 facing 方向\n\nmove_up:\n  effect: 朝上移动 1 格\n  - 若目标 tile 可通行（grass 等）：成功移动\n  - 若目标 tile 是 water：进入 tile 同时补水（water +N）\n  - 若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）\n  - 若目标 tile 是 zombie / skeleton：可能受到攻击\n  - 若目标 tile 不可通行（stone / tree / lava）：移动失败\n  - 移动会改变 facing 方向\n\nmove_down:\n  effect: 朝下移动 1 格\n  - 若目标 tile 可通行（grass 等）：成功移动\n  - 若目标 tile 是 water：进入 tile 同时补水（water +N）\n  - 若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）\n  - 若目标 tile 是 zombie / skeleton：可能受到攻击\n  - 若目标 tile 不可通行（stone / tree / lava）：移动失败\n  - 移动会改变 facing 方向\n\ndo:\n  effect: context-sensitive，取决于 facing 的 tile\n  - facing zombie / skeleton: 攻击（需要 sword 工具更有效）\n  - facing tree: 采集 wood（无需工具）\n  - facing stone: 采集 stone（需要 wood_pickaxe 或更高）\n  - facing coal: 采集 coal（需要 wood_pickaxe 或更高）\n  - facing iron: 采集 iron（需要 stone_pickaxe 或更高）\n  - facing diamond: 采集 diamond（需要 iron_pickaxe）\n  - facing cow / plant: 通常无效（食物靠走进 tile，不靠 do）\n  - facing water: 无效（水靠走进 tile）\n  - facing grass / empty: 无效\n\nsleep:\n  effect: 恢复 energy（推进时间，可能进入夜晚）\n  - 不补 food / water / health\n  - 睡眠时易受威胁攻击——有 threat 可见时不建议\n  - energy 严重低时必须 sleep\n\nplace_stone:\n  effect: 在 facing tile 放置 stone\n  - 需要 inventory 中有 stone\n  - 放置后 inventory -1，该 tile 变成 stone\n\nplace_table:\n  effect: 在 facing tile 放置 crafting table\n  - 需要 inventory 中有 wood\n  - table 是制作工具的前置\n\nplace_furnace:\n  effect: 在 facing tile 放置 furnace\n  - 需要 inventory 中有 stone\n  - furnace 是 iron 制作的前置\n\nplace_plant:\n  effect: 在 facing tile 放置 plant（种子）\n  - 需要 inventory 中有对应种子\n  - 种植为后续食物来源做铺垫\n\nmake_wood_pickaxe:\n  effect: 制作 wood_pickaxe\n  - 需要 wood x1，nearby table\n\nmake_stone_pickaxe:\n  effect: 制作 stone_pickaxe\n  - 需要 wood x1 + stone x1，nearby table\n\nmake_iron_pickaxe:\n  effect: 制作 iron_pickaxe\n  - 需要 wood x1 + coal x1 + iron x1，nearby table + furnace\n\nmake_wood_sword:\n  effect: 制作 wood_sword\n  - 需要 wood x1，nearby table\n  - sword 用于 do 攻击 threat（提高攻击效果）\n\nmake_stone_sword:\n  effect: 制作 stone_sword\n  - 需要 wood x1 + stone x1，nearby table\n  - sword 用于 do 攻击 threat（提高攻击效果）\n\nmake_iron_sword:\n  effect: 制作 iron_sword\n  - 需要 wood x1 + coal x1 + iron x1，nearby table + furnace\n  - sword 用于 do 攻击 threat（提高攻击效果）",
+  "action_ontology_format_text": "noop:\n  effect: skip this turn, no world-state change\n  typical use: rarely used — usually not better than an exploratory move\n\nmove_left:\n  effect: move 1 tile left\n  - if the target tile is passable (grass etc.): move succeeds\n  - if the target tile is water: enter the tile and refill water (water +N)\n  - if the target tile is cow / plant: enter the tile and refill food (food +N)\n  - if the target tile is zombie / skeleton: may take an attack\n  - if the target tile is impassable (stone / tree / lava): move fails\n  - moving changes the facing direction\n\nmove_right:\n  effect: move 1 tile right\n  - if the target tile is passable (grass etc.): move succeeds\n  - if the target tile is water: enter the tile and refill water (water +N)\n  - if the target tile is cow / plant: enter the tile and refill food (food +N)\n  - if the target tile is zombie / skeleton: may take an attack\n  - if the target tile is impassable (stone / tree / lava): move fails\n  - moving changes the facing direction\n\nmove_up:\n  effect: move 1 tile up\n  - if the target tile is passable (grass etc.): move succeeds\n  - if the target tile is water: enter the tile and refill water (water +N)\n  - if the target tile is cow / plant: enter the tile and refill food (food +N)\n  - if the target tile is zombie / skeleton: may take an attack\n  - if the target tile is impassable (stone / tree / lava): move fails\n  - moving changes the facing direction\n\nmove_down:\n  effect: move 1 tile down\n  - if the target tile is passable (grass etc.): move succeeds\n  - if the target tile is water: enter the tile and refill water (water +N)\n  - if the target tile is cow / plant: enter the tile and refill food (food +N)\n  - if the target tile is zombie / skeleton: may take an attack\n  - if the target tile is impassable (stone / tree / lava): move fails\n  - moving changes the facing direction\n\ndo:\n  effect: context-sensitive, depends on the facing tile\n  - facing zombie / skeleton: attack (more effective with a sword tool)\n  - facing tree: collect wood (no tool needed)\n  - facing stone: collect stone (needs wood_pickaxe or higher)\n  - facing coal: collect coal (needs wood_pickaxe or higher)\n  - facing iron: collect iron (needs stone_pickaxe or higher)\n  - facing diamond: collect diamond (needs iron_pickaxe)\n  - facing cow / plant: usually ineffective (food comes from walking into the tile, not do)\n  - facing water: ineffective (water comes from walking into the tile)\n  - facing grass / empty: ineffective\n\nsleep:\n  effect: recover energy (advances time, may enter night)\n  - does NOT refill food / water / health\n  - vulnerable to threat attacks while sleeping — not advised when a threat is visible\n  - must sleep when energy is severely low\n\nplace_stone:\n  effect: place stone on the facing tile\n  - needs stone in inventory\n  - after placing, inventory -1 and the tile becomes stone\n\nplace_table:\n  effect: place a crafting table on the facing tile\n  - needs wood in inventory\n  - the table is a prerequisite for crafting tools\n\nplace_furnace:\n  effect: place a furnace on the facing tile\n  - needs stone in inventory\n  - the furnace is a prerequisite for crafting iron\n\nplace_plant:\n  effect: place a plant (seed) on the facing tile\n  - needs the corresponding seed in inventory\n  - planting paves the way for a future food source\n\nmake_wood_pickaxe:\n  effect: craft a wood_pickaxe\n  - needs wood x1, nearby table\n\nmake_stone_pickaxe:\n  effect: craft a stone_pickaxe\n  - needs wood x1 + stone x1, nearby table\n\nmake_iron_pickaxe:\n  effect: craft an iron_pickaxe\n  - needs wood x1 + coal x1 + iron x1, nearby table + furnace\n\nmake_wood_sword:\n  effect: craft a wood_sword\n  - needs wood x1, nearby table\n  - the sword is used with do to attack threats (improves attack effect)\n\nmake_stone_sword:\n  effect: craft a stone_sword\n  - needs wood x1 + stone x1, nearby table\n  - the sword is used with do to attack threats (improves attack effect)\n\nmake_iron_sword:\n  effect: craft an iron_sword\n  - needs wood x1 + coal x1 + iron x1, nearby table + furnace\n  - the sword is used with do to attack threats (improves attack effect)",
   "all_actions": [
     "noop",
     "move_left",
@@ -22,172 +22,172 @@
   "entries": [
     {
       "action": "noop",
-      "effect": "跳过本回合，无世界状态变化",
+      "effect": "skip this turn, no world-state change",
       "details": [],
-      "typical_use": "极少使用——通常不优于探索移动"
+      "typical_use": "rarely used — usually not better than an exploratory move"
     },
     {
       "action": "move_left",
-      "effect": "朝左移动 1 格",
+      "effect": "move 1 tile left",
       "details": [
-        "若目标 tile 可通行（grass 等）：成功移动",
-        "若目标 tile 是 water：进入 tile 同时补水（water +N）",
-        "若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）",
-        "若目标 tile 是 zombie / skeleton：可能受到攻击",
-        "若目标 tile 不可通行（stone / tree / lava）：移动失败",
-        "移动会改变 facing 方向"
+        "if the target tile is passable (grass etc.): move succeeds",
+        "if the target tile is water: enter the tile and refill water (water +N)",
+        "if the target tile is cow / plant: enter the tile and refill food (food +N)",
+        "if the target tile is zombie / skeleton: may take an attack",
+        "if the target tile is impassable (stone / tree / lava): move fails",
+        "moving changes the facing direction"
       ],
       "typical_use": null
     },
     {
       "action": "move_right",
-      "effect": "朝右移动 1 格",
+      "effect": "move 1 tile right",
       "details": [
-        "若目标 tile 可通行（grass 等）：成功移动",
-        "若目标 tile 是 water：进入 tile 同时补水（water +N）",
-        "若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）",
-        "若目标 tile 是 zombie / skeleton：可能受到攻击",
-        "若目标 tile 不可通行（stone / tree / lava）：移动失败",
-        "移动会改变 facing 方向"
+        "if the target tile is passable (grass etc.): move succeeds",
+        "if the target tile is water: enter the tile and refill water (water +N)",
+        "if the target tile is cow / plant: enter the tile and refill food (food +N)",
+        "if the target tile is zombie / skeleton: may take an attack",
+        "if the target tile is impassable (stone / tree / lava): move fails",
+        "moving changes the facing direction"
       ],
       "typical_use": null
     },
     {
       "action": "move_up",
-      "effect": "朝上移动 1 格",
+      "effect": "move 1 tile up",
       "details": [
-        "若目标 tile 可通行（grass 等）：成功移动",
-        "若目标 tile 是 water：进入 tile 同时补水（water +N）",
-        "若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）",
-        "若目标 tile 是 zombie / skeleton：可能受到攻击",
-        "若目标 tile 不可通行（stone / tree / lava）：移动失败",
-        "移动会改变 facing 方向"
+        "if the target tile is passable (grass etc.): move succeeds",
+        "if the target tile is water: enter the tile and refill water (water +N)",
+        "if the target tile is cow / plant: enter the tile and refill food (food +N)",
+        "if the target tile is zombie / skeleton: may take an attack",
+        "if the target tile is impassable (stone / tree / lava): move fails",
+        "moving changes the facing direction"
       ],
       "typical_use": null
     },
     {
       "action": "move_down",
-      "effect": "朝下移动 1 格",
+      "effect": "move 1 tile down",
       "details": [
-        "若目标 tile 可通行（grass 等）：成功移动",
-        "若目标 tile 是 water：进入 tile 同时补水（water +N）",
-        "若目标 tile 是 cow / plant：进入 tile 同时补食物（food +N）",
-        "若目标 tile 是 zombie / skeleton：可能受到攻击",
-        "若目标 tile 不可通行（stone / tree / lava）：移动失败",
-        "移动会改变 facing 方向"
+        "if the target tile is passable (grass etc.): move succeeds",
+        "if the target tile is water: enter the tile and refill water (water +N)",
+        "if the target tile is cow / plant: enter the tile and refill food (food +N)",
+        "if the target tile is zombie / skeleton: may take an attack",
+        "if the target tile is impassable (stone / tree / lava): move fails",
+        "moving changes the facing direction"
       ],
       "typical_use": null
     },
     {
       "action": "do",
-      "effect": "context-sensitive，取决于 facing 的 tile",
+      "effect": "context-sensitive, depends on the facing tile",
       "details": [
-        "facing zombie / skeleton: 攻击（需要 sword 工具更有效）",
-        "facing tree: 采集 wood（无需工具）",
-        "facing stone: 采集 stone（需要 wood_pickaxe 或更高）",
-        "facing coal: 采集 coal（需要 wood_pickaxe 或更高）",
-        "facing iron: 采集 iron（需要 stone_pickaxe 或更高）",
-        "facing diamond: 采集 diamond（需要 iron_pickaxe）",
-        "facing cow / plant: 通常无效（食物靠走进 tile，不靠 do）",
-        "facing water: 无效（水靠走进 tile）",
-        "facing grass / empty: 无效"
+        "facing zombie / skeleton: attack (more effective with a sword tool)",
+        "facing tree: collect wood (no tool needed)",
+        "facing stone: collect stone (needs wood_pickaxe or higher)",
+        "facing coal: collect coal (needs wood_pickaxe or higher)",
+        "facing iron: collect iron (needs stone_pickaxe or higher)",
+        "facing diamond: collect diamond (needs iron_pickaxe)",
+        "facing cow / plant: usually ineffective (food comes from walking into the tile, not do)",
+        "facing water: ineffective (water comes from walking into the tile)",
+        "facing grass / empty: ineffective"
       ],
       "typical_use": null
     },
     {
       "action": "sleep",
-      "effect": "恢复 energy（推进时间，可能进入夜晚）",
+      "effect": "recover energy (advances time, may enter night)",
       "details": [
-        "不补 food / water / health",
-        "睡眠时易受威胁攻击——有 threat 可见时不建议",
-        "energy 严重低时必须 sleep"
+        "does NOT refill food / water / health",
+        "vulnerable to threat attacks while sleeping — not advised when a threat is visible",
+        "must sleep when energy is severely low"
       ],
       "typical_use": null
     },
     {
       "action": "place_stone",
-      "effect": "在 facing tile 放置 stone",
+      "effect": "place stone on the facing tile",
       "details": [
-        "需要 inventory 中有 stone",
-        "放置后 inventory -1，该 tile 变成 stone"
+        "needs stone in inventory",
+        "after placing, inventory -1 and the tile becomes stone"
       ],
       "typical_use": null
     },
     {
       "action": "place_table",
-      "effect": "在 facing tile 放置 crafting table",
+      "effect": "place a crafting table on the facing tile",
       "details": [
-        "需要 inventory 中有 wood",
-        "table 是制作工具的前置"
+        "needs wood in inventory",
+        "the table is a prerequisite for crafting tools"
       ],
       "typical_use": null
     },
     {
       "action": "place_furnace",
-      "effect": "在 facing tile 放置 furnace",
+      "effect": "place a furnace on the facing tile",
       "details": [
-        "需要 inventory 中有 stone",
-        "furnace 是 iron 制作的前置"
+        "needs stone in inventory",
+        "the furnace is a prerequisite for crafting iron"
       ],
       "typical_use": null
     },
     {
       "action": "place_plant",
-      "effect": "在 facing tile 放置 plant（种子）",
+      "effect": "place a plant (seed) on the facing tile",
       "details": [
-        "需要 inventory 中有对应种子",
-        "种植为后续食物来源做铺垫"
+        "needs the corresponding seed in inventory",
+        "planting paves the way for a future food source"
       ],
       "typical_use": null
     },
     {
       "action": "make_wood_pickaxe",
-      "effect": "制作 wood_pickaxe",
+      "effect": "craft a wood_pickaxe",
       "details": [
-        "需要 wood x1，nearby table"
+        "needs wood x1, nearby table"
       ],
       "typical_use": null
     },
     {
       "action": "make_stone_pickaxe",
-      "effect": "制作 stone_pickaxe",
+      "effect": "craft a stone_pickaxe",
       "details": [
-        "需要 wood x1 + stone x1，nearby table"
+        "needs wood x1 + stone x1, nearby table"
       ],
       "typical_use": null
     },
     {
       "action": "make_iron_pickaxe",
-      "effect": "制作 iron_pickaxe",
+      "effect": "craft an iron_pickaxe",
       "details": [
-        "需要 wood x1 + coal x1 + iron x1，nearby table + furnace"
+        "needs wood x1 + coal x1 + iron x1, nearby table + furnace"
       ],
       "typical_use": null
     },
     {
       "action": "make_wood_sword",
-      "effect": "制作 wood_sword",
+      "effect": "craft a wood_sword",
       "details": [
-        "需要 wood x1，nearby table",
-        "sword 用于 do 攻击 threat（提高攻击效果）"
+        "needs wood x1, nearby table",
+        "the sword is used with do to attack threats (improves attack effect)"
       ],
       "typical_use": null
     },
     {
       "action": "make_stone_sword",
-      "effect": "制作 stone_sword",
+      "effect": "craft a stone_sword",
       "details": [
-        "需要 wood x1 + stone x1，nearby table",
-        "sword 用于 do 攻击 threat（提高攻击效果）"
+        "needs wood x1 + stone x1, nearby table",
+        "the sword is used with do to attack threats (improves attack effect)"
       ],
       "typical_use": null
     },
     {
       "action": "make_iron_sword",
-      "effect": "制作 iron_sword",
+      "effect": "craft an iron_sword",
       "details": [
-        "需要 wood x1 + coal x1 + iron x1，nearby table + furnace",
-        "sword 用于 do 攻击 threat（提高攻击效果）"
+        "needs wood x1 + coal x1 + iron x1, nearby table + furnace",
+        "the sword is used with do to attack threats (improves attack effect)"
       ],
       "typical_use": null
     }

@@ -35,7 +35,9 @@ class RoleContractClockSourceSegmentTests(unittest.TestCase):
         """Plan §3.6 line: do NOT emit low-quality action just to advance time."""
         from scenarios.crafter.ontology import CRAFTER_DLPFC_ROLE_CONTRACT
         body = CRAFTER_DLPFC_ROLE_CONTRACT.format_text()
-        self.assertIn("noop 占位", body)
+        # dlpfc-prompt-all-english: assertion updated zh→en ("noop 占位" → "noop placeholder")
+        # to match the translated role-contract text; same semantic check.
+        self.assertIn("noop placeholder", body)
 
 
 if __name__ == "__main__":
