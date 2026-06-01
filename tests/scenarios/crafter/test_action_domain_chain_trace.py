@@ -63,8 +63,16 @@ class GateBranchReflectsComputationTests(unittest.TestCase):
     def test_normal_branch(self) -> None:
         domain = build_crafter_action_domain(_FakeAgentState(), _obs())
         self.assertEqual(domain.gate_branch.get("branch"), "normal")
-        # feasible_actions is the pre-gate feasible set (sorted list)
-        self.assertEqual(sorted(domain.feasible_actions), sorted(domain.feasible_actions))
+        # feasible_actions is the pre-gate feasible set: the raw-feasible actions
+        # intersected with the Crafter action registry, sorted (A G2 fix: was a
+        # self-comparison tautology; assert against the independently-recomputed set).
+        from scenarios.crafter.actions.feasibility import feasible_raw_actions
+        from scenarios.crafter.anchors import policy as P
+
+        expected_feasible = sorted(
+            a for a in feasible_raw_actions(_obs()) if a in P.CRAFTER_ACTIONS
+        )
+        self.assertEqual(sorted(domain.feasible_actions), expected_feasible)
         # in the normal branch nothing is narrowed: action_set ⊆ feasible
         self.assertTrue(set(domain.action_set) <= set(domain.feasible_actions))
 
