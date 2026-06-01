@@ -450,6 +450,14 @@ def _build_candidates(
         "candidate_kind": "raw_action",
         "raw_action_candidate": True,
         "candidate_profile": "crafter_raw_action",
+        # anchor-domain-chain-trace: thread the anchor's already-computed chain
+        # stages (pre-gate feasible set + the pressure-gate branch snapshot) so the
+        # deliberation_audit — and the kernel anchor.admit trace that reads it back —
+        # can render feasible → gate → A'(s). Trace-only; reuses this single
+        # gate_fields dict (no second parallel set). primary_pressure_reason above
+        # stays the flat field; gate_branch carries it nested for the chain view.
+        "anchor_feasible_actions": sorted(crafter_domain.feasible_actions),
+        "anchor_gate_branch": dict(crafter_domain.gate_branch),
     }
 
     seen: set[str] = set()

@@ -348,6 +348,32 @@ class LifecycleRuntime:
             }
             for candidate in deliberation_audit.candidates
         ]
+        # anchor-domain-chain-trace: surface the anchor chain stages threaded onto
+        # the candidates' parameter_domain by the producer (② feasible_actions /
+        # ③ gate_branch), so the viewer can render feasible → gate → A'(s) →
+        # ⑤ admitted_candidates. Domain-level (identical across a turn's
+        # candidates), so read from the first; absent for non-Crafter scenarios.
+        _first_pd: dict[str, Any] = {}
+        for candidate in deliberation_audit.candidates:
+            _first_pd = candidate.get("parameter_domain") or {}
+            break
+        _feasible_actions = _first_pd.get("anchor_feasible_actions")
+        _gate_branch = _first_pd.get("anchor_gate_branch")
+        anchor_outputs: dict[str, Any] = {
+            "admitted_candidates": admitted,
+            "count": len(admitted),
+        }
+        if _feasible_actions is not None:
+            anchor_outputs["feasible_actions"] = _feasible_actions
+        if _gate_branch is not None:
+            anchor_outputs["gate_branch"] = _gate_branch
+            anchor_outputs["action_domain"] = {
+                "feasible_actions": _feasible_actions,
+                "gate_branch": _gate_branch,
+                "admitted_action_set": sorted(
+                    a.get("action_hint") for a in admitted if a.get("action_hint")
+                ),
+            }
         self.trace_sink.emit_transform(
             layer="anchor",
             transform_id="anchor.admit",
@@ -355,7 +381,7 @@ class LifecycleRuntime:
             turn_index=turn_index,
             inputs=gate_inputs,
             parents=[{"id": "l2.broadcast", "edge_type": "top_drive_bias"}],
-            outputs={"admitted_candidates": admitted, "count": len(admitted)},
+            outputs=anchor_outputs,
         )
 
         # H-3a: P1b batch-2 L3 chain — all seam-assembled from the deliberation audit
