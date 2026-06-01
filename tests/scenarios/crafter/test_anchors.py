@@ -283,13 +283,21 @@ class CrafterAnchorTests(unittest.TestCase):
         self.assertNotIn("place_table", domain.action_set)
         self.assertIn("normal_feasible_raw_set", domain.restriction_reasons)
         serialized = domain.to_dict()
-        self.assertEqual(set(serialized), {"action_set", "restriction_reasons"})
+        # anchor-domain-chain-trace: to_dict now also carries trace-only chain
+        # fields (feasible_actions / gate_branch). The test's intent — A'(s) must
+        # NOT leak strategy/ordering keys — is unchanged and re-asserted below.
+        self.assertEqual(
+            set(serialized),
+            {"action_set", "restriction_reasons", "feasible_actions", "gate_branch"},
+        )
         flattened_keys = set(serialized)
         for value in serialized.values():
             if isinstance(value, list):
                 for item in value:
                     if isinstance(item, dict):
                         flattened_keys.update(item)
+            elif isinstance(value, dict):
+                flattened_keys.update(value)
         self.assertFalse({"rank", "preferred_action", "score", "direction_hint"} & flattened_keys)
 
 

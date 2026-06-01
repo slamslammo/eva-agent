@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol, TYPE_CHECKING
 
 from scenarios.crafter.actions.feasibility import feasible_raw_actions
@@ -85,16 +85,30 @@ COMPATIBILITY_RELEASE_IMPACT = {
 
 @dataclass(frozen=True)
 class CrafterActionDomain:
-    """Scenario-owned raw action set admitted by pre-generative anchors."""
+    """Scenario-owned raw action set admitted by pre-generative anchors.
+
+    anchor-domain-chain-trace: ``feasible_actions`` and ``gate_branch`` are
+    trace-only fields exposing the intermediate stages the anchor already
+    computed (the pre-gate feasible set, and which pressure-gate branch fired
+    + its inputs), so a viewer can render the full chain feasible → gate → A'(s)
+    instead of mislabeling in-domain candidates as pure A'(s). They are
+    NON-decision: ``action_set`` is unchanged by their presence.
+    """
 
     action_set: frozenset[str]
     restriction_reasons: tuple[str, ...]
+    # trace-only (default = back-compat for any direct construction)
+    feasible_actions: tuple[str, ...] = ()
+    gate_branch: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
             # Stable audit serialization only; the contract remains a set.
             "action_set": sorted(self.action_set),
             "restriction_reasons": list(self.restriction_reasons),
+            # anchor-domain-chain-trace: structured chain stages (trace-only).
+            "feasible_actions": sorted(self.feasible_actions),
+            "gate_branch": dict(self.gate_branch),
         }
 
 
@@ -125,25 +139,50 @@ def build_crafter_action_domain(
 
     reasons = ["crafter_raw_action_domain"]
     admitted = feasible
+    # anchor-domain-chain-trace: label which pressure-gate branch fires. This is
+    # a trace-only read of the SAME condition the decision below tests — the
+    # ``admitted`` assignments are unchanged (decision is byte-identical).
+    gate_branch_name = "normal"
     if pressure_reason in WATER_REASONS or salience.get("thirst") == "critical":
         admitted = feasible & MOVE_ACTIONS
         reasons.append("water_critical_move_set")
+        gate_branch_name = "water_critical"
     elif pressure_reason in FOOD_REASONS or salience.get("hunger") == "critical":
         admitted = feasible & MOVE_ACTIONS
         reasons.append("food_critical_move_set")
+        gate_branch_name = "food_critical"
     elif threat_visible or pressure_reason in THREAT_REASONS:
         admitted = feasible & (MOVE_ACTIONS | {DO_ACTION})
         reasons.append("threat_response_move_or_do_set")
+        gate_branch_name = "threat_response"
     elif pressure_reason in ENERGY_REASONS or salience.get("recovery") == "critical":
         admitted = feasible & {SLEEP_ACTION}
         reasons.append("energy_critical_sleep_set")
+        gate_branch_name = "energy_critical"
     else:
         reasons.append("normal_feasible_raw_set")
 
     if not admitted:
         reasons.append("empty_after_anchor_restriction")
     reasons.append(f"admitted_raw_actions={len(admitted)}")
-    return CrafterActionDomain(action_set=frozenset(admitted), restriction_reasons=tuple(reasons))
+    # anchor-domain-chain-trace: structured snapshot of the gate inputs that were
+    # already read above (trace-only; does not affect ``admitted``).
+    gate_branch = {
+        "branch": gate_branch_name,
+        "primary_pressure_reason": pressure_reason,
+        "threat_visible": threat_visible,
+        "salience_critical": {
+            key: salience.get(key)
+            for key in ("thirst", "hunger", "recovery")
+            if salience.get(key) == "critical"
+        },
+    }
+    return CrafterActionDomain(
+        action_set=frozenset(admitted),
+        restriction_reasons=tuple(reasons),
+        feasible_actions=tuple(sorted(feasible)),
+        gate_branch=gate_branch,
+    )
 
 
 def admit_crafter_candidates(
